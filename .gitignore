@@ -1,0 +1,48 @@
+# Secrets — never commit (all secrets live in GCP Secret Manager)
+.env
+.env.*
+!.env.example
+*.pem
+*-sa-key.json
+service-account*.json
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Node / Vite
+node_modules/
+dist/
+.vite/
+*.local
+
+# Supabase CLI
+supabase/.branches/
+supabase/.temp/
+
+# Terraform (if chosen)
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+
+# Firebase
+.firebase/
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Claude Code local settings
+.claude/settings.local.json
