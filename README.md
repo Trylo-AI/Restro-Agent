@@ -1,41 +1,49 @@
-# Restaurant Agentic System (Restro-Agent)
+# Restro (Restro-Agent)
 
-A WhatsApp ordering and retention system for cafés. Customers scan a table QR, order through an AI agent on WhatsApp and get live status updates. Cafés keep every customer as an opted-in contact and can bring them back with offers they can measure.
+WhatsApp ordering and retention for cafés. Customers scan a table QR, order through an AI agent on WhatsApp and get live status updates. Staff run service in the **Restro Console**. Cafés keep every customer as an opted-in contact and bring them back with offers they can measure.
 
-> **Status: design phase.** This repo holds the folder skeleton, the layered context files and the architecture docs. No code yet.
-
-## Start here
-
-| | |
-|---|---|
-| Project context (for engineers and AI agents) | [CLAUDE.md](CLAUDE.md) |
-| How context is layered | [docs/CONTEXT-MAP.md](docs/CONTEXT-MAP.md) |
-| All design docs | [docs/README.md](docs/README.md) |
-| Build plan | [docs/delivery/build-order.md](docs/delivery/build-order.md) |
-| Open decisions | [docs/delivery/open-decisions.md](docs/delivery/open-decisions.md) |
-
-## At a glance
+> **Status: design phase.** Design docs only. No code yet.
 
 ```mermaid
 flowchart LR
     C(["Customer<br/>WhatsApp"]) <--> M["Meta Cloud API"]
     M -->|"webhook"| API["Cloud Run: api"]
-    API --> PS[["Pub/Sub wa-inbound"]] --> W["Cloud Run: worker<br/>conversation + AI + jobs"]
+    API -->|"Cloud Tasks"| W["Cloud Run: worker<br/>conversation, LLM, timers"]
     W --> M
-    W <--> LLM["LLM"]
+    W <--> LLM["Gemini"]
     API <--> DB[("Supabase Postgres")]
     W <--> DB
-    SPA["React SPA<br/>staff · owner · platform"] -->|"REST"| API
-    SPA -.->|"Realtime reads"| DB
+    CON["Restro Console<br/>React SPA"] -->|"REST writes"| API
+    DB -.->|"Realtime reads"| CON
 ```
 
-## Repository layout
+## Docs
 
-| Path | Purpose | Context file |
-|---|---|---|
-| `backend/` | Python 3.12 + FastAPI, deployed as `api` and `worker` | [backend/CLAUDE.md](backend/CLAUDE.md) |
-| `frontend/` | React + Vite + TypeScript SPA | [frontend/CLAUDE.md](frontend/CLAUDE.md) |
-| `supabase/` | Migrations, RLS, views, seed | [supabase/CLAUDE.md](supabase/CLAUDE.md) |
-| `infra/` | GCP resources per environment | [infra/CLAUDE.md](infra/CLAUDE.md) |
-| `.github/` | CI/CD workflows, PR template | — |
-| `docs/` | Architecture split by area, plus ADRs | [docs/README.md](docs/README.md) |
+| Doc | Holds |
+|---|---|
+| [CLAUDE.md](CLAUDE.md) | Stack, invariants, working rules (people and AI agents) |
+| [docs/plan.md](docs/plan.md) | Product, roadmap, resources, work split, open decisions, risks |
+| [docs/architecture.md](docs/architecture.md) | System, pipeline, timers, security, infrastructure, monitoring, cost |
+| [docs/backend.md](docs/backend.md) | Conversation, AI agent, cart, orders, help, menu, WhatsApp, retention |
+| [docs/data-and-api.md](docs/data-and-api.md) | Schema, RLS, views, endpoints, Realtime |
+| [docs/console.md](docs/console.md) | Console shell, urgency, every screen |
+| [docs/rules.md](docs/rules.md) | Per-folder rules and required tests |
+| [docs/decisions.md](docs/decisions.md) | Settled trade-offs |
+
+Inputs: [Restro_Build_Plan.md](Restro_Build_Plan.md) · `Restro Console v2-Updates.html` (open in a browser).
+
+## Layout
+
+Planned; each folder is created with its first real file.
+
+| Path | Purpose |
+|---|---|
+| `backend/` | Python 3.12 + FastAPI, deployed as `api` and `worker` |
+| `frontend/` | Restro Console (React + Vite + TypeScript) |
+| `supabase/` | Migrations, RLS, views, seed |
+| `contracts/` | Frozen schema, OpenAPI, events, LLM schema, state machines |
+| `evals/` | LLM eval set and runner |
+| `loadtest/` | Webhook simulator and scenarios |
+| `infra/` | GCP resources per environment |
+| `.github/` | CI workflows, PR template |
+| `docs/` | Design docs |

@@ -1,95 +1,86 @@
-# Restaurant Agentic System — Project Context (L0)
+# Restro
 
-> **Always loaded.** This is the top of the context tree. It holds only what every task needs: what we're building, the rules nobody may break, and where to look next.
-> Deeper context loads automatically from the `CLAUDE.md` in whichever folder you work in (L1/L2), and the full design lives in [`docs/`](docs/README.md) (L3). See [docs/CONTEXT-MAP.md](docs/CONTEXT-MAP.md).
+WhatsApp ordering and retention for cafés (MVP). A customer scans a table QR, orders with an AI agent on WhatsApp, gets status updates and can call a person. Staff run service in the **Restro Console**. The owner sends offers to opted-in customers and sees who came back and what they spent.
 
-## 1. What this is
+Reliability beats features. Done = 30+ orders in one evening at a real café, zero lost or wrong.
 
-A WhatsApp ordering and retention system for cafés (MVP). Two jobs:
+**Status:** design phase — docs only, no code. Owner: Aman. Build order: [docs/plan.md](docs/plan.md#roadmap).
 
-1. **Ordering (the hook).** A customer scans a table QR, chats with an AI agent on WhatsApp, orders, gets status updates and can call a waiter.
-2. **Retention (the value).** Every customer who orders becomes an opted-in WhatsApp contact the café owns. The owner sends an offer on a slow day and sees who came back and what they spent.
+This is the only `CLAUDE.md`. All design lives in `docs/`.
 
-**Reliability beats features.** One lost or wrong order costs more trust than ten missing features.
-
-**Status:** design phase. The repo has folders and docs only, no code yet. Architecture v0.1 (2026-10-05), owner: Aman.
-
-## 2. Stack (one line each)
+## Stack
 
 | Layer | Choice |
 |---|---|
-| Backend | Python 3.12 + FastAPI. One codebase, two Cloud Run services: `api` (public) and `worker` (internal) |
-| Frontend | React + Vite + TypeScript SPA (staff panel, owner console, platform admin) on Firebase Hosting |
-| Data | Supabase: Postgres + RLS, Auth (staff only), Realtime, Storage |
-| Async | GCP Pub/Sub (`wa-inbound` + DLQ), Cloud Tasks, Cloud Scheduler |
-| Secrets | GCP Secret Manager |
+| Backend | Python 3.12 + FastAPI. One image, two Cloud Run services: `api` (public) and `worker` (internal) |
+| Frontend | Restro Console: React + Vite + TypeScript SPA on Firebase Hosting |
+| Data | Supabase: Postgres + RLS, Auth (console users only), Realtime, Storage |
+| Async | Cloud Tasks (`wa-ack`, `wa-process`, `timers`, `campaign-send`) + Cloud Scheduler. No Pub/Sub |
+| LLM | Gemini Flash-Lite / Flash, one structured call per free-text turn |
 | Messaging | Meta WhatsApp Cloud API, direct |
-| LLM | **Open decision**: see [docs/ai-agent/llm-provider.md](docs/ai-agent/llm-provider.md) |
+| Secrets | GCP Secret Manager |
 | Region | GCP `asia-south1` + Supabase Mumbai |
 
-## 3. Non-negotiable invariants
+## Invariants
 
-These apply everywhere. Area context files add their own, but never relax these.
+1. **AI talks, code decides.** The LLM interprets and drafts text. Prices, totals, availability, orders, status and consent are code reading the DB. The LLM never states a price.
+2. **The menu DB is the only source of truth.** The LLM sees only `available = true` items. Names and prices shown to customers are rendered by code.
+3. **Acknowledge fast, process later.** Webhook: verify signature → store → enqueue `wa-ack` + `wa-process` → `200`. Real work runs in `worker`.
+4. **One turn at a time per conversation.** Debounced `wa-process` task + transaction-scoped advisory lock on `conversation_id`.
+5. **Tenant from infrastructure, never input.** Webhooks: `cafe_id` from `phone_number_id`. Console: from `memberships` behind the JWT. Every repository method requires `cafe_id`.
+6. **Every write goes through FastAPI.** The console uses Supabase only for login and reads. No RLS write policies.
+7. **Orders change only through `transition()`** with optimistic locking. Every change writes `order_events` and `audit_log`.
+8. **Idempotent everything.** `wamid` unique; one order per Confirm tap (`orders.idempotency_key`); message status only moves forward; every timer re-checks state.
+9. **Money is integer paise.** Never floats.
+10. **All outbound goes through one sender** (`domain/outbound`), which enforces the 24-hour window and marketing consent.
+11. **A human is always one tap away.** AI failure, unknown allergen, two failed clarifications or an explicit ask reaches staff within a minute; escalation to manager at 60 s, owner at +2 min.
+12. **Secrets stay in Secret Manager and the backend.** The DB stores references only. Logs hold no tokens or phone numbers.
 
-1. **AI talks, code decides.** The AI picks words and suggests dishes. Prices, availability, totals, order creation, status changes and consent are deterministic code reading the DB. The AI never states a price.
-2. **The menu DB is the only source of truth.** The AI sees only `is_available = true` items. Dish names and prices shown to customers are rendered by code from the DB.
-3. **Acknowledge fast, process later.** The webhook verifies the signature, stores the raw event, publishes to Pub/Sub and returns `200`. All real work runs in the worker.
-4. **One message at a time per customer.** Pub/Sub ordering key `{phone_number_id}:{wa_id}` plus a Postgres advisory lock per conversation.
-5. **Tenant comes from the infrastructure, never from input.** Inbound: `cafe_id` from `phone_number_id`. Panel: from `staff_memberships` behind the JWT. Every repository method requires `cafe_id`.
-6. **Every write goes through FastAPI.** The SPA uses Supabase directly only for login and Realtime reads. No RLS write policies.
-7. **Idempotent everything.** `wamid` is unique, there's one order per `(cart_id, cart_version)`, and message status only moves forward.
-8. **All outbound goes through one sender**, which enforces the 24-hour window and marketing consent.
-9. **A human is always one tap away.** Any AI failure, low-confidence turn or explicit request reaches staff within a minute.
-10. **Secrets never leave Secret Manager and the backend.** The DB stores only references, and logs hold no tokens or phone numbers.
+## Repository
 
-## 4. Repository map
+Planned layout; each folder is created with its first real file.
 
 ```text
-Restro-Agent/
-├── CLAUDE.md                  ← you are here (L0)
-├── docs/                      ← L3 reference: full design, split by area
-├── backend/      CLAUDE.md    ← L1: FastAPI api + worker
-│   ├── app/core/       CLAUDE.md   auth, signature, OIDC, config
-│   ├── app/api/        CLAUDE.md   routers: webhooks, staff, admin, platform, internal
-│   ├── app/domain/     CLAUDE.md   business logic (L2 files per risky module)
-│   ├── app/integrations/whatsapp/  CLAUDE.md
-│   ├── app/db/         CLAUDE.md   repositories, models, session
-│   └── tests/          CLAUDE.md
-├── frontend/     CLAUDE.md    ← L1: React SPA
-│   └── src/features/   CLAUDE.md
-├── supabase/     CLAUDE.md    ← L1: migrations, RLS, views, seed
-├── infra/        CLAUDE.md    ← L1: GCP resources per environment
-└── .github/workflows/         CI/CD
+backend/     FastAPI api + worker (app/core, api, domain, integrations, db; tests/)
+frontend/    Restro Console (src/features/ one folder per screen)
+supabase/    migrations, RLS, views, seed
+contracts/   frozen interfaces: schema, OpenAPI, events, LLM schema, state machines
+infra/       GCP per environment
+evals/       LLM eval set + runner
+loadtest/    webhook simulator + scenarios
+docs/        all design docs
 ```
 
-## 5. Where to look (task → context)
+Inputs, read-only: `Restro_Build_Plan.md` (build plan v1.0), `Restro Console v2-Updates.html` (console mock), `docs/_source/` (frozen v0.1 architecture).
 
-| If you're working on… | Read first | Then |
-|---|---|---|
-| Webhook, Meta payloads, sending messages | [backend/app/integrations/whatsapp/CLAUDE.md](backend/app/integrations/whatsapp/CLAUDE.md) | [docs/whatsapp/](docs/whatsapp/README.md) |
-| Conversation flow, buttons, stages | [backend/app/domain/conversation/CLAUDE.md](backend/app/domain/conversation/CLAUDE.md) | [docs/backend/conversation-router.md](docs/backend/conversation-router.md) |
-| AI prompts, tools, guardrails | [backend/app/domain/ai_agent/CLAUDE.md](backend/app/domain/ai_agent/CLAUDE.md) | [docs/ai-agent/](docs/ai-agent/README.md) |
-| Cart, confirmation, orders | [cart/CLAUDE.md](backend/app/domain/cart/CLAUDE.md) · [orders/CLAUDE.md](backend/app/domain/orders/CLAUDE.md) | [docs/backend/cart-and-confirmation.md](docs/backend/cart-and-confirmation.md) |
-| Consent, campaigns, redemption | [consent/CLAUDE.md](backend/app/domain/consent/CLAUDE.md) · [campaigns/CLAUDE.md](backend/app/domain/campaigns/CLAUDE.md) | [docs/retention/](docs/retention/README.md) |
-| REST endpoints, auth, RBAC | [backend/app/api/CLAUDE.md](backend/app/api/CLAUDE.md) | [docs/api/](docs/api/README.md) · [docs/security/](docs/security/README.md) |
-| Schema, RLS, views | [supabase/CLAUDE.md](supabase/CLAUDE.md) | [docs/database/](docs/database/README.md) |
-| Staff panel / owner console / platform admin | [frontend/CLAUDE.md](frontend/CLAUDE.md) | [docs/frontend/](docs/frontend/README.md) |
-| Cloud Run, Pub/Sub, Tasks, IAM, CI | [infra/CLAUDE.md](infra/CLAUDE.md) | [docs/infra/](docs/infra/README.md) |
-| Logs, alerts, cost | — | [docs/observability/](docs/observability/README.md) |
-| Scope, priorities, roles | — | [docs/product/](docs/product/README.md) · [docs/delivery/](docs/delivery/README.md) |
+## Docs
 
-## 6. Roles (short)
+| Doc | Holds |
+|---|---|
+| [plan.md](docs/plan.md) | Product, roles, features and priority, roadmap, resources, work split, contracts, open decisions, risks |
+| [architecture.md](docs/architecture.md) | System, message pipeline, queues / timers / jobs, backend layout, security and tenancy, data protection, infrastructure, monitoring, cost |
+| [backend.md](docs/backend.md) | Conversation, AI agent, cart, orders, human help, menu, customers, WhatsApp, consent, campaigns |
+| [data-and-api.md](docs/data-and-api.md) | Schema, RLS, analytics views, endpoints, errors, Realtime |
+| [console.md](docs/console.md) | Shell, urgency and alerts, every screen |
+| [rules.md](docs/rules.md) | Must / never per folder, required tests, evals, load tests, dry run |
+| [decisions.md](docs/decisions.md) | Settled trade-offs |
 
-`staff` ⊂ `manager` ⊂ `owner` within one café, and `platform_admin` (us) works across cafés with every action audited. Customers never log in: their identity is their `wa_id`. Full matrix: [docs/product/roles-and-permissions.md](docs/product/roles-and-permissions.md).
+## Roles
 
-## 7. Out of scope (MVP)
+`shift_manager` ⊂ `manager` ⊂ `owner` within one café (`memberships`); `platform_admin` (us) works across cafés, every action audited. Customers never log in; identity is `wa_id`.
 
-Payment gateway and refunds, bookings and pre-orders, loyalty tiers, POS/printer integration, multi-location, Embedded Signup, full BI dashboards. Don't build these without an ADR.
+## Out of scope (MVP)
 
-## 8. Working rules for agents
+Payment gateway and refunds, bookings and pre-orders, voice notes, loyalty tiers, POS/printer integration, multi-location features (switching between cafés is fine; nothing is shared), Embedded Signup, full BI. Don't build these without a decision in [decisions.md](docs/decisions.md).
 
-- **Docs first.** Before changing behaviour, read the linked doc. After changing it, update the doc, and the `CLAUDE.md` too if an invariant moved. Real trade-offs get an ADR in [docs/adr/](docs/adr/README.md).
-- **Don't edit** [docs/_source/](docs/_source/mvp-architecture-v0.1.md). It's the frozen v0.1 snapshot.
-- Use the exact names from the docs (tables, endpoints, jobs, queues, templates). Shared vocabulary is in [docs/product/glossary.md](docs/product/glossary.md).
-- Open decisions live in [docs/delivery/open-decisions.md](docs/delivery/open-decisions.md). Don't silently decide one in code. Ask, or write an ADR.
-- Build order: [docs/delivery/build-order.md](docs/delivery/build-order.md) (step 0 Foundations → step 6 Pilot hardening).
+## Working rules
+
+- **Docs first.** Read the relevant doc and its section in [rules.md](docs/rules.md) before changing code; update the doc in the same PR. A changed invariant updates this file. A real trade-off adds an entry to [decisions.md](docs/decisions.md).
+- **Contracts are frozen.** Change `contracts/` only when the task says so, in one PR that updates backend and console together.
+- **Critical core is the team's.** Don't change a critical-core module unless the task names the file and the change ([list](docs/plan.md#work-split)).
+- **Exact names.** Use the table, column and status names in [data-and-api.md](docs/data-and-api.md#schema). Never invent synonyms.
+- **Open means ask.** Undecided items are in [open decisions](docs/plan.md#open-decisions). Build against the default; never decide one silently.
+- **Phase vs priority.** "Phase 0–7" = build phase; "P0–P3" = feature priority.
+- **No real data.** No secrets, tokens or real customer data in code, fixtures or tests. Use the seed generator.
+- Every task ends with tests and a short note listing assumptions.
+- Don't edit `docs/_source/`, the build plan or the mock.
