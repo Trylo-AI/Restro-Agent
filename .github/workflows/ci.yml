@@ -35,10 +35,29 @@ jobs:
         with:
           version: latest
       - run: supabase start -x studio,imgproxy,inbucket,edge-runtime,logflare,vector,supavisor
+      - name: Export local stack settings (synthetic, CI only)
+        run: |
+          supabase status -o env > /tmp/sb.env
+          . /tmp/sb.env
+          {
+            echo "APP_ENV=test"
+            echo "SUPABASE_URL=$API_URL"
+            echo "SUPABASE_SECRET_KEY=$SERVICE_ROLE_KEY"
+            echo "DATABASE_URL=$DB_URL"
+            echo "DATABASE_URL_SESSION=$DB_URL"
+            echo "META_APP_SECRET=ci-app-secret"
+            echo "META_VERIFY_TOKEN=ci-verify-token"
+            echo "SEED_STAFF_PASSWORD=ci-staff-password-1"
+            echo "RLS_SUPABASE_URL=$API_URL"
+            echo "RLS_PUBLISHABLE_KEY=$ANON_KEY"
+            echo "RLS_PASSWORD=ci-staff-password-1"
+          } >> "$GITHUB_ENV"
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - run: pip install -r backend/requirements.lock && pip install -e backend --no-deps
+      - run: python supabase/seed/generate.py --live
+      - run: python scripts/check_contracts.py
       # Exit code 5 = no tests collected yet.
       - run: pytest -q -m integration || [ $? -eq 5 ]
         working-directory: backend

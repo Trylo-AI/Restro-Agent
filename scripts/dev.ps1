@@ -1,6 +1,7 @@
 # Starts api (:8000), worker (:8001), console (:5173) and simulator (:5174) in this window.
 # Each line is prefixed with its process name. Ctrl+C stops all four.
-$ErrorActionPreference = "Stop"
+# Native programs write to stderr; judge them by exit code.
+$ErrorActionPreference = "Continue"
 $root = Split-Path -Parent $PSScriptRoot
 $python = Join-Path $root "backend\.venv\Scripts\python.exe"
 if (-not (Test-Path $python)) { throw "backend\.venv is missing. Run: py -3.12 -m venv backend\.venv; backend\.venv\Scripts\pip install -e 'backend[dev]'" }

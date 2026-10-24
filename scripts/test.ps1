@@ -1,6 +1,7 @@
 # Runs every check CI runs. -Integration also runs tests that need the local Supabase stack (Docker).
 param([switch]$Integration)
-$ErrorActionPreference = "Stop"
+# Native programs write to stderr; judge them by exit code.
+$ErrorActionPreference = "Continue"
 $root = Split-Path -Parent $PSScriptRoot
 $python = Join-Path $root "backend\.venv\Scripts\python.exe"
 

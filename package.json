@@ -1,0 +1,18 @@
+{
+  "name": "restro-tools",
+  "version": "1.0.0",
+  "description": "WhatsApp ordering and retention for cafés. Customers scan a table QR, order through an AI agent on WhatsApp and get live status updates. Staff run service in the **Restro Console**. Cafés keep every customer as an opted-in contact and bring them back with offers they can measure.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "supabase": "^2.119.0"
+  }
+}

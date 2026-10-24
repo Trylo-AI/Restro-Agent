@@ -11,7 +11,7 @@ Tracks [ordering-slice.md](ordering-slice.md). Ticked in the same commit as the 
 | S0 Setup and plan approval | To do | — |
 | S1 Scaffold | Done | S1 commit |
 | S2 Contracts and doc updates | Done | S2 commit |
-| S3 Database and seed | To do | — |
+| S3 Database and seed | Done | S3 commit |
 | S4 Backend core | To do | — |
 | S5 WhatsApp ingress, send layer, dev router | To do | — |
 | S6 Simulator UI | To do | — |
@@ -71,22 +71,24 @@ Tracks [ordering-slice.md](ordering-slice.md). Ticked in the same commit as the 
 
 ## S3 · Database and seed
 
-- [ ] Migration: every table, check, unique and index in `schema.sql`
-- [ ] `cafe_counters` + `next_order_number()` / `next_menu_version()`
-- [ ] No UPDATE / DELETE grants on append-only tables
-- [ ] RLS enabled everywhere with read policies only
-- [ ] Realtime publication: `orders`, `requests`, `conversations`, `inbound_messages`, `wa_messages`, `menu_items`, `cafes`, `notifications`, `customer_notes`, `customer_preferences`
-- [ ] RLS: `feedback`, `customer_preferences`, `customer_notes` readable by `shift_manager`+
-- [ ] `supabase/dev/` migration for `dev_turn_traces` (G6)
-- [ ] Seed: café with simulator `phone_number_id`, menu with every allergen state, tables with `qr_text`
-- [ ] Seed: one auth user per role + memberships, returning customers with history, approved template rows
-- [ ] Seed: customer profiles (allergy, vegan + dislike, oat milk, complaint, empty), feedback rows, two staff notes
-- [ ] Seed: second café for isolation tests
-- [ ] Seed `--live` option (open orders in every status and flag)
-- [ ] `scripts/reset-dev-db.ps1`
-- [ ] Applied to the local stack and to the cloud project (`supabase db push` with the session URL)
-- [ ] Tests: café A sees no café B rows; `low_rating` hidden below `manager`; own `notifications` only; client writes denied
-- [ ] **Exit:** seed runs twice without duplicates; RLS tests green; security advisor clean
+- [x] `supabase/config.toml` (local test stack; sign-ups off; seed via Python)
+- [x] Migration 0001: every table, check, unique and index in `schema.sql` (+ `v_customer_card`)
+- [x] `cafe_counters` + `next_order_number()` / `next_menu_version()` (migration 0004)
+- [x] Append-only tables reject UPDATE / DELETE (trigger; verified on a real row)
+- [x] RLS enabled everywhere with read policies only; no client write grants (migrations 0002, 0005)
+- [x] Realtime publication: `orders`, `requests`, `conversations`, `inbound_messages`, `wa_messages`, `menu_items`, `cafes`, `notifications`, `customer_notes`, `customer_preferences` (migration 0003)
+- [x] RLS: `feedback`, `customer_preferences`, `customer_notes`, `v_customer_card` readable by `shift_manager`+
+- [x] `supabase/dev/` migration for `dev_turn_traces` (G6), applied with `generate.py --dev-sql`
+- [x] Seed: café with simulator `phone_number_id`, 31 dishes with every allergen state, 12 tables with `qr_text`
+- [x] Seed: one auth user per role + memberships, returning customers with history, approved template rows
+- [x] Seed: customer profiles (allergy, vegan + dislike, oat milk, complaint, empty), feedback rows, two staff notes
+- [x] Seed: second café for isolation tests
+- [x] Seed `--live` option (open orders in every status and flag)
+- [x] `scripts/reset-dev-db.ps1` (refuses unless APP_ENV is local and only seed cafés exist)
+- [x] Applied to the cloud dev project (`supabase db push` with the session URL)
+- [ ] Applied to the local stack — runs in CI; locally once Docker Desktop is running
+- [x] Tests (`tests/integration/test_rls.py`, 36 cases, through Supabase Auth + PostgREST): café A sees no café B rows on 16 tables; owner / platform / backend tables hidden from `shift_manager`; `low_rating` hidden below `manager`; own `notifications` only; anon sees nothing; client writes refused
+- [x] **Exit:** migrations apply to an empty DB; seed runs twice with no duplicates (31 dishes, 5 customers, 27 orders, 7 profile values); RLS tests green against the cloud dev project; no table without RLS, no client write grants (SQL check; the Supabase MCP isn't connected in this session)
 
 ## S4 · Backend core
 
