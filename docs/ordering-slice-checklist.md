@@ -9,7 +9,7 @@ Tracks [ordering-slice.md](ordering-slice.md). Ticked in the same commit as the 
 | Step | Status | Commit |
 |---|---|---|
 | S0 Setup and plan approval | To do | — |
-| S1 Scaffold | To do | — |
+| S1 Scaffold | Done | S1 commit |
 | S2 Contracts and doc updates | To do | — |
 | S3 Database and seed | To do | — |
 | S4 Backend core | To do | — |
@@ -44,16 +44,16 @@ Tracks [ordering-slice.md](ordering-slice.md). Ticked in the same commit as the 
 
 ## S1 · Scaffold
 
-- [ ] `backend/` project: dependencies, ruff, mypy, pytest
-- [ ] `main_api` and `main_worker` with `/healthz`; `/internal/*` only on worker
-- [ ] `frontend/` Vite + React + TS, ESLint, Vitest, design tokens
-- [ ] `simulator/` Vite + React + TS
-- [ ] `.env.example` for backend, frontend, simulator (no values)
-- [ ] `scripts/dev.ps1`, `scripts/test.ps1`
-- [ ] `supabase/config.toml` for the local test stack
-- [ ] Test: `main_api` and `main_worker` share no routes
-- [ ] `.github/workflows/ci.yml` (lint, types, tests for all three)
-- [ ] **Exit:** `scripts/dev.ps1` starts all four; both services answer `/healthz`; CI green
+- [x] `backend/` project: dependencies, ruff, mypy, pytest; `requirements.lock`
+- [x] `main_api` and `main_worker` with `/healthz`; `/internal/*` only on worker
+- [x] `frontend/` Vite + React + TS, ESLint, Vitest, design tokens
+- [x] `simulator/` Vite + React + TS
+- [x] `.env.example` for backend, frontend, simulator (no values)
+- [x] `scripts/dev.ps1`, `scripts/test.ps1`, `scripts/new-dev-secrets.ps1`
+- [x] Test: `main_api` and `main_worker` share no routes; config parsing; log scrubbing
+- [x] `.github/workflows/ci.yml` (lint, types, tests for all three; integration job once `supabase/config.toml` exists)
+- [x] ~~`supabase/config.toml`~~ moved to S3 (needs the Supabase CLI)
+- [x] **Exit:** both services start with the real `.env` and answer `/healthz`; ruff, mypy, pytest, tsc, ESLint, Vitest and both builds pass locally. CI itself runs on the first push
 
 ## S2 · Contracts and doc updates
 

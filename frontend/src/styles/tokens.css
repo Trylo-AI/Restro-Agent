@@ -1,0 +1,82 @@
+/* Design tokens from the Restro Console v2 mock (docs/console.md#design-tokens). All radii 0. */
+:root {
+  --font-sans: "Archivo", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  --color-bg: #f3f2f2;
+  --color-surface: #eae9e9;
+  --color-card: #ffffff;
+  --color-text: #201e1d;
+  --color-muted: #6b6664;
+  --color-border: #d6d3d2;
+
+  /* Accent is for `critical` only. */
+  --color-accent: #ec3013;
+  --color-accent-600: #dd2b0f;
+  --color-accent-700: #ae1800;
+  --color-accent-soft: #fde4df;
+
+  /* Amber set: `warning`. */
+  --color-amber: #b45309;
+  --color-amber-500: #d97706;
+  --color-amber-soft: #fdf1dc;
+
+  --color-green: #2f9e5b;
+  --color-calm: #8a8584;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  --radius: 0;
+  --sidebar-width: 244px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  border-radius: 0;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  font-weight: 800;
+  margin: 0;
+}
+
+code,
+.mono {
+  font-family: var(--font-mono);
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+}
+
+@keyframes critPulse {
+  0% { box-shadow: 0 0 0 0 rgba(236, 48, 19, 0.55); }
+  70% { box-shadow: 0 0 0 10px rgba(236, 48, 19, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(236, 48, 19, 0); }
+}
