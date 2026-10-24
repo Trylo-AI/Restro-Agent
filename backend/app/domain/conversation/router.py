@@ -109,9 +109,13 @@ async def route(ctx: TurnContext, turn: Turn) -> TurnResult:
             return [Reply(render.opted_out(ctx.cafe.name))]
         return TurnResult(commit=[opt_out])
 
-    # 2 · human mode: the bot is silent
+    # 2 · human mode: the bot is silent; the message shows in Chats and re-arms the idle hand-back
     if ctx.conversation.mode == "human":
-        return TurnResult()
+        async def rearm() -> None:
+            from app.domain.handoff.service import arm_idle_handback
+
+            await arm_idle_handback(ctx.cafe.id, ctx.conversation.id)
+        return TurnResult(after=[rearm])
 
     # 3 · table QR
     if text:

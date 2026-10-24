@@ -75,7 +75,7 @@ async def test_taps_only_order_from_qr_to_confirm(k: Kitchen) -> None:
     assert "₹190" in str(dishes[0].body)  # price rendered by code from the DB
     await k.say(WA, tap=f"item:{k.items['Cold Coffee']}")
     summary = await k.say(WA, tap=f"item:{k.items['Avocado Toast']}")
-    assert "Your order · Table T5" in summary[0].text
+    assert "Your order · Table 5" in summary[0].text
     assert "1 × Cold Coffee ₹190" in summary[0].text and "Total (incl. GST) ₹510" in summary[0].text
     version = (await k.state(WA))["cart"]["version"]
     assert ids(summary) == [f"confirm:{version}", f"edit:{version}", f"cancel:{version}"]

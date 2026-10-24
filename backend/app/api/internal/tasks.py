@@ -34,3 +34,10 @@ async def ack(body: dict[str, Any] = Body(...)) -> dict[str, str]:
     except Exception as exc:  # best effort; never worth a retry storm
         log.warning("ack_failed", cafe_id=cafe_id, error_class=type(exc).__name__)
     return {"status": "ok"}
+
+
+@router.post("/tasks/profile-note")
+async def profile_note(body: dict[str, Any] = Body(...)) -> dict[str, str]:
+    from app.domain import customers
+
+    return {"status": await customers.process_note(str(body["cafe_id"]), str(body["note_id"]))}

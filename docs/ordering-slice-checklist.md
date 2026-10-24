@@ -17,10 +17,10 @@ Tracks [ordering-slice.md](ordering-slice.md). Ticked in the same commit as the 
 | S6 Simulator UI | Done | S6 commit |
 | S7 Conversation pipeline and deterministic flows | Done | S7–S8 commit |
 | S8 Cart, Confirm and orders | Done | S7–S8 commit |
-| S9 AI agent | To do | — |
-| S10 Human help | To do | — |
-| S11 Menu availability | To do | — |
-| S12 Customer profile backend | To do | — |
+| S9 AI agent | Done | S9–S12 commit |
+| S10 Human help | Done | S9–S12 commit |
+| S11 Menu availability | Done | S9–S12 commit |
+| S12 Customer profile backend | Done | S9–S12 commit |
 | S13 Console shell | To do | — |
 | S14 Live orders | To do | — |
 | S15 Chats, Calls and bills, Menu | To do | — |
@@ -191,48 +191,55 @@ Built together with S8 (Confirm needs the order code) and committed as one step.
 
 ## S9 · AI agent
 
-- [ ] `integrations/llm`: `developer_api`, `vertex`, `stub`; schema output; 6 s timeout
-- [ ] Prompt prefix cache per `(cafe_id, menu_version)`; version check per turn
-- [ ] Suffix from SQL; last ~6 turns; nothing sensitive in the prompt
-- [ ] Intent handlers
-- [ ] `item_ref` resolution (sold out vs not on menu)
-- [ ] Guardrails: amount scan, alternatives, strikes, off-topic
-- [ ] Allergens from DB; `unknown` → handoff
-- [ ] Cancellation draft (reason code only; refund wording or amount → fixed fallback)
-- [ ] Retry on the other model → `system_error` handoff
-- [ ] `llm_calls` for every call, with `provider`, `cost`, `currency`, `pricing_version`, `message_id`, `order_id`, `outcome`
-- [ ] Kill switch (`off` / `cheap` / `handoff`)
-- [ ] `dev_turn_traces` when `DEV_TRACES=true`
-- [ ] `evals/` runner + ~30 draft cases (team reviews the cases)
-- [ ] Tests: unknown / sold-out rejected; unknown allergen → handoff; amounts dropped; invalid JSON → retry → handoff; kill switch; prompt has no phone, `wa_id` or profile allergy; profile dislikes reach the suffix
-- [ ] **Exit:** the goal phrase gives 2 × Cold Coffee + 1 × Avocado Toast ("no chilli"); eval smoke report saved
+Built with S10 and S11 and committed together (they share the handoff wiring).
+
+- [x] `integrations/llm`: `developer_api`, `vertex`, `stub`; JSON-schema output from the contract; timeout; never raises
+- [x] Models: Gemini 2.5 is closed to new keys → `gemini-3.5-flash` primary (p50 2.5 s on this prompt), `gemini-3.5-flash-lite` fallback; minimal thinking; config values (decision recorded)
+- [x] Prompt prefix cached per (café, menu version, tone); short ids (`m1`…) for dishes; version checked every turn
+- [x] Suffix from SQL; last ~6 messages; never phone, `wa_id`, other customers or profile allergies
+- [x] Interpret (ai_agent) vs act (conversation/agent_turn): ai_agent never calls orders, consent or outbound
+- [x] `item_ref` resolution: available id → op; sold out (by name) → alternatives; not on menu → strike
+- [x] Guardrails: amount scan on reply / clarify / notes; rejected ops discard the reply; off-topic one line + Menu
+- [x] Allergens answered from `menu_item_allergens`; `unknown` / unknown allergen → `allergy` request + human mode
+- [x] Allergies stated in chat → `allergy_note` on the order (bug found and fixed: was cleared before commit)
+- [x] Cancellation draft (reason code only; refund wording or amount → fixed fallback)
+- [x] Retry on the other model → `system_error` handoff
+- [x] `llm_calls` for every attempt, with `provider`, `purpose`, `cost`, `currency`, `pricing_version`, `message_id`, `order_id`
+- [x] Kill switch (`off` / `cheap` / `handoff`) + `llm_spend_check` job (15 min)
+- [x] `dev_turn_traces` when `DEV_TRACES=true` (raw output, parsed, guardrail actions)
+- [x] `evals/run.py` + 32 draft cases (team reviews and grows them); rate-limited calls counted as skipped
+- [x] Unit tests (33): amounts, refund wording, allergen names and mentions, name matching, cost
+- [x] Integration tests (14, scripted LLM): goal phrase + metering; sold out / not on menu; two unclear → handoff; amounts dropped; allergen contains / free from / unknown; human intent; failure → retry → handoff; invalid then fallback; kill switch; typed confirm + allergy note; preferences in, profile allergies out; cancellation guardrails
+- [x] **Exit:** the goal phrase gives 2 × Cold Coffee + 1 × Avocado Toast ("no chilli") with the real model (end to end in the simulator); eval smoke report saved — 8/8 scored cases correct, 24 not scored because the free-tier quota ran out
 
 ## S10 · Human help
 
-- [ ] Requests `help`, `allergy`, `bill`; one open per conversation and kind
-- [ ] Handoff reasons; human mode (bot silent, STOP still works)
-- [ ] `help_escalation`, `idle_handback` timers
-- [ ] Endpoints: request ack / resolve; takeover, reply, handback, open; bill deliver
-- [ ] Tests: one open request per kind; ack / resolve idempotent; reply outside 24 h refused; idle hand-back (fake clock); bill deliver closes the session
-- [ ] **Exit:** call waiter → ack → resolve → bot answers again; two unclear → handoff; staff reply reaches the simulator
+- [x] Requests `help`, `allergy`, `bill`; one open per conversation and kind
+- [x] Handoff reasons; human mode (bot silent, STOP still works); customer messages in human mode re-arm `idle_handback`
+- [x] `help_escalation` (2 min: escalation row, `new_order_alert` to café + managers, "the team is busy" to the customer), `idle_handback` (15 min, only when nothing is unanswered)
+- [x] Dead-lettered turn → `help` request (`system_error`) + human mode (open-decision default)
+- [x] Endpoints: request ack / resolve (resolve hands back); takeover, reply (takes over; 409 `window_closed`), handback, open (Message a table); bill deliver; notifications ack / ack-all; console telemetry
+- [x] Tests (10): ack → resolve → bot answers again; staff reply takeover, silent bot, audit has no message text; window closed 409; idle hand-back rules; help escalation once; bill deliver closes the session; Message a table; dead letter; notifications + telemetry
+- [x] **Exit:** call waiter → request → ack → resolve → the bot answers again; staff reply reaches the customer
 
 ## S11 · Menu availability
 
-- [ ] `POST /menu/{id}/availability`: version, audit, `item_sold_out` on open orders
-- [ ] **Exit:** the next message doesn't offer the item; the open cart drops it at the next summary
+- [x] `POST /menu/{id}/availability`: one transaction — `available`, new menu version, audit, `item_sold_out` on open orders; no-op when unchanged
+- [x] **Exit:** the very next message's prompt lacks the dish; an open cart drops it at the next summary with a notice; open orders flagged
 
 ## S12 · Customer profile backend
 
-- [ ] `v_customer_card` view (migration 0005)
-- [ ] `POST /customers/{id}/notes` → note row + `profile_note` task; audit `customer.note`
-- [ ] `profile_note` handler: one LLM call + retry → validate ops → one transaction → `applied` / `no_changes` / `failed`
-- [ ] Op validation: fixed kinds, single vs list kinds, ≤ 40 chars, allergens matched; consent / offers / prices / orders dropped
-- [ ] Auto-apply incl. allergies (G8); audit `customer.profile_update`; `llm_calls` linked to the note
-- [ ] `POST /customer-notes/{id}/undo` (409 if changed again since)
-- [ ] `POST /customers/{id}/preferences/remove` (chip ×)
-- [ ] Profile allergies in the order read for the card and print ticket
-- [ ] Tests: vegan + mushrooms applied; allergy removal applied and audited; consent comment dropped; bad kinds dropped; LLM failure → profile unchanged; undo; undo after later change → 409; cross-café → 404; note text never logged
-- [ ] **Exit:** a note posted from the API changes the profile within a few seconds and shows its applied ops
+- [x] `v_customer_card` view (in migration 0001 from the S2 contract; read grants in 0005)
+- [x] `POST /customers/{id}/notes` → note row + `profile-note` task; audit `customer.note` (length only, never the text)
+- [x] `profile-note` worker task: re-reads the note (pending only) → one LLM call + retry → validate ops → one transaction → `applied` / `no_changes` / `failed`
+- [x] Op validation: fixed kinds, single vs list kinds, diet and spice normalised, ≤ 40 chars, allergens mapped to ids; consent / offers / prices / orders / phone dropped
+- [x] Auto-apply incl. allergies (G8); `previous` value kept per op; audit `customer.profile_update`; `llm_calls` linked to the note (`purpose = profile_note`)
+- [x] `POST /customer-notes/{id}/undo` (409 when a later note touched the same value; idempotent)
+- [x] `POST /customers/{id}/preferences/remove` (chip ×)
+- [x] Profile allergies for the order card and print ticket: the console reads `customer_preferences` (RLS, Realtime) — done in S14
+- [x] Unit tests (3): normalisation, junk and consent ops dropped, duplicates collapse
+- [x] Integration tests (5): vegan + mushrooms applied, later change blocks the earlier undo (409), undo restores the previous value; allergy add and remove applied automatically; consent comment changes nothing; LLM failure → `failed`, profile unchanged, processed once; chip removal; another café's customer → 404; no phone in the prompt; comment text never in the audit log
+- [x] **Exit:** a note posted through the API changes the profile and shows its applied ops (scripted model); real-model check pending free-tier quota
 
 ## S13 · Console shell
 

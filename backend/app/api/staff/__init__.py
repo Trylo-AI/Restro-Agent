@@ -7,4 +7,4 @@ from fastapi import APIRouter
 
 router = APIRouter()
 
-from app.api.staff import cafes, orders  # noqa: E402,F401  (registers routes)
+from app.api.staff import cafes, customers, help, menu, orders  # noqa: E402,F401  (registers routes)

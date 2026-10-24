@@ -30,6 +30,11 @@ def inr(paise: int) -> str:
     return f"₹{s}" + (f".{rem:02d}" if rem else "")
 
 
+def table_name(label: str) -> str:
+    """'T5' → 'Table 5'; 'Patio 2' → 'Table Patio 2'. What customers see; staff see the label as is."""
+    return f"Table {label[1:]}" if len(label) > 1 and label[0] in "Tt" and label[1:].isdigit() else f"Table {label}"
+
+
 def veg_mark(veg: bool) -> str:
     return "veg" if veg else "non-veg"
 
@@ -79,7 +84,7 @@ def category_items(label: str, slug: str, items: Sequence[tuple[str, str, int, b
 # ── Cart and confirmation ─────────────────────────────────────────────────
 
 def summary(priced: Priced, table_label: str | None, allergy_note: str | None, version: int) -> Buttons:
-    head = f"Your order · Table {table_label}" if table_label else "Your order"
+    head = f"Your order · {table_name(table_label)}" if table_label else "Your order"
     lines = [head]
     for line in priced.lines:
         lines.append(f"{line.qty} × {line.item.name} {inr(line.line_paise)}")
@@ -115,7 +120,7 @@ def empty_cart() -> Buttons:
 
 
 def ask_table(tables: Sequence[tuple[str, str]]) -> ListMessage:
-    rows = [Row(f"table:{tid}", f"Table {label}") for tid, label in tables[:10]]
+    rows = [Row(f"table:{tid}", table_name(label)) for tid, label in tables[:10]]
     return ListMessage("Which table are you at?", "Choose table", [Section("Tables", rows)])
 
 

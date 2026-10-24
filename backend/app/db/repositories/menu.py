@@ -52,3 +52,22 @@ async def allergens(conn: asyncpg.Connection, cafe_id: str, item_ids: list[str])
     for r in rows:
         out[r["item_id"]][r["allergen"]] = r["state"]
     return out
+
+
+async def all_items(conn: asyncpg.Connection, cafe_id: str) -> list[MenuItem]:
+    """Every dish, sold out included (to tell "sold out" from "not on the menu")."""
+    rows = await conn.fetch("select " + _COLS + " from menu_items where cafe_id = $1 order by category, name", cafe_id)
+    return [MenuItem(**dict(r)) for r in rows]
+
+
+async def set_available(conn: asyncpg.Connection, cafe_id: str, item_id: str, available: bool, version: int) -> MenuItem | None:
+    """Returns the item when the value changed; None when it was already set."""
+    row = await conn.fetchrow(
+        "update menu_items set available = $3, version = $4 where cafe_id = $1 and id = $2 and available <> $3 returning " + _COLS,
+        cafe_id, item_id, available, version,
+    )
+    return MenuItem(**dict(row)) if row else None
+
+
+async def next_version(conn: asyncpg.Connection, cafe_id: str) -> int:
+    return int(await conn.fetchval("select next_menu_version($1)", cafe_id))

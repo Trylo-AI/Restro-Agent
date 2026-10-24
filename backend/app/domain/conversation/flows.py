@@ -180,11 +180,21 @@ async def status(ctx: TurnContext) -> list[Reply]:
 
 def call_waiter(ctx: TurnContext, reason_tag: str = "asked") -> TurnResult:
     """Opens a help request and hands the chat to staff. Never blocked by pause, closed or guardrails."""
+    box: dict[str, str] = {}
+
     async def commit(c: asyncpg.Connection) -> list[Reply]:
         opened = await handoff.handoff(c, ctx.cafe.id, ctx.conversation.id, reason_tag,
                                        table_session_id=ctx.conversation.table_session_id)
+        if opened.created:
+            box["request_id"] = opened.request_id
         return [Reply(render.help_opened() if opened.created else render.already_on_way())]
-    return TurnResult(commit=[commit])
+
+    async def after() -> None:
+        if "request_id" in box:
+            from app.domain.handoff.service import schedule_help_escalation
+
+            await schedule_help_escalation(ctx.cafe.id, box["request_id"])
+    return TurnResult(commit=[commit], after=[after])
 
 
 def bill(ctx: TurnContext) -> TurnResult:

@@ -90,3 +90,21 @@ async def set_mode(conn: asyncpg.Connection, cafe_id: str, conversation_id: str,
 async def set_table_session(conn: asyncpg.Connection, cafe_id: str, conversation_id: str, session_id: str | None) -> None:
     await conn.execute("update conversations set table_session_id = $3 where cafe_id = $1 and id = $2",
                        cafe_id, conversation_id, session_id)
+
+
+async def latest_in_session(conn: asyncpg.Connection, cafe_id: str, table_session_id: str) -> Conversation | None:
+    row = await conn.fetchrow(
+        "select " + _COLS + " from conversations where cafe_id = $1 and table_session_id = $2 order by updated_at desc limit 1",
+        cafe_id, table_session_id,
+    )
+    return Conversation(**dict(row)) if row else None
+
+
+async def last_activity(conn: asyncpg.Connection, cafe_id: str, conversation_id: str, customer_id: str) -> tuple[Any, Any]:
+    """(last customer message at, last outbound message at) for idle hand-back."""
+    row = await conn.fetchrow(
+        """select (select max(received_at) from inbound_messages where cafe_id = $1 and conversation_id = $2) as last_in,
+                  (select max(created_at) from wa_messages where cafe_id = $1 and customer_id = $3) as last_out""",
+        cafe_id, conversation_id, customer_id,
+    )
+    return (row["last_in"], row["last_out"]) if row else (None, None)

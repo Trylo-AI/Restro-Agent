@@ -48,3 +48,23 @@ async def open_session(conn: asyncpg.Connection, cafe_id: str, table_id: str) ->
         return str(created)
     return str(await conn.fetchval(
         "select id::text from table_sessions where cafe_id = $1 and table_id = $2 and closed_at is null", cafe_id, table_id))
+
+
+async def close_session(conn: asyncpg.Connection, cafe_id: str, table_session_id: str) -> bool:
+    return bool(await conn.fetchval(
+        "update table_sessions set closed_at = now() where cafe_id = $1 and id = $2 and closed_at is null returning id",
+        cafe_id, table_session_id))
+
+
+async def session_exists(conn: asyncpg.Connection, cafe_id: str, table_session_id: str) -> bool:
+    return bool(await conn.fetchval("select 1 from table_sessions where cafe_id = $1 and id = $2", cafe_id, table_session_id))
+
+
+async def bill_orders(conn: asyncpg.Connection, cafe_id: str, table_session_id: str) -> list[tuple[str, int, int]]:
+    """(order_id, number, total_paise) for every non-cancelled order of the session."""
+    rows = await conn.fetch(
+        """select id::text, number, total_paise from orders
+           where cafe_id = $1 and table_session_id = $2 and status <> 'CANCELLED' order by number""",
+        cafe_id, table_session_id,
+    )
+    return [(r["id"], r["number"], r["total_paise"]) for r in rows]

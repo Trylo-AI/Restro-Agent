@@ -64,12 +64,14 @@ async def confirm(ctx: TurnContext, state: dict[str, Any], version: int) -> Turn
 
     near_closing = hours.status(ctx.cafe).near_closing
     lines = [OrderLine(ln.item.id, ln.item.name, ln.item.price_paise, ln.qty, ln.note) for ln in priced.lines]
+    allergy_note = state.get("allergy_note")  # captured now: state is reset for the next visit below
+    asked_name = state.get("awaiting") == "name"
     created_box: dict[str, Order] = {}
 
     async def commit(c: asyncpg.Connection) -> list[Reply]:
         order, created = await orders_repo.create(
             c, ctx.cafe.id, customer_id=ctx.customer.id, table_session_id=ctx.conversation.table_session_id,
-            lines=lines, expected_minutes=priced.expected_minutes, allergy_note=state.get("allergy_note"),
+            lines=lines, expected_minutes=priced.expected_minutes, allergy_note=allergy_note,
             source="qr", idempotency_key=key, status="NEW", flags=["near_closing"] if near_closing else [],
         )
         if not created:
@@ -78,7 +80,7 @@ async def confirm(ctx: TurnContext, state: dict[str, Any], version: int) -> Turn
         await customers_repo.touch_visit(c, ctx.cafe.id, ctx.customer.id)
         created_box["order"] = order
         replies = [Reply(render.order_received(order.number, order.expected_minutes, order.id, order.version))]
-        if state.get("awaiting") == "name":
+        if asked_name or not ctx.customer.name:
             replies.append(Reply(render.ask_name_after_order()))
         return replies
 

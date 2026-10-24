@@ -145,6 +145,7 @@ Staff (`shift_manager`+) add free-text comments to a customer's profile. One str
 | Local shims | In-memory signal and task shims locally; a restart drops pending timers, inbound work stays in `pending_work` |
 | Dev traces | `dev_turn_traces` (raw LLM output, guardrail actions) only in `supabase/dev/`, written only when `DEV_TRACES=true` |
 | Profile visibility | Every member (`shift_manager`+) sees the full customer profile, including feedback and complaints |
+| Gemini models (starting point) | Gemini 2.5 is closed to new API keys (Oct 2026). Primary `gemini-3.5-flash`, fallback `gemini-3.5-flash-lite`, minimal thinking; measured on this prompt: Flash p50 2.5 s, Flash-Lite 6.9 s. Both are config values; the Phase 2 evals decide routing |
 | Order edits | Customer edits or cancels only while `NEW` |
 | Staff cancel | `shift_manager` cancels in `NEW`; `manager`+ from `ACCEPTED` or `READY`. Reason from a fixed list + custom text. P0 |
 | Cancellation message | AI-written (intent + café tone) under guardrails with a fixed fallback; one extra LLM call per staff cancel. Managers and owner get an in-app `notifications` row, no WhatsApp |

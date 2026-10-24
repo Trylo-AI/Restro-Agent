@@ -18,10 +18,12 @@ from app.core.logging import configure_logging
 from app.db.pool import close_pool, open_pool
 from app.domain import jobs
 from app.domain import outbound as _outbound  # noqa: F401  (registers the send_check timer)
-from app.domain.conversation import pipeline, router
+from app.domain.conversation import agent_turn, pipeline, router
+from app.domain.handoff import service as _help_timers  # noqa: F401  (registers help timers, dead-letter hook)
 from app.domain.orders import service as _order_timers  # noqa: F401  (registers order timers)
 
 pipeline.set_handler(router.route)
+router.set_free_text_handler(agent_turn.handle_text)
 
 
 @asynccontextmanager

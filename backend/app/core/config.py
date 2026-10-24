@@ -32,8 +32,9 @@ class Settings(BaseSettings):
     gemini_api_key: SecretStr | None = None
     gcp_project: str | None = None
     gcp_location: str = "global"
-    llm_model_primary: str = "gemini-2.5-flash-lite"
-    llm_model_fallback: str = "gemini-2.5-flash"
+    # Gemini 2.5 is closed to new API keys (Oct 2026); routing is decided in Phase 2.
+    llm_model_primary: str = "gemini-3.5-flash"
+    llm_model_fallback: str = "gemini-3.5-flash-lite"
     llm_timeout_seconds: float = 6.0
     llm_kill_switch: Literal["off", "cheap", "handoff"] = "off"
     llm_daily_spend_limit_usd: float = 2.0

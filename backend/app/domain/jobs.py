@@ -32,12 +32,28 @@ async def stuck_inbound_check() -> dict[str, int]:
     return {"resignalled": len(stuck), "recovered_sends": len(unsent)}
 
 
+async def llm_spend_check() -> dict[str, int]:
+    """Today's LLM spend over LLM_DAILY_SPEND_LIMIT_USD → kill switch to the cheaper model (and alert)."""
+    from app.core.config import get_settings
+    from app.db.repositories import llm_calls
+    from app.domain.ai_agent import calls
+
+    async with conn() as c:
+        spent = await llm_calls.spend_today_usd(c)
+    over = spent > get_settings().llm_daily_spend_limit_usd
+    calls.set_auto_kill("cheap" if over else None)
+    if over:
+        log.error("llm_spend_over_limit", spent_usd=round(spent, 4))
+    return {"over_limit": int(over)}
+
+
 JOBS: dict[str, Callable[[], Awaitable[dict[str, int]]]] = {
     "stuck_inbound_check": stuck_inbound_check,
+    "llm_spend_check": llm_spend_check,
 }
 
 # Local loop intervals in seconds (Cloud Scheduler cron in the cloud).
-LOCAL_SCHEDULE = {"stuck_inbound_check": 60}
+LOCAL_SCHEDULE = {"stuck_inbound_check": 60, "llm_spend_check": 900}
 
 
 def register(name: str, interval_s: int | None = None) -> Callable[[Callable[[], Awaitable[dict[str, int]]]], Callable[[], Awaitable[dict[str, int]]]]:

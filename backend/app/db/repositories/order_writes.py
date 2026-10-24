@@ -100,3 +100,21 @@ async def insert_notifications(conn: asyncpg.Connection, cafe_id: str, user_ids:
 
 def is_recent(at: datetime, now: datetime, seconds: int) -> bool:
     return (now - at).total_seconds() <= seconds
+
+
+async def mark_notification_read(conn: asyncpg.Connection, cafe_id: str, user_id: str, notification_id: str | None) -> int:
+    """One notification (by id) or all of the user's unread ones. Returns rows changed."""
+    if notification_id:
+        rows = await conn.fetch(
+            "update notifications set read_at = now() where cafe_id = $1 and user_id = $2 and id = $3 and read_at is null returning id",
+            cafe_id, user_id, notification_id)
+    else:
+        rows = await conn.fetch(
+            "update notifications set read_at = now() where cafe_id = $1 and user_id = $2 and read_at is null returning id",
+            cafe_id, user_id)
+    return len(rows)
+
+
+async def notification_exists(conn: asyncpg.Connection, cafe_id: str, user_id: str, notification_id: str) -> bool:
+    return bool(await conn.fetchval("select 1 from notifications where cafe_id = $1 and user_id = $2 and id = $3",
+                                    cafe_id, user_id, notification_id))
