@@ -24,7 +24,7 @@ Tracks [ordering-slice.md](ordering-slice.md). Ticked in the same commit as the 
 | S13 Console shell | Done | S13–S14 commit |
 | S14 Live orders | Done | S13–S14 commit |
 | S15 Chats, Calls and bills, Menu | Done | S15 commit |
-| S16 End to end | In progress | Playwright set up; orders and service specs pass (5) |
+| S16 End to end | In progress | 12 Playwright specs + run of 20 pass; manual dry run left (Aman) |
 
 ## S0 · Setup and plan approval (Aman)
 
@@ -287,9 +287,11 @@ Built with S10 and S11 and committed together (they share the handoff wiring).
 
 - [x] Playwright set up (`frontend/playwright.config.ts`, `frontend/e2e/`; reads the git-ignored env files; `E2E_CHROMIUM` can point at an already-downloaded Chromium)
 - [x] Playwright: goal path with simulator and console side by side (`e2e/orders.spec.ts` order → Served; `e2e/service.spec.ts` call waiter → reply → hand back)
-- [ ] Playwright: edit while `NEW`, edit after `ACCEPTED`, sold out mid-order, allergy handoff, call waiter, delay, cancel with Other text
-- [ ] Playwright: Profile → comment → profile updated → Undo, seen on two consoles
-- [ ] Playwright: dead letter and ambiguous send via fault injection (one message, never two)
+- [x] Playwright (`e2e/flows.spec.ts`): edit while `NEW` (dish added, card shows Edited) and edit after `ACCEPTED` refused; sold out mid-order (dish dropped at Confirm with a notice, the order keeps the rest); delay (+10, customer told, preview matches); cancel with Other text (apology sent, staff text never sent). Call waiter is in `e2e/service.spec.ts`
+- [x] Playwright (`e2e/llm.spec.ts`, real model, skip with `E2E_NO_LLM=1`): `unknown` allergen (brownie / tree nuts) → "Let me check with the team" → Calls → Reply reaches the customer; Profile → comment → allergy + oat milk applied → seen on a second console (manager) by Realtime → Undo clears both
+- [x] Playwright (`e2e/faults.spec.ts`): dead letter (4 armed crashes → one standard message, the crashed turn sent nothing → Calls → Resolve); ambiguous send (one row, `error_code = timeout`, confirmed `sent` by its status webhook, never resent)
+- [x] Fixed in testing: the e2e helper matched a repeated identical message (second category list) to the first copy; it now tracks position. Fault specs wait for earlier sends to leave before arming, because rows are written before the send
 - [ ] Manual dry run of the service items that don't need a real number
-- [ ] `scripts/run-20.ps1`: 20 stub runs + 3 real-model runs; no lost, duplicate or wrong orders
+- [x] `scripts/run-20.ps1` (`scripts/run_conversations.py`): 20 taps-only customers (every 4th double-taps Confirm) + 3 ordering "2 cold coffee and 1 avocado toast, no chilli" through the real model, 5 at a time → **23/23 orders, no lost, duplicate or wrong orders**; every inbound processed, no `pending_work` left, no send pending / ambiguous / failed (24 Oct 2026)
+- [ ] Finding for Aman: run with 10 at a time first failed (3/23): the harness's polling saturated the api's 5-connection pool, because each query round-trips ~150–200 ms from this PC to the hosted DB (one `/dev/sim/thread` poll ≈ 0.9 s). Polling slowed to 1.5 s, 5 at a time. Turns are slow locally for the same reason (a customer run took 1.5–5.5 min). To be measured in the cloud region; the performance dashboard ([OPS_PLAN](OPS_PLAN.md)) would show it per query
 - [ ] **Exit:** the [goal](ordering-slice.md#goal) is met

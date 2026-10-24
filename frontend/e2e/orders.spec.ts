@@ -1,15 +1,8 @@
 // Live orders on the real stack: a WhatsApp order reaches the console, moves through the columns, Undo sends nothing.
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
+import { signIn } from "./console";
 import { Customer } from "./sim";
-
-async function signIn(page: Page, email: string) {
-  await page.goto("/");
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill(process.env.E2E_STAFF_PASSWORD ?? "");
-  await page.getByRole("button", { name: /^Sign in/ }).click();
-  await expect(page.getByRole("heading", { name: "Live orders" })).toBeVisible();
-}
 
 test("shift manager: order arrives, Accept → Undo → Accept → Ready → Served, profile opens", async ({ page }) => {
   test.skip(!process.env.E2E_STAFF_PASSWORD || !process.env.E2E_SIM_TOKEN, "needs frontend/.env.local and simulator/.env.local");
