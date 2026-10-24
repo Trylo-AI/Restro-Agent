@@ -9,6 +9,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api import webhooks
 from app.core.config import get_settings
 from app.core.errors import install_error_handlers
 from app.core.logging import configure_logging
@@ -42,6 +43,12 @@ def create_app() -> FastAPI:
     @app.get("/healthz", include_in_schema=False)
     async def healthz() -> dict[str, str]:
         return {"status": "ok", "service": "api"}
+
+    app.include_router(webhooks.router)
+    if settings.simulator_on:
+        from app.api.dev import sim
+
+        app.include_router(sim.router)
 
     return app
 

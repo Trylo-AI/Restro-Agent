@@ -13,7 +13,7 @@ Tracks [ordering-slice.md](ordering-slice.md). Ticked in the same commit as the 
 | S2 Contracts and doc updates | Done | S2 commit |
 | S3 Database and seed | Done | S3 commit |
 | S4 Backend core | Done | S4 commit |
-| S5 WhatsApp ingress, send layer, dev router | To do | — |
+| S5 WhatsApp ingress, send layer, dev router | Done | S5 commit |
 | S6 Simulator UI | To do | — |
 | S7 Conversation pipeline and deterministic flows | To do | — |
 | S8 Cart, Confirm and orders | To do | — |
@@ -113,19 +113,20 @@ Tracks [ordering-slice.md](ordering-slice.md). Ticked in the same commit as the 
 
 ## S5 · WhatsApp ingress, send layer, dev router
 
-- [ ] `GET /webhooks/whatsapp` verify-token handshake
-- [ ] `POST /webhooks/whatsapp`: signature on raw bytes → `webhook_events` → tenant → upsert → `inbound_messages` + `pending_work` (one transaction) → signal + `wa-ack` → 200
-- [ ] `pending_work` due: +1 s text, now for taps
-- [ ] `statuses` forward-only into `wa_messages`
-- [ ] Parser (every entry and change; multi-entry batches)
-- [ ] Builders with Meta limits (3 buttons, title ≤ 20, list ≤ 10 rows, row ≤ 24, body ≤ 1024)
-- [ ] Client with `meta` and `simulator` transports; error classification
-- [ ] Simulator transport: fake `wamid`, signed status webhooks, armed faults
-- [ ] `domain/outbound`: window check, step row first (`pending` / `sent` / `ambiguous` / `failed`), `attempted_at`, retry only what certainly didn't go, `send_check`, `order_update` outside the window
-- [ ] `wa-ack` task: mark read + typing
-- [ ] Dev router: send, thread, read, debug, customers, close-window, faults, alerts (`X-Sim-Token`, local only)
-- [ ] Tests: tampered signature → 401 and nothing stored; duplicate `wamid` → one reply; status never backwards; timeout after send → `ambiguous`, not resent; parser fixtures; builder snapshots; window block
-- [ ] **Exit:** a simulator message lands in `webhook_events`, `inbound_messages` and `pending_work`; the phone shows typing
+- [x] `GET /webhooks/whatsapp` verify-token handshake
+- [x] `POST /webhooks/whatsapp`: signature on raw bytes → `webhook_events` → tenant → upsert → `inbound_messages` + `pending_work` (one transaction) → signal + `wa-ack` → 200
+- [x] `pending_work` due: +1 s text, now for taps
+- [x] `statuses` forward-only into `wa_messages`; `biz_opaque_callback_data` resolves an ambiguous row; cost estimate per category
+- [x] Parser (every entry and change; multi-entry batches; malformed entries skipped)
+- [x] Builders with Meta limits (3 buttons, title ≤ 20, list ≤ 10 rows, row ≤ 24, description ≤ 72, body ≤ 1024) + `limit_violations()`
+- [x] Transports `meta` (connect error → not sent; timeout / 5xx → ambiguous; 190 → token invalid) and `simulator`; error classification
+- [x] `domain/outbound`: window check, step row first (`pending` / `sent` / `ambiguous` / `failed`), atomic `attempted_at` claim, retry only what certainly didn't go, `send_check`, `order_update` outside the window, `WindowClosed` for staff replies, alerts by reference (no phone in the row)
+- [x] Recovery: `stuck_inbound_check` sends never-attempted steps
+- [x] `wa-ack` task: mark read + typing
+- [x] Dev router: send, thread, read, debug, customers (+ tables), new / reset customer, close-window, faults (arm / consume), events, alerts (`X-Sim-Token`, local only)
+- [x] Unit tests (16 new): parser fixtures, builder limits, Meta error classes, tampered / missing signature → 401 with no DB access, verify handshake, dev router token
+- [x] Integration tests (9, hosted dev project): stored + queued + deduped; bad signature stores nothing; unknown number not processed; window rules; send once then statuses forward-only; 4 concurrent deliveries → one send; 429 retried → one send; timeout → ambiguous, never resent, resolved by the status webhook; send_check fails an unconfirmed send
+- [x] **Exit:** with the real api and worker running, a simulator message lands in `webhook_events`, `inbound_messages` and `pending_work`, and the phone shows typing
 
 ## S6 · Simulator UI
 

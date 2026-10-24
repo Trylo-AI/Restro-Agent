@@ -144,7 +144,7 @@ An API key from Google AI Studio → `backend/.env` `GEMINI_API_KEY`. Free-tier 
 
 ### Local tools
 
-Already installed: Python 3.12 (`py -3.12`), Node 20, npm, Docker, git. Supabase CLI runs through `npx supabase`. Automated tests use the local Supabase stack in Docker (`npx supabase start`), so tests never touch the cloud project; **Docker Desktop must be running** for `pytest` integration tests.
+Already installed: Python 3.12 (`py -3.12`), Node 20, npm, Docker, git. Supabase CLI runs through `npx supabase`. Database integration tests run against the hosted dev project, each in its own throwaway café that is deleted afterwards, so seeded data is never touched (Aman, 24 Oct 2026; Docker Desktop doesn't start on this machine). CI runs the same tests on the local Supabase stack. `scripts/test.ps1 -Integration` wires the settings.
 
 ## Structure
 
@@ -578,7 +578,7 @@ Earliest useful checkpoints: after **S7** the taps-only flow works in the simula
 
 ## Assumptions
 
-- Tests run against the local Supabase stack in Docker; manual testing uses the cloud project. Neither holds real data.
+- Database tests run against the hosted dev project in throwaway cafés (CI: local stack); manual testing uses the seeded café. Neither holds real data.
 - One demo café, plus a second used only by isolation tests.
 - The console's `manager` and `owner` logins see the same service screens as `shift_manager` (plus Pause and cancel after `NEW`); their own screens are Later.
 - Model ids, Supabase key names and Meta webhook field names are checked against current vendor docs at the step that uses them.

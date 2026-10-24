@@ -8,6 +8,7 @@ from collections.abc import Awaitable, Callable
 
 from app.core.logging import get_logger
 from app.db.repositories import jobs as jobs_repo
+from app.db.repositories import wa_messages
 from app.db.tx import conn
 from app.integrations import tasks
 
@@ -18,10 +19,17 @@ async def stuck_inbound_check() -> dict[str, int]:
     """Due work nobody picked up, or a running turn whose lease expired → re-signal (and alert)."""
     async with conn() as c:
         stuck = await jobs_repo.stuck_work(c)
+        unsent = await wa_messages.never_attempted(c)
     for s in stuck:
         log.warning("stuck_inbound", cafe_id=s.cafe_id, conversation_id=s.conversation_id, reason=s.reason)
         await tasks.signal().publish(s.cafe_id, s.conversation_id)
-    return {"resignalled": len(stuck)}
+    # Steps committed by a turn whose process died before sending: send them now (claimed atomically).
+    from app.domain import outbound
+
+    for cafe_id, step_id in unsent:
+        log.warning("recovering_unsent_step", cafe_id=cafe_id, step_id=step_id)
+        await outbound.deliver(cafe_id, step_id)
+    return {"resignalled": len(stuck), "recovered_sends": len(unsent)}
 
 
 JOBS: dict[str, Callable[[], Awaitable[dict[str, int]]]] = {
