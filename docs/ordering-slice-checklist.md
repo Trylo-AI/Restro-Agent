@@ -12,7 +12,7 @@ Tracks [ordering-slice.md](ordering-slice.md). Ticked in the same commit as the 
 | S1 Scaffold | Done | S1 commit |
 | S2 Contracts and doc updates | Done | S2 commit |
 | S3 Database and seed | Done | S3 commit |
-| S4 Backend core | To do | — |
+| S4 Backend core | Done | S4 commit |
 | S5 WhatsApp ingress, send layer, dev router | To do | — |
 | S6 Simulator UI | To do | — |
 | S7 Conversation pipeline and deterministic flows | To do | — |
@@ -92,23 +92,24 @@ Tracks [ordering-slice.md](ordering-slice.md). Ticked in the same commit as the 
 
 ## S4 · Backend core
 
-- [ ] Config (pydantic-settings) with every switch in [adapters](ordering-slice.md#swappable-adapters)
-- [ ] JSON logs with ids only
-- [ ] `env` secrets backend; `token_ref` resolution
-- [ ] asyncpg pool on the transaction pooler (`statement_cache_size=0`)
-- [ ] Repository base that requires `cafe_id`
-- [ ] JWT verification against JWKS (cached with expiry; `exp`, `aud`, `iss`)
-- [ ] Membership and role dependency; `X-Cafe-Id` handling
-- [ ] Error body and mapping (400 / 401 / 403 / 404 / 409 / 422 / 429 / 5xx)
-- [ ] `audit` helper (one row per console write)
-- [ ] Internal auth (`dev_token`; `oidc` stubbed)
-- [ ] Local task and signal shims behind `integrations/tasks`; `integrations/gcp` interfaces
-- [ ] Worker job loop: `stuck_inbound_check` 60 s, `llm_spend_check` 15 min
-- [ ] `pending_work` repository: upsert, due rows, retry with backoff, dead letter
-- [ ] Conversation lease: claim, renew, fenced commit, release, expiry
-- [ ] `timers.schedule()` and dispatch
-- [ ] Tests: expired JWT, wrong audience, other café → 403, role too low → 403, deactivated → 403, `/internal/*` without token → 401; two concurrent claims → one holder; stale holder's commit refused
-- [ ] **Exit:** auth tests green; the shim delivers a delayed task exactly once; lease tests green
+- [x] Config (pydantic-settings) with every switch in [adapters](ordering-slice.md#swappable-adapters)
+- [x] JSON logs with ids only (scrubber drops text, phone, wa_id, tokens)
+- [x] `env` secrets backend; `token_ref` resolution (`env:NAME`), 10-min cache, `forget()` for error 190
+- [x] asyncpg pool on the transaction pooler (`statement_cache_size=0`), json/jsonb codecs; `tx()` short transactions
+- [x] Repositories take `cafe_id` first; named cross-café exceptions (`jobs.py`, tenant lookup)
+- [x] JWT verification against JWKS (cached with expiry; ES256/RS256/EdDSA only; `exp`, `aud`, `iss`, `sub` required)
+- [x] Membership and role dependency (`shift_manager` / `manager` / `owner`); `X-Cafe-Id` → 404 if missing, 403 if not a member
+- [x] Error body and mapping (400 / 401 / 403 / 404 / 409 / 422 / 429 / 500); validation errors never echo submitted values
+- [x] `audit` helper (one row per console write, in the caller's transaction)
+- [x] Internal auth (`dev_token`; `oidc` refuses until Phase 3)
+- [x] Local task and signal shims behind `integrations/tasks` (retries, Cloud Tasks-style name dedupe, Pub/Sub-shaped envelope); `integrations/gcp` interfaces
+- [x] Worker job loop: `stuck_inbound_check` every 60 s (`llm_spend_check` joins in S9)
+- [x] `pending_work` repository: upsert (text debounce / tap now), claim when due, done, fail with 2 / 4 / 8 s backoff, dead letter on the 4th failure, merge into a newer pending row
+- [x] Conversation lease: claim, renew every 10 s, fence (row lock + owner check) in every commit, release, expiry
+- [x] `timers.schedule()` and dispatch registry
+- [x] Unit tests (27): expired / wrong-audience / wrong-issuer / foreign-key / HS256 JWT → 401; other café → 403; missing café header → 404; role too low → 403; deactivated → 403; `/internal/*` without token → 401; error body; delayed task delivered once; delivery retries; signal envelope; timer dispatch
+- [x] Integration tests (7, hosted dev project, throwaway café per test): five concurrent claims → one holder; expired lease re-claimed and the old holder's commit refused; debounce / due / tap; 3 retries then dead letter; failure merges into newer pending row; stuck work found and expired running work reclaimed
+- [x] **Exit:** all green (unit + integration); test cafés cleaned up; append-only triggers verified enabled afterwards
 
 ## S5 · WhatsApp ingress, send layer, dev router
 

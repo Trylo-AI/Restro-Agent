@@ -51,6 +51,7 @@ jobs:
             echo "RLS_SUPABASE_URL=$API_URL"
             echo "RLS_PUBLISHABLE_KEY=$ANON_KEY"
             echo "RLS_PASSWORD=ci-staff-password-1"
+            echo "INTEGRATION_DATABASE_URL=$DB_URL"
           } >> "$GITHUB_ENV"
       - uses: actions/setup-python@v5
         with:

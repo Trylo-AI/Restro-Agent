@@ -24,7 +24,13 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "ASYNC", "S", "DTZ"]
-ignore = ["S101"]  # assert is fine in tests
+ignore = [
+    "S101",  # assert is fine in tests
+    "E501",  # SQL strings run long; line-length stays the guide for code
+]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Header", "fastapi.Body", "fastapi.Query", "fastapi.Path"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S105", "S106"]
