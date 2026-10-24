@@ -391,7 +391,7 @@ Every outbound goes through `domain/outbound`. Callers pass café, recipient, me
 | Utility template | Template `approved` | Alert; caller logs the miss |
 | Marketing template | Latest consent `opted_in` and template `approved` | Not sent |
 
-**Outbound step records.** Every outbound step (a turn's reply, its list, a status message) is its own `wa_messages` row with an idempotency key from the subject: `order:{id}:ACCEPTED`, `campaign_recipient:{id}`, `turn:{pending_work_id}:{step}`. The row is written first (`pending`, `wamid` null), unique on the key, so a re-run never resends.
+**Outbound step records.** Every outbound step (a turn's reply, its list, a status message) is its own `wa_messages` row with an idempotency key from the subject: `order:{id}:ACCEPTED`, `campaign_recipient:{id}`, `turn:{inbound_message_id}:{step}` (the message that started the turn, so a re-run after a crash or a merged retry reuses the same keys). The row is written first (`pending`, `wamid` null), unique on the key, so a re-run never resends.
 
 | Outcome of the request | Row becomes | Then |
 |---|---|---|

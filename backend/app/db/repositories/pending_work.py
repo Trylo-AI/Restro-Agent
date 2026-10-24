@@ -30,14 +30,19 @@ def _work(row: asyncpg.Record | None) -> Work | None:
 
 
 async def upsert_turn(conn: asyncpg.Connection, cafe_id: str, conversation_id: str, *, debounce: bool) -> Work:
-    """Text debounces (due = now + 1 s, moved again by each new text); a tap is due now."""
+    """Text debounces (due = now + 1 s, pushed later by each new text, never earlier); a tap is due now.
+
+    clock_timestamp(), not now(): now() is the transaction's start, which can be earlier than a message that
+    committed first, and would pull the due time back.
+    """
     delay = DEBOUNCE_SECONDS if debounce else 0.0
     row = await conn.fetchrow(
         """insert into pending_work (cafe_id, conversation_id, kind, status, next_attempt_at)
-            values ($1, $2, 'turn', 'pending', now() + make_interval(secs => $3))
+            values ($1, $2, 'turn', 'pending', clock_timestamp() + make_interval(secs => $3))
             on conflict (conversation_id, kind) where status = 'pending'
-            do update set next_attempt_at = case when $4 then excluded.next_attempt_at
-                                                 else least(pending_work.next_attempt_at, excluded.next_attempt_at) end
+            do update set next_attempt_at = case
+                when $4 then greatest(pending_work.next_attempt_at, excluded.next_attempt_at)
+                else least(pending_work.next_attempt_at, excluded.next_attempt_at) end
             returning id::text, cafe_id::text, conversation_id::text, status, attempts, next_attempt_at""",
         cafe_id, conversation_id, delay, debounce,
     )
@@ -68,6 +73,23 @@ async def mark_done(conn: asyncpg.Connection, cafe_id: str, work_id: str) -> Non
         "update pending_work set status = 'done', last_error = null where id = $2 and cafe_id = $1 and status = 'running'",
         cafe_id, work_id,
     )
+
+
+async def requeue(conn: asyncpg.Connection, cafe_id: str, work_id: str) -> None:
+    """Our lease was lost mid-turn: hand the row back (no attempt counted); the new holder reruns it."""
+    other = await conn.fetchval(
+        """select 1 from pending_work p join pending_work w on w.conversation_id = p.conversation_id
+           where w.id = $2 and w.cafe_id = $1 and p.status = 'pending' and p.kind = w.kind""",
+        cafe_id, work_id,
+    )
+    if other:
+        await conn.execute("update pending_work set status = 'done', last_error = 'lease_lost_merged' where id = $2 and cafe_id = $1",
+                           cafe_id, work_id)
+    else:
+        await conn.execute(
+            "update pending_work set status = 'pending', next_attempt_at = now() where id = $2 and cafe_id = $1 and status = 'running'",
+            cafe_id, work_id,
+        )
 
 
 @dataclass(frozen=True)

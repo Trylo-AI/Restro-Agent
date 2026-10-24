@@ -54,8 +54,12 @@ def in_window(last_inbound_at: datetime | None, now: datetime | None = None) -> 
 
 
 async def prepare(conn: asyncpg.Connection, cafe_id: str, recipient: Recipient, message: Message, key: str,
-                  purpose: str, *, fallback_template: Template | None = None) -> Step | None:
-    """Window check + step row, inside the caller's transaction. None = deliberately not sent."""
+                  purpose: str, *, fallback_template: Template | None = None,
+                  customer: customers.Customer | None = None) -> Step | None:
+    """Window check + step row, inside the caller's transaction. None = deliberately not sent.
+
+    Pass `customer` when the caller already loaded it this turn (saves a round trip).
+    """
     if purpose == Purpose.ALERT:
         if not isinstance(message, Template):
             raise ValueError("alerts are templates")
@@ -65,7 +69,8 @@ async def prepare(conn: asyncpg.Connection, cafe_id: str, recipient: Recipient, 
 
     if recipient.customer_id is None:
         raise ValueError("customer message without a customer")
-    customer = await customers.get(conn, cafe_id, recipient.customer_id)
+    if customer is None or customer.id != recipient.customer_id or customer.cafe_id != cafe_id:
+        customer = await customers.get(conn, cafe_id, recipient.customer_id)
     if customer is None:
         raise ValueError("unknown customer for this café")
     chosen: Message = message
@@ -82,14 +87,10 @@ async def prepare(conn: asyncpg.Connection, cafe_id: str, recipient: Recipient, 
     return step
 
 
-async def _recipient_address(c: asyncpg.Connection, step: Step) -> str | None:
-    if step.customer_id:
-        customer = await customers.get(c, step.cafe_id, step.customer_id)
-        return customer.wa_id if customer else None
+async def _alert_address(c: asyncpg.Connection, step: Step, cafe: cafes.Cafe) -> str | None:
     to_ref = str(step.payload.get("_to_ref") or "")
     if to_ref == "cafe_alert":
-        cafe = await cafes.get(c, step.cafe_id)
-        return str((cafe.settings if cafe else {}).get("alert_phone") or "") or None
+        return str(cafe.settings.get("alert_phone") or "") or None
     if to_ref.startswith("membership:"):
         return await c.fetchval(  # type: ignore[no-any-return]
             "select alert_phone from memberships where cafe_id = $1 and id = $2 and active",
@@ -105,14 +106,17 @@ async def deliver(cafe_id: str, step_id: str) -> str:
     """Send one prepared step. Returns the final status. Safe to call twice: only one call ever sends."""
     for attempt in range(len(RETRY_DELAYS) + 1):
         async with db_conn() as c:
-            if not await steps_repo.claim_attempt(c, cafe_id, step_id):
-                step = await steps_repo.get(c, cafe_id, step_id)
-                return step.status if step else "missing"
-            step = await steps_repo.get(c, cafe_id, step_id)
-            cafe = await cafes.get(c, cafe_id)
-            to = await _recipient_address(c, step) if step else None
-        if step is None or cafe is None:
-            return "missing"
+            claimed = await steps_repo.claim_for_delivery(c, cafe_id, step_id)
+            if claimed is None:
+                current = await steps_repo.get(c, cafe_id, step_id)
+                return current.status if current else "missing"
+            step, row = claimed
+            cafe = cafes.Cafe(
+                id=step.cafe_id, name=row["cafe_name"], status=row["cafe_status"], phone_number_id=row["phone_number_id"],
+                display_phone_number=row["display_phone_number"], token_ref=row["token_ref"], timezone=row["timezone"],
+                opening_hours=row["opening_hours"], cutoff_minutes=row["cutoff_minutes"], settings=row["settings"],
+            )
+            to = row["wa_id"] if step.customer_id else await _alert_address(c, step, cafe)
         if not to or cafe.status == "disconnected":
             async with db_conn() as c:
                 await steps_repo.mark_failed(c, cafe_id, step_id, "no_recipient" if not to else "disconnected")

@@ -54,6 +54,7 @@ async def post_signed(body: dict[str, Any]) -> int:
     raw = json.dumps(body, separators=(",", ":")).encode()
     headers = {"Content-Type": "application/json",
                "X-Hub-Signature-256": sign(raw, settings.meta_app_secret.get_secret_value())}
-    async with httpx.AsyncClient(timeout=15) as client:
+    # Generous: a slow network to the DB shows as a slow message in the simulator, not an error.
+    async with httpx.AsyncClient(timeout=30) as client:
         r = await client.post(settings.api_url.rstrip("/") + "/webhooks/whatsapp", content=raw, headers=headers)
         return r.status_code

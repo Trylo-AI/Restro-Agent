@@ -14,7 +14,7 @@ Tracks [ordering-slice.md](ordering-slice.md). Ticked in the same commit as the 
 | S3 Database and seed | Done | S3 commit |
 | S4 Backend core | Done | S4 commit |
 | S5 WhatsApp ingress, send layer, dev router | Done | S5 commit |
-| S6 Simulator UI | To do | — |
+| S6 Simulator UI | Done | S6 commit |
 | S7 Conversation pipeline and deterministic flows | To do | — |
 | S8 Cart, Confirm and orders | To do | — |
 | S9 AI agent | To do | — |
@@ -130,19 +130,22 @@ Tracks [ordering-slice.md](ordering-slice.md). Ticked in the same commit as the 
 
 ## S6 · Simulator UI
 
-- [ ] Phone: header, bubbles, times, ticks, typing dots
-- [ ] Reply buttons; list bottom sheet
-- [ ] Composer; send image / voice
-- [ ] Customer picker; table QR picker
-- [ ] Up to 3 phones side by side
-- [ ] "Try typing" phrases (English, Hinglish, Hindi script); Restart; Close 24-h window
-- [ ] Behind the scenes: state, cart, strikes, last LLM call, raw trace
-- [ ] Event log
-- [ ] Alert phone for `new_order_alert`
-- [ ] Meta-limit violations shown in red
-- [ ] Fault injection panel
-- [ ] Temporary echo turn (removed in S7)
-- [ ] **Exit:** echo chat on 3 phones; ticks ✓ → ✓✓ → blue; an over-long title shows the red badge
+- [x] Phone: header (café, online / typing…), bubbles, times, ticks (✓ sent, ✓✓ delivered, blue read, ! failed, ? ambiguous), typing dots
+- [x] Reply buttons; list bottom sheet (sections, rows, descriptions); taps send the reply id
+- [x] Composer; send photo / voice note / sticker
+- [x] Customer picker (seeded + New customer); table QR picker (sends `qr_text`)
+- [x] Up to 3 phones side by side
+- [x] "Try typing" phrases (English, Hinglish, Hindi script, changes, questions, people, off-topic); Restart; Close 24-h window
+- [x] Behind the scenes: step, mode, awaiting, table, strikes, allergy, lease, cart, work queue, order events, raw state; LLM calls with parsed output, guardrails, raw output, prompt suffix
+- [x] Event log
+- [x] Alert phone for `new_order_alert`
+- [x] Meta-limit violations shown in red
+- [x] Fault switches (send timeout, send 429, LLM fail, LLM invalid, turn crash)
+- [x] Worker pipeline (built here instead of S7): lease, debounce wait, turn split, fenced commit, sends after commit, retries 2 / 4 / 8 s, dead letter with the standard message; `work_retry` timer; `/internal/pubsub/inbound`
+- [x] Temporary echo turn (removed in S7)
+- [x] Component tests (6): ticks, buttons send ids, list sheet, violation badge
+- [ ] ~~Playwright smoke test~~ moved to S16 (Playwright and its browser are installed once there)
+- [x] **Exit:** with api, worker and simulator running: echo replies arrive in send order (text, buttons, list) with no limit violations; ticks reach blue read; tap and photo get their replies; a burst of three texts becomes one turn (or two when one lands after the turn started; never lost, never twice); four armed crashes dead-letter with the standard message
 
 ## S7 · Conversation pipeline and deterministic flows
 

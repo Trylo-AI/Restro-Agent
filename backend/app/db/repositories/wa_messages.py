@@ -61,6 +61,28 @@ async def claim_attempt(conn: asyncpg.Connection, cafe_id: str, step_id: str) ->
     ))
 
 
+async def claim_for_delivery(conn: asyncpg.Connection, cafe_id: str, step_id: str) -> tuple[Step, dict[str, Any]] | None:
+    """claim_attempt + the step, its café and the customer's wa_id in one round trip (hot path)."""
+    row = await conn.fetchrow(
+        """with s as (
+             update wa_messages set attempted_at = now()
+             where cafe_id = $1 and id = $2 and status = 'pending' and attempted_at is null
+             returning *)
+           select s.id::text, s.cafe_id::text, s.customer_id::text, s.idempotency_key, s.type, s.template_name,
+                  s.payload, s.status, s.wamid, s.attempted_at, cu.wa_id,
+                  c.name as cafe_name, c.status as cafe_status, c.phone_number_id, c.display_phone_number,
+                  c.token_ref, c.timezone, c.opening_hours, c.cutoff_minutes, c.settings
+           from s join cafes c on c.id = s.cafe_id left join customers cu on cu.id = s.customer_id""",
+        cafe_id, step_id,
+    )
+    if row is None:
+        return None
+    d = dict(row)
+    step = Step(**{k: d[k] for k in ("id", "cafe_id", "customer_id", "idempotency_key", "type", "template_name",
+                                      "payload", "status", "wamid", "attempted_at")})
+    return step, d
+
+
 async def release_attempt(conn: asyncpg.Connection, cafe_id: str, step_id: str, error_code: str | None) -> None:
     """The request certainly didn't go (connection refused, 429): back to never-attempted for a retry."""
     await conn.execute(

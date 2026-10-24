@@ -43,6 +43,33 @@ async def by_customer(conn: asyncpg.Connection, cafe_id: str, customer_id: str) 
     return Conversation(**dict(row)) if row else None
 
 
+async def turn_context(conn: asyncpg.Connection, cafe_id: str, conversation_id: str) -> tuple[Any, Any, Any] | None:
+    """Café + conversation + customer for one turn, in one round trip."""
+    from app.db.repositories.cafes import Cafe
+    from app.db.repositories.customers import Customer
+
+    r = await conn.fetchrow(
+        """select c.id::text as cafe_id, c.name, c.status, c.phone_number_id, c.display_phone_number, c.token_ref,
+                  c.timezone, c.opening_hours, c.cutoff_minutes, c.settings,
+                  cv.id::text as conversation_id, cv.customer_id::text, cv.mode, cv.assigned_to::text,
+                  cv.table_session_id::text, cv.state,
+                  cu.wa_id, cu.name as customer_name, cu.last_inbound_at, cu.last_visit_at
+           from conversations cv join cafes c on c.id = cv.cafe_id join customers cu on cu.id = cv.customer_id
+           where cv.cafe_id = $1 and cv.id = $2""",
+        cafe_id, conversation_id,
+    )
+    if r is None:
+        return None
+    cafe = Cafe(id=r["cafe_id"], name=r["name"], status=r["status"], phone_number_id=r["phone_number_id"],
+                display_phone_number=r["display_phone_number"], token_ref=r["token_ref"], timezone=r["timezone"],
+                opening_hours=r["opening_hours"], cutoff_minutes=r["cutoff_minutes"], settings=r["settings"])
+    convo = Conversation(id=r["conversation_id"], cafe_id=r["cafe_id"], customer_id=r["customer_id"], mode=r["mode"],
+                         assigned_to=r["assigned_to"], table_session_id=r["table_session_id"], state=r["state"])
+    customer = Customer(id=r["customer_id"], cafe_id=r["cafe_id"], wa_id=r["wa_id"], name=r["customer_name"],
+                        last_inbound_at=r["last_inbound_at"], last_visit_at=r["last_visit_at"])
+    return cafe, convo, customer
+
+
 async def save_state(conn: asyncpg.Connection, cafe_id: str, conversation_id: str, state: dict[str, Any]) -> None:
     await conn.execute("update conversations set state = $3 where cafe_id = $1 and id = $2",
                        cafe_id, conversation_id, state)

@@ -95,7 +95,7 @@ async def thread(wa_id: str, after: datetime | None = None, phone_number_id: str
         outs = await c.fetch(
             """select id::text, wamid, type, template_name, payload, status, error_code, created_at as at, updated_at
                from wa_messages where cafe_id = $1 and customer_id = $2 and (created_at > $3 or updated_at > $3)
-               order by created_at""",
+               order by created_at, idempotency_key""",
             cafe.id, customer["id"], since)
     items = [{"dir": "in", "id": r["id"], "wamid": r["wamid"], "type": r["type"], "payload": r["payload"],
               "at": r["at"].isoformat(), "processed": r["processed_at"] is not None} for r in ins]
@@ -103,7 +103,9 @@ async def thread(wa_id: str, after: datetime | None = None, phone_number_id: str
                "payload": {k: v for k, v in r["payload"].items() if not k.startswith("_")}, "status": r["status"],
                "error_code": r["error_code"], "at": r["at"].isoformat(), "updated_at": r["updated_at"].isoformat(),
                "violations": limit_violations(r["payload"])} for r in outs]
-    items.sort(key=lambda x: x["at"])
+    # Steps of one turn share a transaction timestamp; their key suffix (…:0, …:1) keeps send order.
+    order = {r["id"]: n for n, r in enumerate(outs)}
+    items.sort(key=lambda x: (x["at"], order.get(x["id"], -1)))
     last_inbound = customer["last_inbound_at"]
     window_open = bool(last_inbound and (datetime.now(UTC) - last_inbound).total_seconds() < 86400)
     return {"cafe": cafe.name, "items": items, "typing": _typing_until.get(wa_id, 0) > time.time(),
