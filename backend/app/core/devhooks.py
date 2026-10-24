@@ -8,7 +8,7 @@ from app.core.config import get_settings
 async def consume_fault(kind: str) -> str | None:
     """`send` · `llm` · `turn`. Each fault armed in the simulator fires once."""
     s = get_settings()
-    if not s.simulator_on or not s.simulator_token:
+    if s.app_env != "local" or not s.simulator_on or not s.simulator_token:
         return None
     try:
         async with httpx.AsyncClient(timeout=3) as client:
@@ -22,7 +22,7 @@ async def consume_fault(kind: str) -> str | None:
 async def push_event(wa_id: str, kind: str, **data: object) -> None:
     """Behind-the-scenes event log entry for the simulator (ids and timings only)."""
     s = get_settings()
-    if not s.simulator_on or not s.simulator_token:
+    if s.app_env != "local" or not s.simulator_on or not s.simulator_token:
         return
     try:
         async with httpx.AsyncClient(timeout=3) as client:

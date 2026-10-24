@@ -28,3 +28,18 @@ async def active_with_min_role(conn: asyncpg.Connection, cafe_id: str, roles: tu
         cafe_id, list(roles),
     )
     return [Membership(**dict(r)) for r in rows]
+
+
+async def alert_refs(conn: asyncpg.Connection, cafe_id: str, roles: tuple[str, ...]) -> list[str]:
+    """`membership:<id>` references for active members of these roles who set an alert phone (never the number)."""
+    rows = await conn.fetch(
+        """select id::text from memberships
+           where cafe_id = $1 and active and role = any($2::text[]) and alert_phone is not null""",
+        cafe_id, list(roles),
+    )
+    return [f"membership:{r['id']}" for r in rows]
+
+
+async def alert_phone(conn: asyncpg.Connection, cafe_id: str, membership_id: str) -> str | None:
+    return await conn.fetchval(  # type: ignore[no-any-return]
+        "select alert_phone from memberships where cafe_id = $1 and id = $2 and active", cafe_id, membership_id)

@@ -115,9 +115,10 @@ async def _process(lease: lease_mod.Lease, work_id: str) -> None:
             await lease_mod.fence(c, lease)
             if result.state is not None:
                 await conversations.save_state(c, cafe_id, conversation_id, result.state)
+            replies = list(result.replies)
             for fn in result.commit:
-                await fn(c)
-            for i, reply in enumerate(result.replies):
+                replies.extend(await fn(c) or [])
+            for i, reply in enumerate(replies):
                 step = await outbound.prepare(
                     c, cafe_id, Recipient(customer_id=customer.id), reply.message, f"turn:{turn.first_id}:{i}",
                     reply.purpose, fallback_template=reply.fallback_template, customer=customer,

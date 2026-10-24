@@ -18,10 +18,10 @@ from app.core.logging import configure_logging
 from app.db.pool import close_pool, open_pool
 from app.domain import jobs
 from app.domain import outbound as _outbound  # noqa: F401  (registers the send_check timer)
-from app.domain.conversation import pipeline
-from app.domain.conversation.echo import echo
+from app.domain.conversation import pipeline, router
+from app.domain.orders import service as _order_timers  # noqa: F401  (registers order timers)
 
-pipeline.set_handler(echo)  # TEMPORARY until S7 registers the router
+pipeline.set_handler(router.route)
 
 
 @asynccontextmanager

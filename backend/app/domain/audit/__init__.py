@@ -8,6 +8,8 @@ from typing import Any
 
 import asyncpg
 
+from app.db.repositories import audit_log
+
 
 @dataclass(frozen=True)
 class Actor:
@@ -20,8 +22,4 @@ SYSTEM = Actor(user_id=None, role="system")
 
 
 async def write(conn: asyncpg.Connection, cafe_id: str, actor: Actor, action: str, change: dict[str, Any]) -> None:
-    await conn.execute(
-        """insert into audit_log (actor_id, actor_role, support, cafe_id, action, change)
-           values ($1, $2, $3, $4, $5, $6)""",
-        actor.user_id, actor.role, actor.support, cafe_id, action, change,
-    )
+    await audit_log.insert(conn, cafe_id, actor.user_id, actor.role, actor.support, action, change)

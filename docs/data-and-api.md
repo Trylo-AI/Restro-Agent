@@ -250,7 +250,7 @@ The console joins one channel per table, filtered `cafe_id = <active café>`, wi
 | `customer_preferences` | INSERT, UPDATE, DELETE | Profile box and "On profile" allergy on order cards |
 
 - `order_items` isn't subscribed; on an order INSERT or an `edited` UPDATE the console reads the items.
-- Apply an UPDATE only if its `version` (orders) or `updated_at` is newer than shown.
+- Apply an UPDATE only if its `version` (orders) or `updated_at` is newer than shown; for orders a same-`version` update with a newer `updated_at` also applies (timer flags don't bump `version`).
 - Subscribe first, buffer, do the initial read, then apply the buffer. No gap.
 - Never trust that every event arrived: refetch active orders and open requests on reconnect, tab visible again and café switch, and every 30 s while connected, so a missed event never hides an order.
 - A table joins the publication only with an RLS read policy and an entry in `contracts/events.md`.

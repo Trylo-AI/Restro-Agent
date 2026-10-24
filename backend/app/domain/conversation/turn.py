@@ -50,7 +50,9 @@ class Reply:
     fallback_template: Template | None = None
 
 
-CommitFn = Callable[[asyncpg.Connection], Awaitable[None]]
+# Runs inside the turn's fenced transaction; may return replies that need values only known there
+# (e.g. the order number). Those replies are prepared in the same transaction.
+CommitFn = Callable[[asyncpg.Connection], Awaitable["list[Reply] | None"]]
 AfterFn = Callable[[], Awaitable[None]]
 
 

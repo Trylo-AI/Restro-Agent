@@ -18,7 +18,7 @@ Contract. Source: [Realtime](../docs/data-and-api.md#realtime). Only these table
 Rules (console, `src/lib/realtime`):
 
 1. Subscribe first, buffer events, do the initial read, then apply the buffer. No gap.
-2. Apply an UPDATE only if its version field is newer than the row shown.
+2. Apply an UPDATE only if its version field is newer than the row shown. Orders: newer `version`, or the same `version` with a newer `updated_at` (flags set by timers, such as `overdue` or `escalated`, don't bump `version`, so a shift manager's `expected_version` stays valid).
 3. `order_items` isn't published: on an order INSERT, or an UPDATE whose `flags` gained `edited`, read the items.
 4. Refetch active orders and open requests on reconnect, tab visible again, café switch, and every 30 s while connected.
 5. DELETE events carry only the primary key (`customer_preferences` uses replica identity full so the console can drop the chip).

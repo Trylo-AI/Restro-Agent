@@ -17,6 +17,7 @@ import asyncpg
 
 from app.core.ids import lease_token
 from app.core.logging import get_logger
+from app.db.repositories import leases
 from app.db.tx import conn as db_conn
 
 log = get_logger(__name__)
@@ -39,43 +40,25 @@ class Lease:
 
 async def claim(c: asyncpg.Connection, cafe_id: str, conversation_id: str) -> Lease | None:
     lease = Lease(cafe_id, conversation_id)
-    got = await c.fetchval(
-        """update conversations set lease_owner = $3, lease_expires_at = now() + make_interval(secs => $4)
-           where id = $2 and cafe_id = $1 and (lease_owner is null or lease_expires_at < now())
-           returning id""",
-        cafe_id, conversation_id, lease.token, LEASE_SECONDS,
-    )
-    return lease if got else None
+    return lease if await leases.claim(c, cafe_id, conversation_id, lease.token, LEASE_SECONDS) else None
 
 
 async def renew(c: asyncpg.Connection, lease: Lease) -> bool:
-    ok = await c.fetchval(
-        """update conversations set lease_expires_at = now() + make_interval(secs => $4)
-           where id = $2 and cafe_id = $1 and lease_owner = $3 returning id""",
-        lease.cafe_id, lease.conversation_id, lease.token, LEASE_SECONDS,
-    )
+    ok = await leases.renew(c, lease.cafe_id, lease.conversation_id, lease.token, LEASE_SECONDS)
     if not ok:
         lease.lost = True
-    return bool(ok)
+    return ok
 
 
 async def fence(tx_conn: asyncpg.Connection, lease: Lease) -> None:
     """Call first inside every commit transaction of a turn. Row lock holds until that transaction ends."""
-    owner = await tx_conn.fetchval(
-        "select lease_owner from conversations where id = $2 and cafe_id = $1 for update",
-        lease.cafe_id, lease.conversation_id,
-    )
-    if owner != lease.token:
+    if await leases.owner_for_update(tx_conn, lease.cafe_id, lease.conversation_id) != lease.token:
         lease.lost = True
         raise LeaseLost(lease.conversation_id)
 
 
 async def release(c: asyncpg.Connection, lease: Lease) -> None:
-    await c.execute(
-        """update conversations set lease_owner = null, lease_expires_at = null
-           where id = $2 and cafe_id = $1 and lease_owner = $3""",
-        lease.cafe_id, lease.conversation_id, lease.token,
-    )
+    await leases.release(c, lease.cafe_id, lease.conversation_id, lease.token)
 
 
 @asynccontextmanager

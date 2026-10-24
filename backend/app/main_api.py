@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import webhooks
+from app.api import staff, webhooks
 from app.core.config import get_settings
 from app.core.errors import install_error_handlers
 from app.core.logging import configure_logging
@@ -45,6 +45,7 @@ def create_app() -> FastAPI:
         return {"status": "ok", "service": "api"}
 
     app.include_router(webhooks.router)
+    app.include_router(staff.router)
     if settings.simulator_on:
         from app.api.dev import sim
 

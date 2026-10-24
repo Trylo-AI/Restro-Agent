@@ -20,7 +20,7 @@ import asyncpg
 
 from app.core.errors import WindowClosed
 from app.core.logging import get_logger
-from app.db.repositories import cafes, customers
+from app.db.repositories import cafes, customers, memberships
 from app.db.repositories import wa_messages as steps_repo
 from app.db.repositories.wa_messages import Step
 from app.db.tx import conn as db_conn
@@ -92,9 +92,7 @@ async def _alert_address(c: asyncpg.Connection, step: Step, cafe: cafes.Cafe) ->
     if to_ref == "cafe_alert":
         return str(cafe.settings.get("alert_phone") or "") or None
     if to_ref.startswith("membership:"):
-        return await c.fetchval(  # type: ignore[no-any-return]
-            "select alert_phone from memberships where cafe_id = $1 and id = $2 and active",
-            step.cafe_id, to_ref.removeprefix("membership:"))
+        return await memberships.alert_phone(c, step.cafe_id, to_ref.removeprefix("membership:"))
     return None
 
 
@@ -135,7 +133,7 @@ async def deliver(cafe_id: str, step_id: str) -> str:
                 else:
                     await steps_repo.mark_failed(c, cafe_id, step_id, err.code)
                     if err.cls is SendClass.TOKEN_INVALID:
-                        await c.execute("update cafes set status = 'disconnected' where id = $1", cafe_id)
+                        await cafes.set_status(c, cafe_id, "disconnected")
                         log.error("whatsapp_token_invalid", cafe_id=cafe_id)
                     log.error("send_failed", cafe_id=cafe_id, step_id=step_id, error_code=err.code)
                     return "failed"

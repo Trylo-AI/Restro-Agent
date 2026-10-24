@@ -31,3 +31,17 @@ async def by_phone_number_id(conn: asyncpg.Connection, phone_number_id: str) -> 
 async def get(conn: asyncpg.Connection, cafe_id: str) -> Cafe | None:
     row = await conn.fetchrow("select " + _COLS + " from cafes where id = $1", cafe_id)
     return Cafe(**dict(row)) if row else None
+
+
+async def set_status(conn: asyncpg.Connection, cafe_id: str, status: str) -> None:
+    await conn.execute("update cafes set status = $2 where id = $1", cafe_id, status)
+
+
+async def set_paused(conn: asyncpg.Connection, cafe_id: str, paused: bool) -> Cafe | None:
+    """Returns the café when the value changed; None when it was already set (no-op)."""
+    row = await conn.fetchrow(
+        "update cafes set settings = jsonb_set(settings, '{paused}', to_jsonb($2::boolean)) "
+        "where id = $1 and coalesce((settings ->> 'paused')::boolean, false) <> $2 returning " + _COLS,
+        cafe_id, paused,
+    )
+    return Cafe(**dict(row)) if row else None

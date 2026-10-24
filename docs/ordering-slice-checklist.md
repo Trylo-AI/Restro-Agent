@@ -15,8 +15,8 @@ Tracks [ordering-slice.md](ordering-slice.md). Ticked in the same commit as the 
 | S4 Backend core | Done | S4 commit |
 | S5 WhatsApp ingress, send layer, dev router | Done | S5 commit |
 | S6 Simulator UI | Done | S6 commit |
-| S7 Conversation pipeline and deterministic flows | To do | — |
-| S8 Cart, Confirm and orders | To do | — |
+| S7 Conversation pipeline and deterministic flows | Done | S7–S8 commit |
+| S8 Cart, Confirm and orders | Done | S7–S8 commit |
 | S9 AI agent | To do | — |
 | S10 Human help | To do | — |
 | S11 Menu availability | To do | — |
@@ -149,42 +149,45 @@ Tracks [ordering-slice.md](ordering-slice.md). Ticked in the same commit as the 
 
 ## S7 · Conversation pipeline and deterministic flows
 
-- [ ] `/internal/pubsub/inbound`: ack, lease, 1 s debounce, batch, loop while due work remains, release
-- [ ] LLM call and sends outside transactions; fenced commit
-- [ ] 3 retries with backoff (`work_retry`), then dead letter: standard customer message, alert, `help` + human mode (open default)
-- [ ] Routing order 1–9; keyword lists (English, Hinglish, Hindi)
-- [ ] `render.py`: every customer-facing string in one place
-- [ ] Steps and back-edges; `awaiting`
-- [ ] Greeting new / returning; name capture
-- [ ] QR text → table session join or open
-- [ ] Menu and category lists (pagination); item tap
-- [ ] Non-text reply; keywords (whole message only)
-- [ ] Paused / closed replies; status flow
-- [ ] STOP → `consents` opt-out row
-- [ ] `stuck_inbound_check` local loop (overdue `pending_work`, expired leases, never-attempted sends)
-- [ ] Scripted conversation tests (stub LLM) for every flow and every stale / invalid case
-- [ ] Tests: lease held → second signal exits; crash mid-turn → rerun, no double send; 3 failures → dead letter
-- [ ] **Exit:** Table 5 QR → name → Menu → items → cart summary with taps only; three texts within 1 s give one turn
+Built together with S8 (Confirm needs the order code) and committed as one step.
+
+- [x] `/internal/pubsub/inbound`: ack, lease, 1 s debounce, batch, loop while due work remains, release (built in S6)
+- [x] LLM call and sends outside transactions; fenced commit; commit hooks may add replies (order number)
+- [x] 3 retries with backoff (`work_retry`), then dead letter: standard customer message (+ `help` and human mode: S10 hook)
+- [x] Routing order 1–9; keyword lists (English, Hinglish, Hindi), whole-message match only
+- [x] `render.py`: every customer-facing string in one place; ₹ from paise with Indian grouping
+- [x] Steps and back-edges; `awaiting` (name, table); new visit after 6 h or on a QR scan
+- [x] Greeting new / returning ("Same again?" from SQL); name capture (≤ 3 words, not a dish; else asked after the order)
+- [x] QR text → table session join or open (shared tables join the open session)
+- [x] Menu and category lists (paging, prices from the DB in row descriptions); item tap; reorder
+- [x] Non-text reply; call waiter (help + human mode) and bill (no human mode); status flow
+- [x] Paused / closed replies (opening hours in the café's time zone, past-midnight windows, near closing)
+- [x] STOP → `consents` opt-out row, also in human mode
+- [x] `stuck_inbound_check` local loop (built in S4/S5)
+- [x] All SQL in `db/repositories` (moved out of domain modules; the dev router is the one documented exception)
+- [x] Scripted conversation tests (real pipeline, recording transport): see S8
+- [x] **Exit:** Table 5 QR → name → Menu → category → items → cart summary → Confirm with taps only; three texts within 1 s give one turn (S6)
 
 ## S8 · Cart, Confirm and orders
 
-- [ ] Cart ops and rejections; version bump
-- [ ] Integer paise; total = sum of lines (no GST setting, G2); `expected_minutes`
-- [ ] Confirmation rendering with "Total (incl. GST)"
-- [ ] Confirm steps 1–6 in one transaction; snapshots; `idempotency_key`
-- [ ] Table ask when no session
-- [ ] `transition()` with optimistic lock, `order_events`, `audit_log`
-- [ ] Flags: `escalated`, `overdue`, `delayed`, `edited`, `item_sold_out`, `near_closing`
-- [ ] Undo inside 5 s (queued message never sent)
-- [ ] Delay
-- [ ] Staff cancel: `shift_manager` on `NEW`, `manager`+ after; reason code + custom text; `cancel_*` fields; `notifications` rows
-- [ ] AI-drafted cancellation message (reason code only), fixed fallback
-- [ ] Customer edit / cancel while `NEW`; edit / accept race → 409
-- [ ] Manual order (`ACCEPTED`, no customer messages)
-- [ ] Timers: `accept_escalation_1/2` (with `escalations` + `new_order_alert`), `overdue`, `auto_served`, `status_message`
-- [ ] Endpoints: transition, cancel, undo, delay, manual, pause-ordering
-- [ ] Tests: every allowed and forbidden transition; `shift_manager` cancel on `ACCEPTED` → 403; cancel → one notification per manager and owner; race → 409; double / stale tap → one order; sold out at Confirm; undo after 5 s → 422; timer after state moved does nothing; cart qty / note mixes; manual order idempotent
-- [ ] **Exit:** taps-only order → Confirm → exactly one order; Accept sends "Your order is being made" after 5 s
+- [x] Cart ops and rejections; version bump; lines keyed by (item, note); qty 1–20; note ≤ 120
+- [x] Integer paise; total = sum of lines (no GST setting, G2); `expected_minutes`; live prices at every render
+- [x] Confirmation rendering with "Total (incl. GST)"
+- [x] Confirm steps 1–6 in one transaction; snapshots; `idempotency_key` = `{conversation_id}:{cart_version}`
+- [x] Table ask when no session, then the order on the table tap
+- [x] `transition()` with optimistic lock, `order_events`, `audit_log`
+- [x] Flags: `escalated`, `overdue`, `delayed`, `edited`, `near_closing` (`item_sold_out` in S11); timer flags don't bump `version`
+- [x] Undo inside 5 s (queued message never sent; other actor or after 5 s → 422)
+- [x] Delay (message at once, `overdue` re-created)
+- [x] Staff cancel: `shift_manager` on `NEW`, `manager`+ after; reason code + custom text; `cancel_*` fields; `notifications` rows for each manager and owner
+- [x] Cancellation message: fixed fallback (AI draft in S9); `reason_text` never sent
+- [x] Customer edit / cancel while `NEW`; edit / accept race → 409 / "already accepted"
+- [x] Manual order (`ACCEPTED`, no customer messages, idempotent on the header)
+- [x] Timers: `accept_escalation_1/2` (with `escalations` + `new_order_alert` to the café alert number and managers / owner), `overdue`, `auto_served`, `status_message`
+- [x] Endpoints: transition, cancel, undo, delay, manual, pause-ordering (`manager`+)
+- [x] Unit tests: cart (11), hours (5)
+- [x] Integration tests (17): taps-only order; double tap → one order; stale summary; sold out at Confirm; table ask; foreign ids; non-text; call waiter / bill / human mode / STOP; paused; customer cancel before and after accept; edit + race; staff flow with undo and status messages; cancel roles + notifications; delay; manual order; escalation alerts + auto-served; REST endpoints with 409 / 422 / 403 / 400 / 404
+- [x] **Exit:** taps-only order → Confirm → exactly one order; Accept sends "Your order is being made" after 5 s (status_message re-checked)
 
 ## S9 · AI agent
 
