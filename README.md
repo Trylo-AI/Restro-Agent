@@ -8,9 +8,9 @@ WhatsApp ordering and retention for cafés. Customers scan a table QR, order thr
 flowchart LR
     C(["Customer<br/>WhatsApp"]) <--> M["Meta Cloud API"]
     M -->|"webhook"| API["Cloud Run: api"]
-    API -->|"Cloud Tasks"| W["Cloud Run: worker<br/>conversation, LLM, timers"]
+    API -->|"Pub/Sub signal"| W["Cloud Run: worker<br/>work queue, conversation, LLM, timers"]
     W --> M
-    W <--> LLM["Gemini"]
+    W <--> LLM["Gemini on Vertex AI"]
     API <--> DB[("Supabase Postgres")]
     W <--> DB
     CON["Restro Console<br/>React SPA"] -->|"REST writes"| API
@@ -29,6 +29,7 @@ flowchart LR
 | [docs/console.md](docs/console.md) | Console shell, urgency, every screen |
 | [docs/rules.md](docs/rules.md) | Per-folder rules and required tests |
 | [docs/decisions.md](docs/decisions.md) | Settled trade-offs |
+| [docs/ordering-slice.md](docs/ordering-slice.md) · [checklist](docs/ordering-slice-checklist.md) | Current build plan and progress |
 
 Inputs: [Restro_Build_Plan.md](Restro_Build_Plan.md) · `Restro Console v2-Updates.html` (open in a browser).
 
@@ -44,6 +45,6 @@ Planned; each folder is created with its first real file.
 | `contracts/` | Frozen schema, OpenAPI, events, LLM schema, state machines |
 | `evals/` | LLM eval set and runner |
 | `loadtest/` | Webhook simulator and scenarios |
-| `infra/` | GCP resources per environment |
-| `.github/` | CI workflows, PR template |
+| `infra/` | `gcloud` scripts per environment |
+| `.github/` | CI and deploy workflows (Workload Identity Federation), PR template |
 | `docs/` | Design docs |

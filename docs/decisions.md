@@ -54,6 +54,8 @@ One FastAPI image deployed as `api` (public) and `worker` (internal, OIDC from `
 
 ## 7. Cloud Tasks for inbound and timers, no Pub/Sub
 
+**Superseded by [12](#12-postgres-work-queue-and-conversation-lease-pubsub-as-a-wake-up-signal) for inbound processing.** Cloud Tasks still carry `wa-ack`, timers and campaign sends.
+
 Cloud Tasks for ack, debounced processing, timers and campaign sends; Cloud Scheduler for periodic jobs. One turn at a time per conversation via a debounced `wa-process` task + advisory lock. Supersedes the earlier Pub/Sub ordering-key design.
 
 - **Why:** retries, delayed delivery and rate limits in one service; calls `worker` as a normal request.
@@ -92,12 +94,49 @@ Build Phases 0–2 locally for free; activate the $200 / 90-day trial at the sta
 - **Rejected:** activating now.
 - **Cost:** cloud-only issues surface in Phase 3; no real data near the LLM until then.
 
+## 12. Postgres work queue and conversation lease; Pub/Sub as a wake-up signal
+
+The webhook durably records the inbound message and a `pending_work` row, publishes a Pub/Sub signal and returns 200. The worker acks the push, claims a lease on the conversation (`lease_owner`, `lease_expires_at`), waits out the 1 s debounce, runs the turn, sends and releases. Gemini calls and WhatsApp sends run outside short DB transactions; commits are fenced by the lease. App retries (3, exponential backoff) and dead letters live in `pending_work`; Pub/Sub retry and its DLQ cover transport only. Supersedes 7 for inbound; narrows 2 (the worker keeps working after acking a push, so it needs CPU after the response; see the open decision on billing).
+
+- **Why:** Postgres decides processing order and holds the work, so a lost signal, crashed worker or full DLQ loses nothing, and dead letters are visible rows we can retry. An advisory transaction lock had to hold a transaction and a pooled connection across the LLM call and sends.
+- **Rejected:** Cloud Tasks `wa-process` + `pg_try_advisory_xact_lock` (long transactions through the transaction pooler); Pub/Sub ordering keys (with push delivery, one failing message blocks every later message for that customer); Pub/Sub as the work queue.
+- **Cost:** a table, a lease and a sweep to operate; Pub/Sub joins the stack; the worker needs instance-based billing or a Cloud Task hand-off.
+
+## 13. Gemini on Vertex AI, global endpoint
+
+Staging and prod call Gemini on Vertex AI through the global endpoint as `worker-sa`. Local Phases 1–2 keep the free developer API with synthetic data only. Closes the "Gemini access" open decision; routing (Flash vs Flash-Lite) stays open.
+
+- **Why:** GCP terms for real customer data; draws on the GCP credit; no API key to hold in the cloud.
+- **Rejected:** developer API in staging or prod (data terms, keys); a regional endpoint.
+- **Cost:** no data-residency guarantee: prompts may be processed outside India. Accepted for the MVP and stated in the privacy policy.
+
+## 14. Outbound step records; ambiguous sends are checked
+
+Each outbound step is a `wa_messages` row written before the request, with a unique idempotency key and status `pending` / `sent` / `ambiguous` / `failed`; `wamid` is unique and nullable. A timeout after the request left is `ambiguous`, checked by `send_check`, never blindly retried. `wa_messages` keeps its uuid primary key, so no separate steps table is needed.
+
+- **Why:** a blind retry after a timeout sends the customer the same message twice.
+- **Rejected:** retry with backoff on every error; a separate outbound-steps table (duplicates `wa_messages`).
+- **Cost:** an ambiguous send nobody can confirm becomes `failed` and may need a manual resend.
+
+## 15. `gcloud` scripts for infra; Workload Identity Federation for CI
+
+Infra is idempotent `gcloud` scripts per environment in `infra/`, applied by hand by a founder. GitHub Actions deploys through Workload Identity Federation; no service-account keys.
+
+- **Why:** a handful of resources in two projects; scripts are easy to read line by line. WIF removes long-lived keys.
+- **Rejected:** Terraform (state to host and lock); service-account JSON keys in GitHub secrets.
+- **Cost:** no drift detection or plan step; scripts must stay idempotent by discipline.
+
 ## Smaller decisions
 
 | Topic | Decision |
 |---|---|
 | GST | Inclusive or exclusive is a café setting; computed only in the cart |
 | Order edits | Customer edits or cancels only while `NEW` |
+| Staff cancel | `shift_manager` cancels in `NEW`; `manager`+ from `ACCEPTED` or `READY`. Reason from a fixed list + custom text. P0 |
+| Cancellation message | AI-written (intent + café tone) under guardrails with a fixed fallback; one extra LLM call per staff cancel. Managers and owner get an in-app `notifications` row, no WhatsApp |
+| Cost metering | `llm_calls` and `wa_messages` carry `cost`, `currency` and `pricing_version` (`wa_messages` also `cost_basis` estimated / actual); `v_daily_costs` and `v_unit_costs` aggregate in Postgres |
+| Realtime recovery | Console refetches active orders and open requests on reconnect and every 30 s |
+| Production access | The two founders and people they explicitly authorise |
 | Feedback delay | Café setting 15 / 30 / 60 min after `SERVED` |
 | Realtime on phones | WhatsApp backup alert + escalation chain |
 | Multi-café | Café switcher yes; multi-location features no |

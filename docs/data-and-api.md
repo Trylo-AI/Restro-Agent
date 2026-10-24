@@ -6,7 +6,7 @@ Contract: `contracts/schema.sql`. Implemented by `supabase/migrations/`.
 
 - Every table has `id` (uuid), `created_at`, `updated_at` (UTC). Not repeated below.
 - Every tenant table has `cafe_id`, child tables included, so RLS and Realtime filter without joins. Only `platform_admins` and `webhook_events` have none.
-- Money is integer paise in `*_paise` columns. `llm_calls.cost_estimate` is the one fractional amount.
+- Money is integer paise in `*_paise` columns. The only fractional amounts are the metering columns `llm_calls.cost` and `wa_messages.cost` (numeric, with `currency`); they never touch customer money.
 - Enum-like columns are text with a check constraint. Day and hour buckets use `cafes.timezone`.
 
 ### Café and access
@@ -37,23 +37,32 @@ Contract: `contracts/schema.sql`. Implemented by `supabase/migrations/`.
 | `customer_preferences` | `cafe_id`, `customer_id`, `kind`, `value`, `source` | Stated preferences only |
 | `consents` | `cafe_id`, `customer_id`, `type` (`marketing`), `status`, `wording_version`, `source` | `status` `opted_in` / `opted_out`; append-only; current = newest row |
 | `data_deletion_requests` | `cafe_id`, `customer_id`, `wa_id`, `source` (`owner` / `meta_callback`), `status`, `completed_at` | — |
-| `conversations` | `cafe_id`, `customer_id`, `mode`, `assigned_to`, `table_session_id`, `state` | unique (`cafe_id`, `customer_id`); `mode` `bot` / `human` |
+| `conversations` | `cafe_id`, `customer_id`, `mode`, `assigned_to`, `table_session_id`, `state`, `lease_owner`, `lease_expires_at` | unique (`cafe_id`, `customer_id`); `mode` `bot` / `human` |
 | `inbound_messages` | `cafe_id`, `conversation_id`, `wamid`, `type`, `payload`, `received_at`, `processed_at` | unique `wamid`; index on unprocessed per conversation |
-| `wa_messages` | `cafe_id`, `customer_id`, `wamid`, `idempotency_key`, `direction`, `type`, `template_name`, `status`, `error_code`, `pricing_category`, `billable`, status timestamps | unique `wamid`; unique `idempotency_key`; status forward-only |
+| `pending_work` | `cafe_id`, `conversation_id`, `kind`, `status`, `attempts`, `next_attempt_at`, `last_error`, `dead_lettered_at` | `kind` `turn`; `status` `pending` / `running` / `done` / `dead_lettered` / `resolved`; one `pending` row per (`conversation_id`, `kind`); index (`status`, `next_attempt_at`) |
+| `wa_messages` | `cafe_id`, `customer_id`, `wamid`, `idempotency_key`, `direction`, `type`, `template_name`, `status`, `attempted_at`, `error_code`, `pricing_category`, `billable`, `cost`, `currency`, `pricing_version`, `cost_basis`, status timestamps | `id` uuid primary key; `wamid` unique and nullable (an `ambiguous` send has none yet); unique `idempotency_key`; status forward-only |
+
+- **Lease:** `lease_owner` is the worker instance id + a random token; `lease_expires_at` is 30 s ahead, renewed every 10 s. Both null when free. [Pipeline](architecture.md#message-pipeline).
+- **`pending_work`:** `last_error` is an error class and id, never message text. Dead-lettered rows stay until a `platform_admin` retries (back to `pending`, `attempts` reset) or resolves them.
+- **Outbound steps:** every outbound is one `wa_messages` row written before the request (`status = pending`, `wamid` null). Status: `pending` → `sent` → `delivered` → `read`; `pending` → `ambiguous` → `sent` or `failed`; `pending` → `failed`. `attempted_at` is set just before the request, so recovery can tell a never-attempted row from a possibly-sent one. Inbound messages stay in `inbound_messages`.
+- **`cost_basis`:** `estimated` from the category and price table, `actual` once reconciled with Meta billing.
 
 ### Orders and service
 
 | Table | Key columns | Keys and checks |
 |---|---|---|
 | `table_sessions` | `cafe_id`, `table_id`, `opened_at`, `closed_at` | One open session per table |
-| `orders` | `cafe_id`, `customer_id`, `table_session_id`, `number`, `status`, `flags`, `allergy_note`, `expected_minutes`, `delay_minutes`, `total_paise`, `source`, `campaign_recipient_id`, `idempotency_key`, `version`, status timestamps | unique (`cafe_id`, `number`); unique `idempotency_key`; `status` `NEW` / `ACCEPTED` / `READY` / `SERVED` / `CANCELLED`; `source` `qr` / `campaign` / `manual` |
+| `orders` | `cafe_id`, `customer_id`, `table_session_id`, `number`, `status`, `flags`, `allergy_note`, `expected_minutes`, `delay_minutes`, `total_paise`, `source`, `campaign_recipient_id`, `idempotency_key`, `version`, `cancel_reason_code`, `cancel_reason_text`, `cancelled_by`, `cancelled_at`, status timestamps | unique (`cafe_id`, `number`); unique `idempotency_key`; `status` `NEW` / `ACCEPTED` / `READY` / `SERVED` / `CANCELLED`; `source` `qr` / `campaign` / `manual`; `cancel_reason_code` `out_of_stock` / `kitchen_issue` / `customer_asked` / `other` / `customer`; `cancel_*` set only when `CANCELLED` |
 | `order_items` | `cafe_id`, `order_id`, `item_id`, `name_snapshot`, `price_snapshot_paise`, `qty`, `note` | `qty` 1–20 |
 | `order_events` | `cafe_id`, `order_id`, `from_status`, `to_status`, `actor_type`, `actor_id`, `reason` | `actor_type` `customer` / `staff` / `system`; append-only |
 | `requests` | `cafe_id`, `table_session_id`, `conversation_id`, `order_id`, `kind`, `status`, `reason_tag`, `acknowledged_by`, `acknowledged_at`, `resolved_at` | `kind` `help` / `bill` / `allergy` / `low_rating`; one unresolved per (`conversation_id`, `kind`) |
 | `escalations` | `cafe_id`, `subject_type`, `subject_id`, `level`, `target`, `sent_at`, `outcome` | unique (`subject_type`, `subject_id`, `level`) |
 | `feedback` | `cafe_id`, `order_id`, `rating`, `text` | unique `order_id`; `rating` 1–5 |
+| `notifications` | `cafe_id`, `user_id`, `kind`, `subject_type`, `subject_id`, `payload`, `read_at` | `kind` `order_cancelled`; one row per recipient (each active `manager` and `owner`) |
 
 - `number` is allocated inside the order-create transaction: gaps allowed, duplicates never, never resets.
+- Cancel fields: `cancel_reason_text` is the staff's custom text (required for `other`, ≤ 120 chars), shown to staff only. `cancelled_by` is the staff user; null with code `customer` when the customer cancels on WhatsApp.
+- `notifications` rows are written in the same transaction as their subject (e.g. a staff cancel). `payload` holds display fields (order number, table, reason code, actor name), never a phone number.
 - `idempotency_key` is `{conversation_id}:{cart_version}` for WhatsApp orders and the `Idempotency-Key` header for manual orders.
 - Snapshots are copied at creation and never recomputed; revenue, bills and history read them.
 - Undo writes a new `order_events` row; nothing is deleted.
@@ -66,7 +75,7 @@ Contract: `contracts/schema.sql`. Implemented by `supabase/migrations/`.
 | `campaigns` | `cafe_id`, `name`, `segment`, `template_name`, `offer_text`, `code_prefix`, `valid_until`, `scheduled_at`, `status` | `segment` `all_opted_in` / `lapsed` / `regulars` |
 | `campaign_recipients` | `cafe_id`, `campaign_id`, `customer_id`, `code`, `status`, `wamid` | unique `code`; unique (`campaign_id`, `customer_id`) |
 | `redemptions` | `cafe_id`, `campaign_recipient_id`, `code`, `order_id`, `table_session_id`, `discount_paise`, `redeemed_by`, `redeemed_at` | unique `campaign_recipient_id`; append-only |
-| `llm_calls` | `cafe_id`, `conversation_id`, `model`, token counts, `latency_ms`, `outcome`, `cost_estimate` | append-only |
+| `llm_calls` | `cafe_id`, `provider`, `model`, `conversation_id`, `message_id`, `order_id`, `input_tokens`, `cached_tokens`, `output_tokens`, `cost`, `currency`, `pricing_version`, `latency_ms`, `outcome` | append-only; `provider` `vertex` / `developer_api`; `message_id` = the `inbound_messages` row that started the turn; `order_id` set for calls about an order (edit, cancellation draft); `outcome` `ok` / `invalid_output` / `timeout` / `rate_limited` / `error` |
 | `audit_log` | `actor_id`, `actor_role`, `support`, `cafe_id`, `action`, `change`, `at` | append-only; no secrets or full numbers in `change` |
 | `webhook_events` | `received_at`, `signature_valid`, `payload`, `processed_at` | Deleted after 30 days |
 
@@ -91,10 +100,10 @@ Contract: `contracts/schema.sql`. Implemented by `supabase/migrations/`.
 | Readable by | Tables / views |
 |---|---|
 | Every member | `cafes`, `tables`, `menu_items`, `menu_item_allergens`, `customers`, `conversations`, `inbound_messages`, `wa_messages`, `table_sessions`, `orders`, `order_items`, `requests` (not `low_rating`), `escalations`, `redemptions` |
-| Own rows | `memberships` (owner sees every row of the café); `platform_admins` |
+| Own rows | `memberships` (owner sees every row of the café); `platform_admins`; `notifications` (`user_id` = caller, `manager`+) |
 | `manager`+ | `low_rating` requests, `feedback`, `v_service_report`, `v_prep_times`, `v_feedback_summary` |
 | `owner` | `consents`, `templates`, `campaigns`, `campaign_recipients`, `v_daily_revenue`, `v_top_items`, `v_customer_segments`, `v_customer_profile`, `v_campaign_funnel` |
-| `platform_admins` | `llm_calls`, `audit_log`, `webhook_events`, `v_unit_costs` |
+| `platform_admins` | `llm_calls`, `audit_log`, `webhook_events`, `pending_work`, `v_unit_costs`, `v_daily_costs`, `v_conversation_metrics` |
 | Backend only | `customer_preferences`, `order_events`, `data_deletion_requests` |
 
 `v_customer_profile` exposes the masked number, never `wa_id`. RLS is tested in CI with cross-café and role cases.
@@ -114,9 +123,11 @@ Contract: `contracts/schema.sql`. Implemented by `supabase/migrations/`.
 | `v_feedback_summary` | Average rating, count, 1–3★ with text | Service report, Analytics, AI review |
 | `v_campaign_funnel` | Sent → held → delivered → read → came back; spent, discount, WhatsApp cost | Campaigns, Today, Costs |
 | `v_unit_costs` | Cost per order, WhatsApp 7 d, AI 7 d, fallback rate | Platform Costs, daily summary |
+| `v_daily_costs` | Per café per day: AI cost by model, WhatsApp cost by category (`estimated` vs `actual`), calls, orders | Kill switch, daily summary, weekly cost review |
+| `v_conversation_metrics` | Per café per day: human-handoff rate by `reason_tag`, time to confirm (first inbound of the visit → order), turns per order | Daily summary, AI review |
 
 - Revenue = WhatsApp orders from snapshots; `CANCELLED` excluded from revenue, visits and spend. Anonymised customers stay as anonymous rows.
-- AI cost per order = `llm_calls.cost_estimate` for the conversation that produced it.
+- AI cost per order = `llm_calls.cost` of the conversation's calls since its previous order, plus calls with that `order_id`. Costs are summed per `currency`.
 - `refresh_views` runs nightly ("Updated nightly"). Today tiles and a `sending` campaign need same-day numbers, so those stay plain views **[verify]**. Plain views run as the caller so RLS applies; materialised views stay out of the exposed schema and are read through a filtered plain view **[verify]**.
 
 ## API
@@ -125,9 +136,9 @@ Contract: `contracts/schema.sql`. Implemented by `supabase/migrations/`.
 |---|---|---|---|
 | `api` | `/webhooks/*` | Meta | Signature on raw bytes, or signed request |
 | `api` | Console routes, `/platform/*` | Restro Console | `Authorization: Bearer <Supabase JWT>` |
-| `worker` | `/internal/*` | Cloud Tasks, Cloud Scheduler | OIDC for `invoker-sa` |
+| `worker` | `/internal/*` | Pub/Sub push, Cloud Tasks, Cloud Scheduler | OIDC for `invoker-sa` |
 
-The console reads tables and views through Supabase (no custom read endpoints) and calls `api` for every write. Exceptions that are API reads: `GET /consents/export`, `GET /platform/audit/export`, `POST /campaigns/audience-preview`.
+The console reads tables and views through Supabase (no custom read endpoints) and calls `api` for every write. So the notifications list is a Supabase read of `notifications` and the dead-letter list a read of `pending_work` where `status = dead_lettered`; acting on them goes through the endpoints below. Exceptions that are API reads: `GET /consents/export`, `GET /platform/audit/export`, `POST /campaigns/audience-preview`.
 
 ### Console request check
 
@@ -167,7 +178,8 @@ Body: `error.code` (stable snake_case), `error.message` (safe to show), `error.d
 
 | Endpoint | Body | Role | Does | Audit |
 |---|---|---|---|---|
-| `POST /orders/{id}/transition` | `{to, reason?, expected_version}` | `shift_manager`+, support | Accept, Mark ready, Mark served, cancel / decline (reason required); queues `status_message` | `order.transition` / `order.cancel` |
+| `POST /orders/{id}/transition` | `{to, expected_version}` | `shift_manager`+, support | Accept, Mark ready, Mark served; queues `status_message` | `order.transition` |
+| `POST /orders/{id}/cancel` | `{reason_code, reason_text?, expected_version}` | `shift_manager`+ while `NEW`; `manager`+ from `ACCEPTED` or `READY`; support | → `CANCELLED` with reason (`reason_text` required for `other`); queues the AI-drafted `status_message`; notifies each `manager` and `owner` in-app | `order.cancel` |
 | `POST /orders/{id}/undo` | — | Same actor ≤ 5 s | Revert last transition | `order.undo` |
 | `POST /orders/{id}/delay` | `{minutes, note?}` | `shift_manager`+, support | Delay and message | `order.delay` |
 | `POST /orders/manual` | `{table_id, items, allergy_note?}` + `Idempotency-Key` | `shift_manager`+ | Manual order priced by code | `order.manual` |
@@ -180,6 +192,8 @@ Body: `error.code` (stable snake_case), `error.message` (safe to show), `error.d
 | `POST /conversations/{id}/handback` | — | `shift_manager`+, support | `mode = bot` | `chat.handback` |
 | `POST /conversations/open` | `{table_session_id}` | `shift_manager`+, support | Open the table's chat in human mode | `chat.takeover` |
 | `POST /menu/{id}/availability` | `{available}` | `shift_manager`+, support | Sold-out toggle | `menu.availability` |
+| `POST /notifications/{id}/ack` · `POST /notifications/ack-all` | — | `manager`+ (own rows) | Set `read_at` | `notification.ack` |
+| `POST /telemetry/console` | `{events: [{kind, at}]}` (`realtime_disconnect`, `realtime_reconnect`, `offline_banner`) | `shift_manager`+ | Recorded as metrics; no content | — |
 | `POST /menu` · `PUT /menu/{id}` | Item + `allergens: [{allergen, state}]` (+ `version` on PUT) | `manager`+, support | Create / edit; past orders keep snapshots | `menu.update` |
 | `POST /menu/import` | CSV (multipart) | `owner`, support | All-or-nothing import; returns row errors | `menu.import` |
 | `POST /cafes/{id}/pause-ordering` | `{paused}` | `manager`+, support | Pause / resume WhatsApp ordering | `ordering.pause` / `ordering.resume` |
@@ -198,13 +212,15 @@ Body: `error.code` (stable snake_case), `error.message` (safe to show), `error.d
 | `POST /platform/cafes/{id}/templates/sync` | — | `platform_admin` | Pull templates from Meta | `template.sync` |
 | `POST /platform/support/{cafe_id}/open` · `POST /platform/support/exit` | — | `platform_admin` | Start / end support mode | `support.open` / `support.exit` |
 | `GET /platform/audit/export` | Filters | `platform_admin` | CSV of `audit_log` | — |
-| `POST /internal/tasks/{ack,process,timer,campaign-send}` | Task body | `invoker-sa` | [Queues](architecture.md#queues-timers-and-jobs) | — |
+| `POST /platform/dead-letters/{id}/retry` · `POST /platform/dead-letters/{id}/resolve` | `{note?}` | `platform_admin` | Retry: back to `pending`, `attempts` reset, re-signal. Resolve: `resolved` (handled by hand) | `dead_letter.retry` / `dead_letter.resolve` |
+| `POST /internal/pubsub/inbound` | Pub/Sub push envelope `{conversation_id}` | `invoker-sa` | Ack, then run the conversation's due work ([pipeline](architecture.md#message-pipeline)) | — |
+| `POST /internal/tasks/{ack,timer,campaign-send}` | Task body | `invoker-sa` | [Queues](architecture.md#queues-timers-and-jobs) | — |
 | `POST /internal/jobs/{job}` | — | `invoker-sa` | [Jobs](architecture.md#scheduled-jobs) | — |
 
 **Endpoint rules**
 
 - No endpoint accepts `cafe_id` in a body or query string.
-- Every console and platform write writes exactly one `audit_log` row; `change` holds changed fields only. Webhook and internal calls are recorded in their own tables instead.
+- Every console and platform write writes exactly one `audit_log` row; `change` holds changed fields only. Webhook and internal calls are recorded in their own tables instead; `POST /telemetry/console` only feeds metrics.
 - Prices, totals and discounts in responses are computed from the DB, in paise.
 - Rate limits never apply to signature-valid webhooks.
 
@@ -221,10 +237,11 @@ The console joins one channel per table, filtered `cafe_id = <active café>`, wi
 | `wa_messages` | INSERT, UPDATE | Open chat thread, delivery ticks |
 | `menu_items` | UPDATE | Sold-out toggles on every device |
 | `cafes` | UPDATE | Paused and Disconnected banners |
+| `notifications` | INSERT, UPDATE | Bell badge and list (`manager`+, own rows) |
 
 - `order_items` isn't subscribed; on an order INSERT or an `edited` UPDATE the console reads the items.
 - Apply an UPDATE only if its `version` (orders) or `updated_at` is newer than shown.
 - Subscribe first, buffer, do the initial read, then apply the buffer. No gap.
-- Never trust that every event arrived: refetch on reconnect, tab visible again and café switch.
+- Never trust that every event arrived: refetch active orders and open requests on reconnect, tab visible again and café switch, and every 30 s while connected, so a missed event never hides an order.
 - A table joins the publication only with an RLS read policy and an entry in `contracts/events.md`.
 - The console is never the only alert path: escalation timers send `new_order_alert` whatever the browser state.

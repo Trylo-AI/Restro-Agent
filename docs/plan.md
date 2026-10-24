@@ -28,9 +28,9 @@ The order creates the customer, the meal earns the opt-in, a redeemed code links
 
 | Role | Who | Can |
 |---|---|---|
-| `shift_manager` | Person running service | Live orders, calls and bills, chats, sold-out toggle, cancel with reason, manual order |
-| `manager` | Runs shifts, owns the menu | + menu edits, pause ordering, low ratings, service report. Escalation level 1 |
-| `owner` | Café owner | + Today, customers, campaigns, analytics, setup, CSV import, data deletion. Escalation level 2 |
+| `shift_manager` | The one on-shift person (base role; replaces v0.1's waiter / kitchen `staff`) | Live orders and status changes, calls and bills, redeem codes, chats and human mode, sold-out toggle, manual order, customer name and past orders; **cancel an order in `NEW`** with a reason |
+| `manager` | Runs shifts, owns the menu | + cancel from `ACCEPTED` or `READY`, menu edits, pause ordering, low ratings, service report, cancellation notifications. Escalation level 1 |
+| `owner` | Café owner | + Today, customers, campaigns, analytics, setup (team, tables and QR), CSV import, consent register, data deletion, cancellation notifications. Escalation level 2 |
 | `platform_admin` | Restro team (`platform_admins` table) | All cafés: onboarding, templates, number health, costs, AI review, audit log. Café actions only in support mode, every action audited |
 | Customer | Anyone ordering | WhatsApp only; identity is `wa_id`; never logs in |
 
@@ -42,13 +42,15 @@ Café roles nest `shift_manager` ⊂ `manager` ⊂ `owner` (`memberships.role`).
 
 | Feature | Priority | Phase |
 |---|---|---|
-| Webhook verify, dedupe, tenant from `phone_number_id`; send layer with 24-hour window and consent checks; cost metering | P0 | 1 |
+| Webhook verify, dedupe, tenant from `phone_number_id`; Postgres work queue with leases, retries and dead letters; send layer with 24-hour window, consent checks and outbound step records; cost metering | P0 | 0 → 1 |
 | Greeting (new vs returning, name capture), menu lists, cart summary with Confirm / Edit / Cancel, order on Confirm, status messages | P0 | 1 |
 | Free-text ordering (one structured LLM call per turn, validated in code) | P0 | 1 → 2 |
 | Questions, recommendations, allergen answers (`unknown` → handoff) | P0 | 2 |
 | Console login; Live orders: Accept / Mark ready / Mark served | P0 | 1 |
-| Undo, delay, cancel with reason; urgency alerts and escalation; Chats (take over, reply, hand back); Menu (sold-out toggle, allergens) | P0 | 4 |
+| Shift manager cancels a `NEW` order with a reason (fixed list + custom text; `manager`+ after); AI-written cancellation message | P0 | 4 |
+| Undo, delay; urgency alerts and escalation; Chats (take over, reply, hand back); Menu (sold-out toggle, allergens); Realtime recovery (refetch on reconnect + every 30 s) | P0 | 4 |
 | Text-only handling (voice, image, sticker → "please type") | P0 | 4 |
+| Cancellation notification (in-app) to managers and owner | P1 | 4 |
 | Customer edit or cancel while `NEW`; shared table sessions; Calls and bills | P1 | 4 |
 | Opening hours, last-order cutoff, pause ordering; print ticket, offline banner, manual order, menu CSV import; Setup; service report | P1 | 4 |
 | Feedback 1–5, opt-in after `SERVED`, counter QR, STOP; "same again?"; template sync | P1 | 5 |
@@ -77,11 +79,11 @@ Indicative, for 2–3 developers plus Claude Code. A phase ends only when its ex
 
 | Phase | Work |
 |---|---|
-| 0 | The five [contracts](#contracts); local env (Docker, Supabase CLI, tunnel, local queue shim); Meta developer account, business verification, test number; monorepo and CI; console scaffold, design tokens, role nav, MSW; first 50 eval cases; draft all five templates; pilot menu with allergens |
-| 1 | Webhook ingress; worker with lock, debounce, routing; deterministic flows; LLM v1 (one model, structured output, menu validation); `transition()` and status messages; send layer; metering from the first call; Live orders on local Realtime |
+| 0 | The five [contracts](#contracts); local env (Docker, Supabase CLI, tunnel, local queue and signal shims); Postgres work queue (`pending_work`) + conversation leases, retries and dead letters; Meta developer account, business verification, test number; monorepo and CI; CI/CD identity: GitHub Actions → GCP through Workload Identity Federation, no keys (deploy workflows run from Phase 3); console scaffold, design tokens, role nav, MSW; first 50 eval cases; draft all five templates; pilot menu with allergens |
+| 1 | Webhook ingress; worker on the work queue with the 1 s debounce and routing; deterministic flows; LLM v1 (one model, structured output, menu validation); `transition()` and status messages; send layer with outbound step records; metering from the first call; Live orders on local Realtime |
 | 2 | Eval set to 150–250 cases; prompt (compact menu, cached prefix, Hinglish few-shots); all guardrails; run Flash-Lite and Flash; choose routing |
-| 3 | GCP trial with every [guardrail](#credit-guardrails) on day one; deploy `api`, `worker`, queues, secrets, Supabase cloud, console hosting; tune concurrency, pool, queue rates; pilot WABA and number; submit templates; load test |
-| 4 | Customer edit and cancel, edit/accept race; handoff reasons; escalation chain; non-text handling; table sessions and bill sheet; human mode; sold-out flags; hours, cutoff, pause; delay, cancel, undo; offline and manual order; print ticket; urgency on every screen |
+| 3 | GCP trial with every [guardrail](#credit-guardrails) on day one; `gcloud` infra scripts; deploy `api`, `worker`, Pub/Sub, queues, secrets, Vertex AI, Supabase cloud, console hosting; tune concurrency, pool, queue rates; pilot WABA and number; submit templates; load test |
+| 4 | Customer edit and cancel, edit/accept race; handoff reasons; escalation chain; non-text handling; table sessions and bill sheet; human mode; sold-out flags; hours, cutoff, pause; delay, staff cancel with AI message and notifications, undo; offline and manual order; print ticket; urgency on every screen; Realtime recovery |
 | 5 | Feedback and low ratings; opt-in, counter QR, consent; STOP; template sync; campaign sender, wizard, report; redemption at the bill |
 | 6 | Go-live checklist 10/10; menu checked with owner; shift manager trained in < 10 min; QRs printed; two dry runs; monitoring on; Supabase paid plan |
 | 7 | Daily review of failed sends, handoffs, fallbacks, cost per order; fixes only in month 1; tune routing and prompts from real conversations |
@@ -99,7 +101,7 @@ Templates are per WABA: drafted in Phase 0, submitted on the test WABA as soon a
 | Supabase local | Free | Phase 0 | Real Postgres, Auth, Realtime |
 | Gemini free developer tier | Free, rate-limited, different data terms **[verify]** | Phases 1–2, synthetic data only | Prompt and eval work at zero cost |
 | GCP trial ($200 / 90 days) **[verify]** | Credits expire 90 days after activation | Start of Phase 3 | Covers staging, dry runs, start of pilot |
-| Cloud Run, Tasks, Scheduler, Secret Manager, Firebase Hosting | Pay per use, free tiers **[verify]** | Phase 3 | Only needed in the cloud |
+| Cloud Run, Pub/Sub, Tasks, Scheduler, Secret Manager, Vertex AI (Gemini, global endpoint), Firebase Hosting | Pay per use, free tiers **[verify]** | Phase 3 | Only needed in the cloud |
 | Supabase cloud free tier | Free; pauses, no backups **[verify]** | Phase 3 | Staging |
 | Supabase paid plan | Monthly **[verify]** | Phase 6 | Backups; pilot orders must not be lost |
 | Domain + HTTPS | Small yearly | Phase 3 | Privacy, terms and data-deletion pages for Meta review |
@@ -112,7 +114,7 @@ Set the day the trial is activated, before any deploy.
 
 - Budget $200 with alerts at 25 / 50 / 75 / 90 % to two people.
 - Cloud Run `max-instances` 3–5 per service; Vertex AI quotas just above peak; LLM kill switch.
-- Everything in `asia-south1`. No GKE, Cloud SQL, Memorystore, load balancers, NAT or static IPs.
+- Everything in `asia-south1` except Gemini on the Vertex AI global endpoint. No GKE, Cloud SQL, Memorystore, load balancers, NAT or static IPs.
 - Artifact Registry keeps the last ~10 images; Cloud Logging excludes verbose request logs.
 - 10-minute weekly review: GCP billing + `llm_calls` and `wa_messages` cost.
 - Never send real customer data to the free Gemini tier.
@@ -124,7 +126,7 @@ Set the day the trial is activated, before any deploy.
 | Critical core | Code |
 |---|---|
 | Webhook ingress (signature, dedupe, tenant) | `api/`, `integrations/whatsapp/` |
-| Conversation pipeline (lock, debounce, batch) | `domain/conversation` |
+| Conversation pipeline (work queue, lease, debounce, batch, retries, dead letters) | `domain/conversation` |
 | Order state machine and transitions | `domain/orders` |
 | Cart, pricing, tax | `domain/cart` |
 | Menu availability | `domain/menu` |
@@ -137,7 +139,7 @@ Set the day the trial is activated, before any deploy.
 | RLS, memberships, secrets | `supabase/migrations/`, `core/`, `integrations/gcp` |
 | Cost metering | `domain/ai_agent`, `domain/outbound` |
 
-**Claude Code builds:** console shell and every screen; urgency UI; MSW mock and seed generator; menu CSV import UI; print ticket; QR sheet generator; analytics view SQL and weekly report (team reviews queries); eval runner and report (team writes cases); load-test scripts; infra scripts (team reviews line by line); landing, privacy, terms and data-deletion pages.
+**Claude Code builds:** console shell and every screen; urgency UI; MSW mock and seed generator; menu CSV import UI; print ticket; QR sheet generator; analytics view SQL and weekly report (team reviews queries); eval runner and report (team writes cases); load-test scripts; `gcloud` infra scripts and GitHub Actions workflows (team reviews line by line); landing, privacy, terms and data-deletion pages.
 
 **Workflow:** task with links to the contract sections → Claude Code branch and PR → team review (core-adjacent PRs need two reviewers) → CI runs lint, types, tests, and evals for prompt or routing changes.
 
@@ -148,7 +150,7 @@ Frozen in Phase 0 in `contracts/`. A change is one PR that updates backend, cons
 | File | Defines |
 |---|---|
 | `schema.sql` | Tables, keys, constraints ([schema](data-and-api.md#schema)) |
-| `state-machines.md` | Order states; conversation steps + `mode` ([orders](backend.md#orders), [conversation](backend.md#conversation)) |
+| `state-machines.md` | Order states; conversation steps + `mode`; `pending_work` and outbound send statuses ([orders](backend.md#orders), [conversation](backend.md#conversation), [sending](backend.md#sending)) |
 | `openapi.yaml` | Console and platform REST API ([API](data-and-api.md#api)) |
 | `events.md` | Realtime subscriptions ([realtime](data-and-api.md#realtime)) |
 | `llm_output.schema.json` | One structured LLM output per turn ([AI agent](backend.md#ai-agent)) |
@@ -163,7 +165,6 @@ Build against the default. When decided, move it to [decisions](decisions.md) an
 | Team | Size; who owns critical core and supervises Claude Code? | 2–3 developers + Claude Code | Phase 0 |
 | Pilot café | Which café, go-live date? | None; Phase 6 ends ~17 Dec 2026 | Phase 0 (menu); Phase 3 (WABA) |
 | Meta business | Verification status, legal entity, domain with email | Start verification now | Phase 0 |
-| Gemini access | Vertex AI or developer API? | Developer API (synthetic data) in Phases 1–2; Vertex AI from Phase 3 | Phase 2 |
 | LLM routing | Flash only, Flash-Lite only, or deterministic router? | One model behind one per-café config value | Phase 2 exit |
 | Menu size | When does the full-menu prompt stop working? | Full menu; measure tokens in Phase 2 | Phase 2 |
 | Post-trial budget | Monthly spend after day 90 | Supabase paid plan before go-live; budget from cost model | Pilot week 2 |
@@ -175,11 +176,21 @@ Build against the default. When decided, move it to [decisions](decisions.md) an
 | CSV allergen separator | `;` (backend) or `\|` (console template)? | `;` | Phase 4 |
 | Campaign cancel | Cancel only `scheduled`, or also `sending`? | `scheduled` and `sending`; queued recipients not sent | Phase 5 |
 | Discount amount | How is the discount defined? (`campaigns` stores only `offer_text`) | Percentage of subtotal, as in the mock | Phase 5 |
+| WhatsApp marketing cost | Who pays for WhatsApp marketing messages: the café or Restro? | TBD. Doesn't block the build; metered per message in `wa_messages.cost` either way | Before pilot month 2 campaigns |
+| Dead-letter handling **(pending)** | When a turn is dead-lettered, does it also alert the shift manager (`help` request, `system_error`) and switch the chat to human mode (a third Bot → Human trigger)? | Yes to both, per invariant 11. The customer message and the `platform_admin` escalation happen regardless | Ordering slice S7 |
+| Cancellation message guardrails **(pending)** | Beyond the standard guardrails: forbid refund or compensation promises? Keep the custom `reason_text` away from the LLM and the customer? | Yes to both: refund / compensation wording dropped like amounts (fixed fallback sent); only `reason_code` reaches the LLM | Phase 4 |
+| Worker CPU after the ack | Cloud Run throttles CPU after the response: run `worker` with instance-based billing, or have the push handler hand the turn to a Cloud Task? | Instance-based billing (CPU always allocated) on `worker` | Phase 3 |
 | Opt-in wording | Final consent text (`wording_version`) | Draft as version 1 | Phase 5 |
 | Consent re-ask | When to ask again after "No"? | Not within 30 days | Phase 5 |
 | Opt-out `source` | Which `source` do STOP / button / 131050 rows get? | Add `keyword`, `button`, `meta_block` | Phase 5 |
 | Chat retention | How long is chat text kept? | Kept for the pilot; removed on deletion | Phase 6 |
 | Pilot number | New dedicated number or the café's existing one? | Dedicated | Phase 3 |
+| Message body | `wa_messages` has no body; Chats and the simulator need what was sent ([G1](ordering-slice.md#gaps-in-the-docs)) | Add `wa_messages.payload jsonb`, purged on deletion | Ordering slice S2 |
+| Order subtotal and GST | Only `total_paise` is stored ([G2](ordering-slice.md#gaps-in-the-docs)) | Add `orders.subtotal_paise`, `orders.gst_paise` snapshots | Ordering slice S2 |
+| WhatsApp simulator | Not in the design ([G3](ordering-slice.md#gaps-in-the-docs)) | `simulator/` app + `api/dev/` router, local only | Ordering slice S1 |
+| Console on MSW first | Needed when the real backend runs locally? ([G4](ordering-slice.md#gaps-in-the-docs)) | Skip for the ordering slice; real local API + seed | Ordering slice S1 |
+| Local task shim | In-memory shim drops timers on restart ([G5](ordering-slice.md#gaps-in-the-docs)) | Accept locally; `stuck_inbound_check` covers inbound | Ordering slice S4 |
+| LLM debug traces | Raw LLM output isn't stored ([G6](ordering-slice.md#gaps-in-the-docs)) | Dev-only `dev_turn_traces`, never in staging or prod | Ordering slice S3 |
 
 ## Risks
 
@@ -187,7 +198,10 @@ Never weaken a mitigation without a decision record. The Phase 6 dry runs exerci
 
 | Risk | Mitigation |
 |---|---|
-| Order lost between Confirm and the console | Order + items + event in one transaction; unique `idempotency_key`; Realtime alert; escalation timers; `stuck_inbound_check` |
+| Order lost between Confirm and the console | Order + items + event in one transaction; unique `idempotency_key`; Realtime alert + 30 s refetch; escalation timers; `stuck_inbound_check` |
+| Message stuck or lost in the pipeline | Inbound + `pending_work` durable before the 200; lease expiry; `stuck_inbound_check`; retries, then dead letter → customer told how to reach a person + `platform_admin` |
+| Duplicate WhatsApp messages | One `wa_messages` row per outbound step, written first; ambiguous sends checked, never blindly resent |
+| Prompts processed outside India (Vertex global endpoint) | Accepted for the MVP; stated in the privacy policy; no phone numbers or other customers in prompts |
 | AI offers sold-out or invented dishes, or states a price | Prompt has only available items; code resolves every `item_ref`; code renders names and totals |
 | Hinglish accuracy below target | Phase 2 gate; confirmation always shown; handoff after two failed clarifications |
 | Edit/accept race | Optimistic locking in `transition()`; 409 `version_conflict` |
@@ -199,6 +213,6 @@ Never weaken a mitigation without a decision record. The Phase 6 dry runs exerci
 | Free-tier LLM data terms | Synthetic data only until Phase 3 |
 | Supabase free tier pauses, no backups | Paid plan before go-live |
 | Trial credits wasted or run out | Activate at Phase 3; cost model by pilot week 2 |
-| LLM spend spike | Kill switch; `max-instances`; Vertex quotas |
+| LLM spend spike | Kill switch; `max-instances`; Vertex quotas; `v_daily_costs` |
 | Cross-café data leak | Tenant from infrastructure; RLS; isolation tests |
 | Scope creep from the mock | Platform screens are P3; phase gates; backlog |

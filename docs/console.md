@@ -56,6 +56,7 @@ Stacked under the header in this order.
 
 - While offline, write buttons are disabled except Add manual order.
 - Back online: refetch every live list, toast "Back online · N orders arrived while offline", replay first-seen alerts; urgency is recomputed from server timestamps.
+- **Realtime recovery.** Even while connected, active orders and open requests are refetched every 30 s and on tab visible, so a missed Realtime event never hides an order. Disconnects and reconnects are reported to `POST /telemetry/console`.
 
 ### Undo toast
 
@@ -127,6 +128,8 @@ Allergy rings until accepted (accepting is the kitchen check); the banner stays 
 
 **Alerts gate** (phones, `shift_manager` and `manager`, alerts off): full screen "Turn on alerts before service." The tap unlocks audio, asks for notification permission and plays the chime. The bell panel shows this device's sound, notification permission and WhatsApp backup state, with a test button.
 
+**In-app notifications** (`manager`+). The bell panel also lists the user's `notifications`, newest first, with an unread count on the bell. `order_cancelled`: "#1048 · T7 cancelled by Ravi · Out of stock" (custom text shown to staff). Silent, `info`; opening the panel or tapping Mark all read calls `POST /notifications/ack-all`, tapping one calls `POST /notifications/{id}/ack` and opens the order.
+
 **Notifications.** Ring events while the tab is hidden become browser notifications ("Overdue · T11 #1044", "Allergy · T7 #1048"); critical ones stay until tapped. Ring events for another screen show a heads-up card that opens it. The WhatsApp backup is sent by the backend, never the browser: `new_order_alert` to the café alert number when an order is `NEW` at 60 s or a call is open at 2 min.
 
 ## Screens
@@ -158,7 +161,7 @@ Owner screens also open for `platform_admin` in support mode, minus Print ticket
 |---|---|---|
 | Roles | Staff / Manager / Owner / Platform | `shift_manager` "Shift manager" / `manager` / `owner` / `platform_admin` |
 | Order columns | New / Preparing / Ready; "Start preparing" | New / Accepted / Ready; **Accept**; "Your order is being made" |
-| Cancel | `manager`+, not on Ready | `shift_manager`+ on all three, reason required |
+| Cancel | `manager`+, not on Ready | `shift_manager`+ on New; `manager`+ on Accepted and Ready; reason required (fixed list + custom text) |
 | Allergy alarm | Rings until Ready | Rings until Accepted |
 | Added | — | Flag chips, escalation chain, print ticket, manual order, offline banner, Paused chip |
 | Menu edit | Free-text tags | Category, veg, spice, three-state allergens |
@@ -175,9 +178,9 @@ Owner screens also open for `platform_admin` in support mode, minus Print ticket
 Moves orders New → Accepted → Ready → Served. Backend: [orders](backend.md#orders).
 
 - **Layout:** toolbar with Tabs / Board toggle (phones always Tabs), Pause WhatsApp ordering (`manager`+), Add manual order · summary strip ("1 overdue · 1 allergy · 2 new") · column tabs New / Accepted / Ready with counts and severity dots · type chips All · Overdue · Allergy · Not started · Due soon · New · Delayed + legend · card grid.
-- **Card:** allergy banner (until `READY`) · table large · "#1048 · Riya · 6th visit" · severity and flag chips · timer "6 / 10 min" from `accepted_at` · progress bar · items with notes · redeemed code · escalation chain · total · Message, Print ticket, Cancel, Delay, and the primary action (Accept / Mark ready / Mark served).
+- **Card:** allergy banner (until `READY`) · table large · "#1048 · Riya · 6th visit" · severity and flag chips · timer "6 / 10 min" from `accepted_at` · progress bar · items with notes · redeemed code · escalation chain · total · Message, Print ticket, Cancel (New for `shift_manager`; every column for `manager`+), Delay, and the primary action (Accept / Mark ready / Mark served).
 - **Delay panel:** +2 · +5 (default) · +10 · custom 1–99, note ≤ 120, preview of the customer message.
-- **Cancel dialog:** reason Out of stock · Kitchen issue · Customer asked; the reason goes to the customer and the audit log.
+- **Cancel dialog:** reason Out of stock · Kitchen issue · Customer asked · Other (text field, required, ≤ 120). Note under the reasons: "The customer gets an apology. Your own text stays with the team." The reason goes to the audit log and to managers' and the owner's notifications.
 - **Manual order:** table, available items with qty and note, optional allergy note.
 
 | Action | API | Result |
@@ -185,14 +188,14 @@ Moves orders New → Accepted → Ready → Served. Backend: [orders](backend.md
 | Accept / Mark ready / Mark served | `POST /orders/{id}/transition` with `expected_version` | Card moves; undo toast; message after 5 s |
 | Undo | `POST /orders/{id}/undo` | Card returns; nothing sent |
 | Delay | `POST /orders/{id}/delay` | Delayed +N; due pushed; message sent |
-| Cancel | `transition` to `CANCELLED` with reason | Card leaves; customer told |
+| Cancel | `POST /orders/{id}/cancel` with `reason_code`, `reason_text?`, `expected_version` | Card leaves; customer told; managers and owner notified in-app |
 | Message | `POST /conversations/open` if no chat | Opens the chat |
 | Manual order | `POST /orders/manual` | New card via Realtime |
 | Pause / resume | `POST /cafes/{id}/pause-ordering` | Paused banner |
 
 409 → "Riya changed this order — check it again", card refreshes. 422 → "This order was already updated", refetch.
 
-**Done when:** a new order appears ≤ 2 s after Confirm with chime · transitions send `expected_version`; Undo within 5 s sends nothing · amber at 60 s, Due soon at 80 %, red past due; strip, chips, dots and badge agree · allergy rings every 30 s until accepted · Delay pushes due and sends the preview · Cancel needs a reason · 409 refreshes the card · Tabs at 375 px with no horizontal scroll · Pause `manager`+ only; Print and manual order hidden in support mode.
+**Done when:** a new order appears ≤ 2 s after Confirm with chime · transitions send `expected_version`; Undo within 5 s sends nothing · amber at 60 s, Due soon at 80 %, red past due; strip, chips, dots and badge agree · allergy rings every 30 s until accepted · Delay pushes due and sends the preview · Cancel needs a reason (text for Other); `shift_manager` sees Cancel only on New · 409 refreshes the card · a missed Realtime event shows up within 30 s · Tabs at 375 px with no horizontal scroll · Pause `manager`+ only; Print and manual order hidden in support mode.
 
 ### Calls and bills
 
@@ -317,7 +320,8 @@ Our cross-café console (`platform_admin`). Until P3 the team uses Supabase Stud
 | Café detail | Go-live checklist, health rows, Meta ids and secret refs |
 | Templates | Per café, status and quality, Sync with Meta |
 | Number health | Card per café: Healthy / Check / Reconnect |
-| Costs | Cost per order, WhatsApp 7 d, AI 7 d, fallback rate; per café and per campaign |
+| Costs | Cost per order, WhatsApp 7 d (estimated vs actual), AI 7 d, fallback rate; per café and per campaign (`v_unit_costs`, `v_daily_costs`) |
+| Dead letters | Dead-lettered `pending_work` per café: conversation, attempts, `last_error`, time; Retry · Resolve (`/platform/dead-letters`) |
 | AI review | Fallbacks and ≤ 2★ ratings with read-only transcripts |
 | Audit log | Filter by café, actor, action; export |
 

@@ -12,6 +12,11 @@ Back-edges: cart cleared or Cancel → `browsing`; Edit or any change at `confir
 
 `mode` is an overlay, `bot` or `human`. In `human` the bot is silent and `assigned_to` is set; it never changes `step`.
 
+| `mode` change | Triggers |
+|---|---|
+| `bot` → `human` | A [handoff](#handoff) (incl. AI failure) · staff Take over, reply or Message a table · a dead-lettered turn **(pending)** ([open decision](plan.md#open-decisions)) |
+| `human` → `bot` | Hand back · resolving the conversation's help or allergy request · `idle_handback` |
+
 | `conversations.state` | Meaning |
 |---|---|
 | `step` | Current step |
@@ -36,7 +41,7 @@ First match wins.
 8. Paused or closed → fixed reply. Status, help, bill and STOP still work.
 9. Free text → one [LLM call](#ai-agent).
 
-In a batch each interactive reply is its own turn; consecutive free-text messages join into one LLM turn. State changes and `processed_at` commit in one transaction under the lock. Keywords match the whole normalised message against a short per-language list, never a substring.
+In a batch each interactive reply is its own turn; consecutive free-text messages (1 s debounce) join into one LLM turn. The turn runs under the conversation [lease](architecture.md#message-pipeline): the LLM call and sends happen with no transaction open, and state changes, `processed_at` and the outbound step rows commit in one short transaction that first checks the lease is still held. Keywords match the whole normalised message against a short per-language list, never a substring.
 
 ### Deterministic flows
 
@@ -61,7 +66,7 @@ Reply ids are `action[:arg[:arg]]`. Handlers act on the id, never the title, and
 
 ## AI agent
 
-One structured Gemini call per free-text turn, only in `bot` mode, at most once per turn (plus one retry). No tools, no loop. The LLM interprets and drafts; code decides.
+One structured Gemini call (Vertex AI, global endpoint) per free-text turn, only in `bot` mode, at most once per turn (plus one retry). No tools, no loop. The LLM interprets and drafts; code decides. The only other call is the [cancellation message](#transitions) draft.
 
 ### Output
 
@@ -109,7 +114,7 @@ An order is created only by `confirm:{cart_version}` or `confirm` on an unchange
 
 ### Failures
 
-Timeout 6 s. Error, timeout or invalid output → one retry on the other model. Second failure → "Sorry, I'm having trouble — a team member will help you." + handoff `system_error`. Every call, including failures, writes `llm_calls`. Kill switch: [cost](architecture.md#cost).
+Timeout 6 s. Error, timeout, Vertex 429 or invalid output → one retry on the other model. Second failure → "Sorry, I'm having trouble — a team member will help you." + handoff `system_error`. Every call, including failures, writes `llm_calls` with its cost. Kill switch: [cost](architecture.md#cost).
 
 ### Guardrails
 
@@ -119,7 +124,7 @@ Timeout 6 s. Error, timeout or invalid output → one retry on the other model. 
 - **Clarify strikes.** +1 for `unclear`, `clarify`, or every op rejected as not on the menu. Valid action resets to 0. Two → handoff `repeated_unclear`.
 - **Injection.** Customer text is data. With no tools, injection can at most change `reply` wording.
 - **Off-topic.** One short friendly line and back to the menu. No general knowledge, no other businesses.
-- **Free-tier rule.** Until Gemini runs on GCP terms (Phase 3), prompts contain synthetic data only.
+- **Free-tier rule.** Until Gemini runs on Vertex AI (Phase 3), prompts contain synthetic data only.
 
 ## Cart
 
@@ -160,7 +165,7 @@ A second tap hits the unique key → "Already placed — order #N". `source` is 
 
 - **Edit** (button or free text with an open `NEW` order): ops apply to `order_edit` → "Updated order #N" with Save changes · Keep order.
 - **Save:** `transition()` `NEW → NEW` with the customer's expected version; items replaced, totals and `expected_minutes` recomputed, flag `edited`.
-- **Cancel:** Cancel order button (typed "cancel" gets the button) → `CANCELLED` → "Order #N cancelled."
+- **Cancel:** Cancel order button (typed "cancel" gets the button) → `CANCELLED` (`cancel_reason_code = customer`) → "Order #N cancelled."
 - **Race:** staff accepted first → customer gets "already accepted" + Call waiter. Customer first → staff Accept gets 409 `version_conflict` and the card reloads.
 
 ## Orders
@@ -173,7 +178,8 @@ A second tap hits the unique key → "Already placed — order #N". `source` is 
 | `NEW` → `NEW` | Customer edit | Version check; flag `edited` | "Updated order #N" |
 | `NEW` → `CANCELLED` | Customer | Only `NEW` | "Order #N cancelled." |
 | `NEW` → `ACCEPTED` | `shift_manager`+ | 409 if the customer changed it first | "Your order is being made" |
-| `NEW` / `ACCEPTED` / `READY` → `CANCELLED` | `shift_manager`+ | Reason required; manager notified after `NEW` | "Your order was cancelled: <reason>" |
+| `NEW` → `CANCELLED` | `shift_manager`+ | Reason required (fixed list + custom text) | AI-written cancellation message (below) |
+| `ACCEPTED` / `READY` → `CANCELLED` | `manager`+ | Reason required (fixed list + custom text) | AI-written cancellation message (below) |
 | `ACCEPTED` → `READY` | `shift_manager`+ | — | "Your order is ready and on its way" |
 | `READY` → `SERVED` | `shift_manager`+, or system after 10 min | — | Nothing; schedules `feedback` |
 | Any → previous | Same actor within 5 s | Undo | The queued message is never sent |
@@ -183,16 +189,22 @@ stateDiagram-v2
     [*] --> NEW: customer confirms
     NEW --> NEW: customer edits
     NEW --> ACCEPTED: Accept
-    NEW --> CANCELLED: customer cancels / staff declines
+    NEW --> CANCELLED: customer cancels / shift manager cancels (reason)
     ACCEPTED --> READY: Mark ready
-    ACCEPTED --> CANCELLED: staff cancels (reason)
+    ACCEPTED --> CANCELLED: manager+ cancels (reason)
     READY --> SERVED: Mark served / auto after 10 min
-    READY --> CANCELLED: staff cancels (reason)
+    READY --> CANCELLED: manager+ cancels (reason)
     SERVED --> [*]
     CANCELLED --> [*]
 ```
 
 Statuses never skip and nothing follows `SERVED`. Staff-transition messages wait 5 s (`status_message`) so Undo can stop them; customer-initiated changes reply at once. Inside the 24-hour window the message is free-form, otherwise the `order_update` template.
+
+**Staff cancel** (`POST /orders/{id}/cancel`):
+
+- Reason: fixed list Out of stock (`out_of_stock`) · Kitchen issue (`kitchen_issue`) · Customer asked (`customer_asked`) · Other (`other`, custom text required). Stored in `cancel_reason_code`, `cancel_reason_text`, `cancelled_by`, `cancelled_at`.
+- **Customer message:** written by the AI with the right intent (apologise, say the order is cancelled, offer Call waiter) in the café's tone, under guardrails. Input: the reason code, order number, first name, tone. Code adds the order number line and the Call waiter button, runs the amount scan, and falls back to the fixed "Sorry, order #N has been cancelled." on any LLM failure or guardrail hit. Outside the 24-hour window it goes as `order_update`. **(pending)** further guardrails: no refund or compensation promises, and the custom `reason_text` is never passed to the LLM or the customer ([open decision](plan.md#open-decisions)).
+- **Side effects:** one `notifications` row (`order_cancelled`) per active `manager` and `owner`, in the same transaction; in-app only, no WhatsApp message. Plus `order_events` and `audit_log` as for every transition.
 
 ### transition()
 
@@ -221,7 +233,7 @@ Flags are attributes, not statuses.
 Due = `accepted_at` + `expected_minutes` + `delay_minutes`. `allergy_note` is a separate field shown as the Allergy chip.
 
 - **Delay** (`NEW` or `ACCEPTED`): +2 / +5 / +10 / custom minutes, optional note ≤ 120 chars. Adds to `delay_minutes`, sets `delayed`, clears `overdue`, re-creates the `overdue` timer, sends "Sorry for the wait — your order needs about N more minutes. <note>" at once.
-- **Cancel reasons:** Out of stock · Kitchen issue · Customer asked. Cancelled orders are excluded from revenue, visits and spend.
+- **Cancel reasons:** Out of stock · Kitchen issue · Customer asked · Other (custom text). See [staff cancel](#transitions). Cancelled orders are excluded from revenue, visits and spend.
 - **Manual order** (`shift_manager`+, offline fallback): table, items, optional allergy note; cart pricing rules; `source = manual`; no customer messages. Open: created as `NEW` or `ACCEPTED` ([plan](plan.md#open-decisions)).
 - **Print ticket:** browser print, no endpoint. Number, table, time, first name, `qty × name` + note, allergy boxed at the top in large type, Edited / Near closing marks, expected time. No prices.
 - **Table sessions:** QR text "Hi, I'm at Table N" joins the table's open session or opens one. Several customers at one table share the session and one bill. A session closes on "Bill delivered" or after 3 h with no order.
@@ -248,11 +260,14 @@ Status `open` → `acknowledged` (`acknowledged_by`) → `resolved`. One open re
 | Complaint | `complaint` | `help` |
 | LLM flags frustration | `frustration` | `help` |
 | Allergen state `unknown` | `allergen_unknown` | `allergy` |
-| LLM failure after retry, or pipeline error | `system_error` | `help` |
+| LLM failure after retry | `system_error` | `help` |
+| Turn dead-lettered after 3 retries **(pending)** | `system_error` | `help` |
 
 Every handoff sets `mode = human`. A `bill` request never stops the bot.
 
-**Human mode.** Entered by a handoff, Take over, a staff reply or Message a table. The bot sends nothing (STOP still works); staff replies go through `outbound`. Exits on Hand back, on resolving the conversation's help or allergy request, or after 15 min with no unanswered customer message (`idle_handback`).
+**Dead-lettered turn.** The customer always gets the standard "Sorry, something went wrong on our side. Tap below to talk to a person." + Call waiter, and `platform_admin` is alerted. Whether it also opens a `help` request for the shift manager and switches to human mode is pending; default yes, per invariant 11 ([open decision](plan.md#open-decisions)).
+
+**Human mode.** Entered by a handoff, Take over, a staff reply, Message a table or (pending) a dead-lettered turn. The bot sends nothing (STOP still works); staff replies go through `outbound`. Exits on Hand back, on resolving the conversation's help or allergy request, or after 15 min with no unanswered customer message (`idle_handback`).
 
 ### Escalation
 
@@ -336,7 +351,7 @@ One Meta app per environment, each with its own app secret and verify token.
 
 | Payload | We do |
 |---|---|
-| `messages` | Upsert customer + conversation; insert `inbound_messages` (unique `wamid`); set `last_inbound_at`; enqueue `wa-ack` and `wa-process` |
+| `messages` | Upsert customer + conversation; insert `inbound_messages` (unique `wamid`) and upsert `pending_work` in one transaction; set `last_inbound_at`; publish the `wa-inbound` signal; enqueue `wa-ack` |
 | `statuses` | Forward-only update of `wa_messages` (+ `pricing_category`, `billable`, `error_code`); mirror to `campaign_recipients` |
 | `message_template_status_update` / `_quality_update` | Update `templates`; trigger `template_sync` |
 | `phone_number_quality_update` | Update `cafes.health` |
@@ -352,8 +367,17 @@ Every outbound goes through `domain/outbound`. Callers pass café, recipient, me
 | Utility template | Template `approved` | Alert; caller logs the miss |
 | Marketing template | Latest consent `opted_in` and template `approved` | Not sent |
 
-- Key from the subject (`order:{id}:ACCEPTED`, `campaign_recipient:{id}`, `turn:{wamid}`). The `wa_messages` row is written first, unique on the key, so a retry never resends.
-- 429, `130429`, 5xx, timeout → backoff, max 3 attempts, then `failed`. `190` → drop cached token, `disconnected`, alert. Other 4xx → `failed` + `error_code`.
+**Outbound step records.** Every outbound step (a turn's reply, its list, a status message) is its own `wa_messages` row with an idempotency key from the subject: `order:{id}:ACCEPTED`, `campaign_recipient:{id}`, `turn:{pending_work_id}:{step}`. The row is written first (`pending`, `wamid` null), unique on the key, so a re-run never resends.
+
+| Outcome of the request | Row becomes | Then |
+|---|---|---|
+| Accepted by Meta | `sent` + `wamid` | Status webhooks move it forward |
+| Not sent: connection failed before the request left, 429, `130429` | stays `pending` | Retry with backoff; still failing → `failed` + alert |
+| Timeout or 5xx after the request left | `ambiguous` | Not retried. `send_check` at 60 s: a status webhook carrying the row id (`biz_opaque_callback_data` **[verify]**) → `sent` with its `wamid`; none → `failed` + alert, shown "Not delivered" in Chats so staff can resend by hand |
+| `190` | `failed` | Drop cached token, `disconnected`, alert |
+| Other 4xx | `failed` + `error_code` | — |
+
+`attempted_at` is set just before the request. After a crash, `pending` rows never attempted are sent by recovery; attempted ones become `ambiguous`. This is what prevents duplicate messages: nothing is resent unless it certainly didn't go.
 - Token from Secret Manager via `cafes.token_ref`, cached 10 min.
 - `wa-ack` marks the inbound read and shows typing; same client, no `wa_messages` row.
 - Dish names and prices in any message come from the DB.
