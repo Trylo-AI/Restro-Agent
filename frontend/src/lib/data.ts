@@ -86,7 +86,7 @@ export function useLiveOrders() {
 }
 
 export function useOpenRequests() {
-  const { cafeId } = useSession();
+  const { cafeId, userId } = useSession();
   return useLive<LiveRequest[]>({
     key: ["requests", cafeId], enabled: !!cafeId, cafeId, tables: ["requests"],
     fetcher: async () => {
@@ -115,7 +115,7 @@ export function useOpenRequests() {
           customerId,
           customerName: customerId ? cardMap.get(customerId)?.first_name || null : null,
           escalations: escalations.filter((e) => e.subject_id === r.id),
-          ackName: r.acknowledged_by ? names.get(r.acknowledged_by) ?? "Staff" : null,
+          ackName: r.acknowledged_by ? (r.acknowledged_by === userId ? "You" : names.get(r.acknowledged_by) ?? "a teammate") : null,
           words: last?.payload?.text?.body ?? null,
         };
       });
@@ -151,7 +151,7 @@ export function useChats() {
           maskedPhone: card?.masked_phone ?? "••••",
           lastInAt: lastIn?.received_at ?? null,
           lastOutAt: lastOut?.created_at ?? null,
-          lastText: lastIn ? (lastIn.type === "text" ? lastIn.payload?.text?.body ?? "" : `(${lastIn.type})`) : null,
+          lastText: lastIn ? messageText(lastIn.type, lastIn.payload as Payload).text : null,
         };
       });
     },
@@ -237,5 +237,130 @@ export function useTables() {
   return useLive<{ id: string; label: string }[]>({
     key: ["tables", cafeId], enabled: !!cafeId, cafeId, tables: [],
     fetcher: () => rows(supabase.from("tables").select("id, label").eq("cafe_id", cafeId!).order("label")),
+  });
+}
+
+export interface ThreadItem {
+  id: string;
+  dir: "in" | "out";
+  by: "customer" | "agent" | "staff";
+  at: string;
+  text: string;
+  buttons: string[];
+  status: string | null; // outbound only
+}
+
+export interface Thread {
+  conversation: Conversation;
+  customerName: string | null;
+  maskedPhone: string;
+  table: string | null;
+  windowOpen: boolean;
+  assignedName: string | null;
+  items: ThreadItem[];
+}
+
+type Payload = Record<string, unknown> & {
+  text?: { body?: string };
+  interactive?: {
+    body?: { text?: string };
+    button_reply?: { title?: string };
+    list_reply?: { title?: string };
+    action?: { buttons?: { reply?: { title?: string } }[]; button?: string; sections?: { rows?: { title?: string }[] }[] };
+  };
+  template?: { name?: string };
+};
+
+/** Customer text and taps, agent and staff messages, as staff read them. Never raw JSON. */
+export function messageText(type: string, p: Payload): { text: string; buttons: string[] } {
+  if (p.text?.body) return { text: p.text.body, buttons: [] };
+  const i = p.interactive;
+  if (i?.button_reply?.title) return { text: `Tapped “${i.button_reply.title}”`, buttons: [] };
+  if (i?.list_reply?.title) return { text: `Picked “${i.list_reply.title}”`, buttons: [] };
+  if (i?.body?.text) {
+    const buttons = i.action?.buttons?.map((b) => b.reply?.title ?? "").filter(Boolean)
+      ?? i.action?.sections?.flatMap((s) => s.rows?.map((r) => r.title ?? "") ?? []).filter(Boolean) ?? [];
+    return { text: i.body.text, buttons };
+  }
+  if (type === "template" || p.template) return { text: `Template · ${p.template?.name ?? ""}`.trim(), buttons: [] };
+  return { text: `(${type})`, buttons: [] };
+}
+
+/** One chat (docs/console.md#chats). */
+export function useThread(conversationId: string | null) {
+  const { cafeId, userId } = useSession();
+  return useLive<Thread | null>({
+    key: ["thread", cafeId, conversationId], enabled: !!conversationId, cafeId,
+    tables: ["conversations", "inbound_messages", "wa_messages"],
+    fetcher: async () => {
+      type Row = Conversation & { created_at: string; table_sessions: { tables: { label: string } | null } | null;
+        customers: { last_inbound_at: string | null } | null };
+      const conv = (await rows<Row[]>(supabase.from("conversations")
+        .select("id, cafe_id, customer_id, mode, assigned_to, table_session_id, updated_at, created_at, table_sessions(tables(label)), customers(last_inbound_at)")
+        .eq("id", conversationId!)))[0];
+      if (!conv) return null;
+      const since = new Date(Date.now() - 7 * 24 * 3600_000).toISOString();
+      const [ins, outs, cardMap, names] = await Promise.all([
+        rows<{ id: string; type: string; payload: Payload; received_at: string }[]>(supabase.from("inbound_messages")
+          .select("id, type, payload, received_at").eq("conversation_id", conv.id).gte("received_at", since)
+          .order("received_at").limit(300)),
+        rows<{ id: string; type: string; payload: Payload; status: string; idempotency_key: string; created_at: string }[]>(
+          supabase.from("wa_messages").select("id, type, payload, status, idempotency_key, created_at")
+            .eq("customer_id", conv.customer_id).gte("created_at", since).order("created_at").limit(300)),
+        cards([conv.customer_id]),
+        staffNames(cafeId!),
+      ]);
+      const items: ThreadItem[] = [
+        ...ins.map((m) => ({ id: m.id, dir: "in" as const, by: "customer" as const, at: m.received_at, status: null,
+          ...messageText(m.type, m.payload) })),
+        ...outs.map((m) => ({ id: m.id, dir: "out" as const, by: m.idempotency_key.startsWith("staff:") ? "staff" as const : "agent" as const,
+          at: m.created_at, status: m.status, ...messageText(m.type, m.payload) })),
+      ].sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+      const card = cardMap.get(conv.customer_id);
+      const lastIn = conv.customers?.last_inbound_at;
+      return {
+        conversation: conv,
+        customerName: card?.first_name || null,
+        maskedPhone: card?.masked_phone ?? "••••",
+        table: conv.table_sessions?.tables?.label ?? null,
+        windowOpen: !!lastIn && Date.now() - Date.parse(lastIn) < 24 * 3600_000,
+        assignedName: conv.assigned_to ? (conv.assigned_to === userId ? "You" : names.get(conv.assigned_to) ?? "A teammate") : null,
+        items,
+      };
+    },
+  });
+}
+
+export interface BillOrder { id: string; number: number; total_paise: number; items: { name_snapshot: string; qty: number }[] }
+
+/** Every non-cancelled order of a table session (docs/backend.md#bill-sheet). */
+export function useBill(tableSessionId: string | null) {
+  const { cafeId } = useSession();
+  return useLive<BillOrder[]>({
+    key: ["bill", cafeId, tableSessionId], enabled: !!tableSessionId, cafeId, tables: ["orders"],
+    fetcher: async () => {
+      const data = await rows<(Omit<BillOrder, "items"> & { order_items: BillOrder["items"] })[]>(supabase.from("orders")
+        .select("id, number, total_paise, order_items(name_snapshot, qty)").eq("table_session_id", tableSessionId!)
+        .neq("status", "CANCELLED").order("created_at"));
+      return data.map(({ order_items, ...o }) => ({ ...o, items: order_items ?? [] }));
+    },
+  });
+}
+
+/** Sum of order totals that code already priced (integer paise; no discounts or tax maths here). */
+export function billTotal(orders: BillOrder[]): number {
+  return orders.reduce((s, o) => s + o.total_paise, 0);
+}
+
+/** Open table sessions, for "Message a table". */
+export function useOpenSessions() {
+  const { cafeId } = useSession();
+  return useLive<{ id: string; label: string; opened_at: string }[]>({
+    key: ["sessions", cafeId], enabled: !!cafeId, cafeId, tables: [],
+    fetcher: async () => {
+      const data = await rows<{ id: string; opened_at: string; tables: { label: string } | null }[]>(supabase.from("table_sessions")
+        .select("id, opened_at, tables(label)").eq("cafe_id", cafeId!).is("closed_at", null).order("opened_at"));
+      return data.map((s) => ({ id: s.id, opened_at: s.opened_at, label: s.tables?.label ?? "—" }));
+    },
   });
 }

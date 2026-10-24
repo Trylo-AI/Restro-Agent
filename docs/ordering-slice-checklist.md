@@ -23,8 +23,8 @@ Tracks [ordering-slice.md](ordering-slice.md). Ticked in the same commit as the 
 | S12 Customer profile backend | Done | S9–S12 commit |
 | S13 Console shell | Done | S13–S14 commit |
 | S14 Live orders | Done | S13–S14 commit |
-| S15 Chats, Calls and bills, Menu | To do | — |
-| S16 End to end | In progress | Playwright set up; Live orders specs pass |
+| S15 Chats, Calls and bills, Menu | Done | S15 commit |
+| S16 End to end | In progress | Playwright set up; orders and service specs pass (5) |
 
 ## S0 · Setup and plan approval (Aman)
 
@@ -275,15 +275,18 @@ Built with S10 and S11 and committed together (they share the handoff wiring).
 
 ## S15 · Chats, Calls and bills, Menu
 
-- [ ] Chats: list split, thread, mode banner, quick replies, window closed, Message a table, customer panel = shared profile panel
-- [ ] Calls and bills: strip, chips, cards, buttons per kind, Profile button, escalation chain, bill sheet ("Total (incl. GST)", no code field), Bill delivered
-- [ ] Menu: sold-out count, category chips, rows, two-tap switch; nothing `manager`+ shown
-- [ ] **Exit:** each screen's "Done when" list passes, minus the Later parts
+- [x] Chats: list split, thread (taps and buttons shown as text, "Not delivered" on failed sends), mode banner (incl. "Waiting for a person" when human mode is unassigned), quick replies, window closed, Message a table, customer panel = shared profile panel (third column ≥ 1200 px, otherwise a Profile button)
+- [x] Calls and bills: strip, chips, cards, buttons per kind, Profile button, escalation chain, bill sheet ("Total (incl. GST)", no code field), Bill delivered
+- [x] Menu: sold-out count, category chips, rows, two-tap switch (armed state resets after 5 s or when another item is tapped; back in stock is one tap). Price and prep shown read-only to `manager`+ only; no Edit, New or Import in this slice
+- [x] Tests: `features/s15.test.tsx` (menu two taps, expiry and role; calls buttons per kind, low ratings hidden, bill sheet + deliver; chats quick replies, Send, Take over, closed window, teammate replying; message rendering)
+- [x] E2E: `e2e/service.spec.ts` call waiter → Calls → Acknowledge → Chats reply reaches the customer → hand back → bot answers again; menu two taps on the real stack
+- [x] **Exit:** each screen's "Done when" list passes, minus the Later parts
+- [ ] Assumption for Aman: the contract has no bill read endpoint, so the sheet sums the session's order totals, which code already priced (integer paise, no discount or tax maths; one helper `billTotal`). "Bill delivered" shows the API's total. A `GET /bills/{table_session_id}` would remove this; it needs a contract change
 
 ## S16 · End to end
 
 - [x] Playwright set up (`frontend/playwright.config.ts`, `frontend/e2e/`; reads the git-ignored env files; `E2E_CHROMIUM` can point at an already-downloaded Chromium)
-- [ ] Playwright: goal path with simulator and console side by side (the order → Served half is done in `e2e/orders.spec.ts`; Chats is S15)
+- [x] Playwright: goal path with simulator and console side by side (`e2e/orders.spec.ts` order → Served; `e2e/service.spec.ts` call waiter → reply → hand back)
 - [ ] Playwright: edit while `NEW`, edit after `ACCEPTED`, sold out mid-order, allergy handoff, call waiter, delay, cancel with Other text
 - [ ] Playwright: Profile → comment → profile updated → Undo, seen on two consoles
 - [ ] Playwright: dead letter and ambiguous send via fault injection (one message, never two)

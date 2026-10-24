@@ -28,6 +28,25 @@ export const orders = {
 export const conversations = {
   open: (tableSessionId: string) =>
     call(api.POST("/conversations/open", { params: cafeHeader(), body: { table_session_id: tableSessionId } })),
+  takeover: (conversationId: string) => call(api.POST("/conversations/{id}/takeover", { params: id(conversationId) })),
+  reply: (conversationId: string, text: string) =>
+    call(api.POST("/conversations/{id}/reply", { params: id(conversationId), body: { text } })),
+  handback: (conversationId: string) => call(api.POST("/conversations/{id}/handback", { params: id(conversationId) })),
+};
+
+export const requests = {
+  ack: (requestId: string) => call(api.POST("/requests/{id}/ack", { params: id(requestId) })),
+  resolve: (requestId: string) => call(api.POST("/requests/{id}/resolve", { params: id(requestId) })),
+};
+
+export const bills = {
+  deliver: (tableSessionId: string) =>
+    call(api.POST("/bills/{table_session_id}/deliver", { params: { ...cafeHeader(), path: { table_session_id: tableSessionId } } })),
+};
+
+export const menu = {
+  setAvailable: (itemId: string, available: boolean) =>
+    call(api.POST("/menu/{id}/availability", { params: id(itemId), body: { available } })),
 };
 
 export const cafes = {
