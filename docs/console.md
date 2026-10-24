@@ -10,7 +10,7 @@ The staff web app for all four roles. One on-shift person runs service from it, 
 | Auth | Supabase Auth, anon key only in the bundle |
 | Reads | Supabase tables and views under RLS + [Realtime](data-and-api.md#realtime) |
 | Writes | `api` only, typed client generated from `contracts/openapi.yaml` |
-| Mock | MSW handlers from `openapi.yaml` + seed generator + fake Realtime emitting the same events |
+| Mock | Demo builds only: MSW handlers from `openapi.yaml` + seed generator + fake Realtime emitting the same events. Development runs against the real local backend with seed data ([decisions](decisions.md#smaller-decisions)) |
 | Icons | Lucide |
 
 ```text
@@ -151,7 +151,7 @@ Allergy rings until accepted (accepting is the kitchen check); the banner stays 
 
 Owner screens also open for `platform_admin` in support mode, minus Print ticket, Add manual order and Service report.
 
-**Building a screen:** read its section + Shell + Urgency → build on MSW with contract names only → check at 375 px and desktop, in every role that sees it and in support mode → switch reads to Supabase and writes to `api` with no UI change → done when "Done when" passes on MSW and the real backend. If this doc and `contracts/` disagree, stop and raise it.
+**Building a screen:** read its section + Shell + Urgency → build against the local backend and seed data with contract names only → check at 375 px and desktop, in every role that sees it and in support mode → done when "Done when" passes on the real backend. If this doc and `contracts/` disagree, stop and raise it.
 
 **Every screen** handles: empty state, filter with no match, 403, 409 (refetch and show the new state), network error (keep input, "try again", Offline banner if it persists).
 
@@ -178,7 +178,7 @@ Owner screens also open for `platform_admin` in support mode, minus Print ticket
 Moves orders New → Accepted → Ready → Served. Backend: [orders](backend.md#orders).
 
 - **Layout:** toolbar with Tabs / Board toggle (phones always Tabs), Pause WhatsApp ordering (`manager`+), Add manual order · summary strip ("1 overdue · 1 allergy · 2 new") · column tabs New / Accepted / Ready with counts and severity dots · type chips All · Overdue · Allergy · Not started · Due soon · New · Delayed + legend · card grid.
-- **Card:** allergy banner (until `READY`) · table large · "#1048 · Riya · 6th visit" · severity and flag chips · timer "6 / 10 min" from `accepted_at` · progress bar · items with notes · redeemed code · escalation chain · total · Message, Print ticket, Cancel (New for `shift_manager`; every column for `manager`+), Delay, and the primary action (Accept / Mark ready / Mark served).
+- **Card:** allergy banner (until `READY`; this visit's `allergy_note` and "On profile: <allergen>") · table large · "#1048 · Riya · 6th visit" + **Profile** button ([customer profile](#customer-profile)) · severity and flag chips · timer "6 / 10 min" from `accepted_at` · progress bar · items with notes · redeemed code · escalation chain · total · Message, Print ticket, Cancel (New for `shift_manager`; every column for `manager`+), Delay, and the primary action (Accept / Mark ready / Mark served).
 - **Delay panel:** +2 · +5 (default) · +10 · custom 1–99, note ≤ 120, preview of the customer message.
 - **Cancel dialog:** reason Out of stock · Kitchen issue · Customer asked · Other (text field, required, ≤ 120). Note under the reasons: "The customer gets an apology. Your own text stays with the team." The reason goes to the audit log and to managers' and the owner's notifications.
 - **Manual order:** table, available items with qty and note, optional allergy note.
@@ -219,7 +219,7 @@ Help calls, allergy questions, bill requests, low ratings, and the bill sheet. B
 
 Read conversations, take over, reply, hand back. Backend: [human mode](backend.md#handoff).
 
-- **Layout:** list split into "Waiting for you" (human mode, by severity) and "Bot is handling" (most recent) · thread · customer panel (name, masked phone, allergy, visits, past orders). Phone: list → full-width thread → back.
+- **Layout:** list split into "Waiting for you" (human mode, by severity) and "Bot is handling" (most recent) · thread · customer panel = the [customer profile](#customer-profile). Phone: list → full-width thread → back.
 - **Thread:** mode banner with Take over or Hand back to bot · bubbles for customer, agent, staff with time; "Not delivered" on failed sends · quick replies (On its way · Just 2 more minutes · Checking with the kitchen · Coming to your table now) fill the composer, never send · composer warns "this pauses the bot" in bot mode.
 - **Window closed** (last customer message > 24 h): composer disabled — "WhatsApp only allows a reply after the customer messages again." Status updates still go as templates.
 - **Message a table:** pick an open table session → chat in human mode.
@@ -234,6 +234,24 @@ Read conversations, take over, reply, hand back. Backend: [human mode](backend.m
 Another staff member took over → "Meera is replying" + Take over. Idle hand-back shows "Handed back to the bot".
 
 **Done when:** a human-mode chat appears ≤ 2 s, amber, red at 60 s · banner follows Realtime mode · quick replies never send alone · closed window disables the composer · Message a table works with no prior chat · numbers masked · works at 375 px.
+
+### Customer profile
+
+One shared panel (`shift_manager`+), opened from the **Profile** button on order cards and Calls and bills cards, and shown as the customer panel in Chats. Side panel on desktop, full-height bottom sheet on phones. Backend: [customer profile](backend.md#customer-profile-and-staff-comments).
+
+- **At a glance** (top box, no scrolling at 375 px, large type, one fact per line, icon + label on every chip): first name and "6th visit" / "First visit" · masked phone and segment · last visit ("12 Oct · 12 days ago") · usually orders (top 3 dishes) · **Allergy** first, in the allergy style used on order cards · Dislikes · Diet · Prefers (milk, sugar, spice, seating, likes, other). Each chip has × to remove a wrong value.
+- **Details** (below): Feedback (average, each rating with text) · Complaints (1–2★ and `complaint` / `frustration` handoffs, with the customer's words) · Recent orders (last 5, cancelled struck through) · Comments (newest first: author, time, the comment as written, what the AI changed with **Undo**, or "No profile changes" / "Couldn't read this — profile unchanged").
+- **Add a comment:** text ≤ 500 + Save; "Updating profile…" until the result arrives by Realtime. Hint: "Write what the customer told you — the profile updates itself. Offers and opt-outs can only be changed by the customer."
+
+| Action | API |
+|---|---|
+| Add a comment | `POST /customers/{id}/notes` |
+| Undo a comment's changes | `POST /customer-notes/{id}/undo` |
+| Remove a value (chip ×) | `POST /customers/{id}/preferences/remove` |
+
+Reads: `v_customer_card`, `customer_preferences`, `customer_notes`, `feedback`, `requests`, `orders` + `order_items` through Supabase.
+
+**Done when:** opens in one tap from a card · the top box reads at a glance at 375 px with no scrolling · a comment shows its applied changes within a few seconds on every console · Undo reverses them, 409 shows "Changed again since — remove it from the box instead" · × removes one value · numbers masked · empty profile and first visit look intentional, not broken.
 
 ### Menu
 
@@ -305,7 +323,7 @@ Owner. Tabs **Tables & QR · Team · Settings · Alerts**, each with its own URL
 
 - **Tables & QR:** add / edit tables (label unique, area, seats); download one QR or all as PDF. Every printed QR carries "Can't order on WhatsApp? Ask any of our team."
 - **Team:** invite by email and role; change role; deactivate / reactivate (immediate). Owner rows can't be deactivated; the last active owner can't be demoted. One login per person.
-- **Settings:** opening hours · last-order cutoff · agent tone (Warm / Crisp / Playful) · feedback delay 15 / 30 / 60 min (default 30) · GST inclusive / exclusive 5 %. Saved in one `PUT`.
+- **Settings:** opening hours · last-order cutoff · agent tone (Warm / Crisp / Playful) · feedback delay 15 / 30 / 60 min (default 30). No GST setting: menu prices include GST. Saved in one `PUT`.
 - **Alerts:** café alert number (gets `new_order_alert`) · sound tests for each severity.
 
 **Done when:** QR opens WhatsApp with "Hi, I'm at Table N" · invite, role change and deactivation work and deactivation blocks the next request · settings save with `settings.update` · alert number validated · 375 px.

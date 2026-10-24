@@ -13,12 +13,12 @@ Contract: `contracts/schema.sql`. Implemented by `supabase/migrations/`.
 
 | Table | Key columns | Keys and checks |
 |---|---|---|
-| `cafes` | `name`, `timezone`, `business_id`, `waba_id`, `phone_number_id`, `display_phone_number`, `onboarding_model` (`hosted`), `token_ref`, `pin_ref`, `status`, `opening_hours`, `cutoff_minutes`, `settings` (`paused`, `tone`, `feedback_delay_minutes`, `gst_mode`, `gst_rate`, `alert_phone`, `model`), `health`, `checklist` | unique `phone_number_id`; `status` `onboarding` / `live` / `disconnected` / `paused`; `tone` `warm` / `crisp` / `playful` |
-| `memberships` | `user_id`, `cafe_id`, `role`, `active`, `alert_phone` | unique (`user_id`, `cafe_id`); `role` `shift_manager` / `manager` / `owner` |
+| `cafes` | `name`, `timezone`, `business_id`, `waba_id`, `phone_number_id`, `display_phone_number`, `onboarding_model` (`hosted`), `token_ref`, `pin_ref`, `status`, `opening_hours`, `cutoff_minutes`, `settings` (`paused`, `tone`, `feedback_delay_minutes`, `alert_phone`, `model`; no GST setting: prices include GST), `health`, `checklist` | unique `phone_number_id`; `status` `onboarding` / `live` / `disconnected` / `paused`; `tone` `warm` / `crisp` / `playful` |
+| `memberships` | `user_id`, `cafe_id`, `role`, `active`, `display_name`, `alert_phone` | unique (`user_id`, `cafe_id`); `role` `shift_manager` / `manager` / `owner` |
 | `platform_admins` | `user_id` | unique `user_id` |
 | `tables` | `cafe_id`, `label`, `area`, `seats`, `qr_text` | unique (`cafe_id`, `label`) |
 
-`token_ref` and `pin_ref` are Secret Manager references, never the secret.
+`token_ref` and `pin_ref` are Secret Manager references, never the secret. `display_name` is the first name staff see ("Acknowledged by Ravi"). `cafe_counters` (`cafe_id`, `order_number`, `menu_version`; backend only) holds the per-café counters behind order numbers and the menu version.
 
 ### Menu
 
@@ -34,18 +34,20 @@ Contract: `contracts/schema.sql`. Implemented by `supabase/migrations/`.
 | Table | Key columns | Keys and checks |
 |---|---|---|
 | `customers` | `cafe_id`, `wa_id`, `name`, `first_seen_at`, `last_inbound_at`, `last_visit_at` | unique (`cafe_id`, `wa_id`) |
-| `customer_preferences` | `cafe_id`, `customer_id`, `kind`, `value`, `source` | Stated preferences only |
+| `customer_preferences` | `cafe_id`, `customer_id`, `kind`, `value`, `source`, `note_id` | Stated preferences only; `kind` from `contracts/preference_kinds.json`; `source` `chat` / `staff_note`; unique (`customer_id`, `kind`, `value`) |
+| `customer_notes` | `cafe_id`, `customer_id`, `author_id`, `text`, `ai_status`, `ai_ops`, `ai_summary`, `undone_at`, `undone_by` | `text` ≤ 500; `ai_status` `pending` / `applied` / `no_changes` / `failed`; [profile](backend.md#customer-profile-and-staff-comments) |
 | `consents` | `cafe_id`, `customer_id`, `type` (`marketing`), `status`, `wording_version`, `source` | `status` `opted_in` / `opted_out`; append-only; current = newest row |
 | `data_deletion_requests` | `cafe_id`, `customer_id`, `wa_id`, `source` (`owner` / `meta_callback`), `status`, `completed_at` | — |
 | `conversations` | `cafe_id`, `customer_id`, `mode`, `assigned_to`, `table_session_id`, `state`, `lease_owner`, `lease_expires_at` | unique (`cafe_id`, `customer_id`); `mode` `bot` / `human` |
 | `inbound_messages` | `cafe_id`, `conversation_id`, `wamid`, `type`, `payload`, `received_at`, `processed_at` | unique `wamid`; index on unprocessed per conversation |
 | `pending_work` | `cafe_id`, `conversation_id`, `kind`, `status`, `attempts`, `next_attempt_at`, `last_error`, `dead_lettered_at` | `kind` `turn`; `status` `pending` / `running` / `done` / `dead_lettered` / `resolved`; one `pending` row per (`conversation_id`, `kind`); index (`status`, `next_attempt_at`) |
-| `wa_messages` | `cafe_id`, `customer_id`, `wamid`, `idempotency_key`, `direction`, `type`, `template_name`, `status`, `attempted_at`, `error_code`, `pricing_category`, `billable`, `cost`, `currency`, `pricing_version`, `cost_basis`, status timestamps | `id` uuid primary key; `wamid` unique and nullable (an `ambiguous` send has none yet); unique `idempotency_key`; status forward-only |
+| `wa_messages` | `cafe_id`, `customer_id`, `wamid`, `idempotency_key`, `direction`, `type`, `template_name`, `payload`, `status`, `attempted_at`, `error_code`, `pricing_category`, `billable`, `cost`, `currency`, `pricing_version`, `cost_basis`, status timestamps | `id` uuid primary key; `wamid` unique and nullable (an `ambiguous` send has none yet); unique `idempotency_key`; status forward-only |
 
 - **Lease:** `lease_owner` is the worker instance id + a random token; `lease_expires_at` is 30 s ahead, renewed every 10 s. Both null when free. [Pipeline](architecture.md#message-pipeline).
 - **`pending_work`:** `last_error` is an error class and id, never message text. Dead-lettered rows stay until a `platform_admin` retries (back to `pending`, `attempts` reset) or resolves them.
 - **Outbound steps:** every outbound is one `wa_messages` row written before the request (`status = pending`, `wamid` null). Status: `pending` → `sent` → `delivered` → `read`; `pending` → `ambiguous` → `sent` or `failed`; `pending` → `failed`. `attempted_at` is set just before the request, so recovery can tell a never-attempted row from a possibly-sent one. Inbound messages stay in `inbound_messages`.
 - **`cost_basis`:** `estimated` from the category and price table, `actual` once reconciled with Meta billing.
+- **`payload`:** the rendered outbound message (text, buttons, list or template parameters), so Chats and the simulator can show what was sent. Chat text: purged by customer data deletion.
 
 ### Orders and service
 
@@ -75,7 +77,7 @@ Contract: `contracts/schema.sql`. Implemented by `supabase/migrations/`.
 | `campaigns` | `cafe_id`, `name`, `segment`, `template_name`, `offer_text`, `code_prefix`, `valid_until`, `scheduled_at`, `status` | `segment` `all_opted_in` / `lapsed` / `regulars` |
 | `campaign_recipients` | `cafe_id`, `campaign_id`, `customer_id`, `code`, `status`, `wamid` | unique `code`; unique (`campaign_id`, `customer_id`) |
 | `redemptions` | `cafe_id`, `campaign_recipient_id`, `code`, `order_id`, `table_session_id`, `discount_paise`, `redeemed_by`, `redeemed_at` | unique `campaign_recipient_id`; append-only |
-| `llm_calls` | `cafe_id`, `provider`, `model`, `conversation_id`, `message_id`, `order_id`, `input_tokens`, `cached_tokens`, `output_tokens`, `cost`, `currency`, `pricing_version`, `latency_ms`, `outcome` | append-only; `provider` `vertex` / `developer_api`; `message_id` = the `inbound_messages` row that started the turn; `order_id` set for calls about an order (edit, cancellation draft); `outcome` `ok` / `invalid_output` / `timeout` / `rate_limited` / `error` |
+| `llm_calls` | `cafe_id`, `provider`, `model`, `purpose` (`turn` / `cancel_draft` / `profile_note`), `conversation_id`, `message_id`, `order_id`, `note_id`, `input_tokens`, `cached_tokens`, `output_tokens`, `cost`, `currency`, `pricing_version`, `latency_ms`, `outcome` | append-only; `provider` `vertex` / `developer_api`; `message_id` = the `inbound_messages` row that started the turn; `order_id` set for calls about an order (edit, cancellation draft); `outcome` `ok` / `invalid_output` / `timeout` / `rate_limited` / `error` |
 | `audit_log` | `actor_id`, `actor_role`, `support`, `cafe_id`, `action`, `change`, `at` | append-only; no secrets or full numbers in `change` |
 | `webhook_events` | `received_at`, `signature_valid`, `payload`, `processed_at` | Deleted after 30 days |
 
@@ -85,7 +87,8 @@ Contract: `contracts/schema.sql`. Implemented by `supabase/migrations/`.
 - Never key a customer on `wa_id` alone. Never weaken the unique `wamid`, `idempotency_key` or `code`.
 - Migrations are timestamped and forward-only; an applied migration is never edited. Each new tenant table enables RLS and its read policy in the same migration. Expand then contract: the migration must work with the running backend.
 - CI applies every migration to an empty DB. A schema change updates `contracts/schema.sql` in the same PR.
-- `supabase/seed/` (from the seed generator, also used by MSW): demo café, menu with allergens, tables, one user per role, customers, orders in every status, a campaign. Never real data.
+- `supabase/seed/` (from the seed generator, also used by MSW): demo café, menu with allergens, tables, one user per role, customers with profiles and feedback, orders in every status, a campaign. Never real data.
+- **Local only:** `supabase/dev/` holds `dev_turn_traces` (raw LLM output and guardrail actions per call, written only when `DEV_TRACES=true`). It is never part of `supabase/migrations/` or `contracts/schema.sql`.
 
 ## Row-level security
 
@@ -99,12 +102,12 @@ Contract: `contracts/schema.sql`. Implemented by `supabase/migrations/`.
 
 | Readable by | Tables / views |
 |---|---|
-| Every member | `cafes`, `tables`, `menu_items`, `menu_item_allergens`, `customers`, `conversations`, `inbound_messages`, `wa_messages`, `table_sessions`, `orders`, `order_items`, `requests` (not `low_rating`), `escalations`, `redemptions` |
+| Every member | `cafes`, `tables`, `menu_items`, `menu_item_allergens`, `customers`, `customer_preferences`, `customer_notes`, `feedback`, `conversations`, `inbound_messages`, `wa_messages`, `table_sessions`, `orders`, `order_items`, `requests` (not `low_rating`), `escalations`, `redemptions`, `v_customer_card` |
 | Own rows | `memberships` (owner sees every row of the café); `platform_admins`; `notifications` (`user_id` = caller, `manager`+) |
-| `manager`+ | `low_rating` requests, `feedback`, `v_service_report`, `v_prep_times`, `v_feedback_summary` |
+| `manager`+ | `low_rating` requests, `v_service_report`, `v_prep_times`, `v_feedback_summary` |
 | `owner` | `consents`, `templates`, `campaigns`, `campaign_recipients`, `v_daily_revenue`, `v_top_items`, `v_customer_segments`, `v_customer_profile`, `v_campaign_funnel` |
 | `platform_admins` | `llm_calls`, `audit_log`, `webhook_events`, `pending_work`, `v_unit_costs`, `v_daily_costs`, `v_conversation_metrics` |
-| Backend only | `customer_preferences`, `order_events`, `data_deletion_requests` |
+| Backend only | `order_events`, `data_deletion_requests`, `cafe_counters` |
 
 `v_customer_profile` exposes the masked number, never `wa_id`. RLS is tested in CI with cross-café and role cases.
 
@@ -118,6 +121,7 @@ Contract: `contracts/schema.sql`. Implemented by `supabase/migrations/`.
 | `v_top_items` | Dishes by quantity and revenue | Analytics, weekly report |
 | `v_customer_segments` | Segment per customer; returning % | Today, Analytics, Customers, campaign audiences |
 | `v_customer_profile` | Masked number, visits, spend, top 3 dishes, rating, consent, campaigns, segment | Customers |
+| `v_customer_card` | First name, masked number, visits, first seen, last visit, top 3 dishes (90 days), segment, average rating. No spend, no consent | Customer profile panel (every member) |
 | `v_prep_times` | Median `created_at` → `ready_at` per order and dish | Service report |
 | `v_service_report` | Median prep, % overdue, slowest dishes, peak overdue hour | Service report, Analytics |
 | `v_feedback_summary` | Average rating, count, 1–3★ with text | Service report, Analytics, AI review |
@@ -163,6 +167,7 @@ Body: `error.code` (stable snake_case), `error.message` (safe to show), `error.d
 | 404 | `not_found` | Missing or another café's |
 | 409 | `version_conflict` | Row changed since read; response carries the current row |
 | 409 | `code_already_used` | Code redeemed on another order |
+| 409 | `window_closed` | Staff reply after the customer's 24-hour window closed |
 | 422 | `invalid_transition` | Not allowed from current status, or undo after 5 s |
 | 422 | `invalid_code` | Unknown, expired or another café's code |
 | 429 | `rate_limited` | `Retry-After` set |
@@ -197,7 +202,10 @@ Body: `error.code` (stable snake_case), `error.message` (safe to show), `error.d
 | `POST /menu` · `PUT /menu/{id}` | Item + `allergens: [{allergen, state}]` (+ `version` on PUT) | `manager`+, support | Create / edit; past orders keep snapshots | `menu.update` |
 | `POST /menu/import` | CSV (multipart) | `owner`, support | All-or-nothing import; returns row errors | `menu.import` |
 | `POST /cafes/{id}/pause-ordering` | `{paused}` | `manager`+, support | Pause / resume WhatsApp ordering | `ordering.pause` / `ordering.resume` |
-| `PUT /cafes/{id}/settings` | Hours, cutoff, tone, feedback delay, GST, alert number | `owner`, support | Update settings | `settings.update` |
+| `POST /customers/{id}/notes` | `{text}` (≤ 500) | `shift_manager`+, support | Store the comment; the worker applies the AI's profile changes | `customer.note` (+ `customer.profile_update` when applied) |
+| `POST /customer-notes/{id}/undo` | — | `shift_manager`+, support | Reverse that comment's applied changes; 409 if changed again since | `customer.profile_undo` |
+| `POST /customers/{id}/preferences/remove` | `{kind, value}` | `shift_manager`+, support | Remove one profile value | `customer.profile_update` |
+| `PUT /cafes/{id}/settings` | Hours, cutoff, tone, feedback delay, alert number | `owner`, support | Update settings | `settings.update` |
 | `POST /tables` · `PUT /tables/{id}` | `{label, area, seats}` | `owner`, support | Create / edit table and `qr_text` | `table.update` |
 | `POST /team/invite` | `{email, role}` | `owner`, support | Auth invite + membership | `team.invite` |
 | `PATCH /team/{membership_id}` | `{role?, active?}` | `owner`, support | Change role or deactivate; effective next request | `team.update` |
@@ -238,6 +246,8 @@ The console joins one channel per table, filtered `cafe_id = <active café>`, wi
 | `menu_items` | UPDATE | Sold-out toggles on every device |
 | `cafes` | UPDATE | Paused and Disconnected banners |
 | `notifications` | INSERT, UPDATE | Bell badge and list (`manager`+, own rows) |
+| `customer_notes` | INSERT, UPDATE | Profile comments and their applied changes |
+| `customer_preferences` | INSERT, UPDATE, DELETE | Profile box and "On profile" allergy on order cards |
 
 - `order_items` isn't subscribed; on an order INSERT or an `edited` UPDATE the console reads the items.
 - Apply an UPDATE only if its `version` (orders) or `updated_at` is newer than shown.

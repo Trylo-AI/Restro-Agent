@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://restro.local/contracts/llm_output.schema.json",
+  "title": "Restro LLM structured outputs",
+  "description": "One structured output per LLM call (docs/backend.md#ai-agent). The model interprets and drafts; code validates every field. Output that doesn't parse against the matching $defs entry is a failed call.",
+  "$defs": {
+    "turn": {
+      "type": "object",
+      "description": "One free-text customer turn.",
+      "additionalProperties": false,
+      "required": ["intent", "cart_ops", "allergen_question", "needs_human", "clarify", "reply"],
+      "properties": {
+        "intent": {
+          "type": "string",
+          "enum": ["browse", "ask_question", "add_items", "modify_cart", "confirm", "cancel", "order_status", "human", "smalltalk", "unclear"]
+        },
+        "cart_ops": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["op", "item_ref", "qty", "note"],
+            "properties": {
+              "op": { "type": "string", "enum": ["add", "remove", "set_qty", "set_note"] },
+              "item_ref": { "type": "string", "minLength": 1, "maxLength": 80, "description": "Menu id from the prompt; the customer's words when nothing fits" },
+              "qty": { "type": "integer", "minimum": 0, "maximum": 20, "description": "1-20 for add; 0-20 for set_qty (0 removes); ignored otherwise" },
+              "note": { "type": ["string", "null"], "maxLength": 120 }
+            }
+          }
+        },
+        "allergen_question": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": ["allergen", "item_ref"],
+          "properties": {
+            "allergen": { "type": "string", "maxLength": 40 },
+            "item_ref": { "type": ["string", "null"], "maxLength": 80 }
+          }
+        },
+        "needs_human": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["flag", "reason"],
+          "properties": {
+            "flag": { "type": "boolean" },
+            "reason": { "type": ["string", "null"], "enum": ["asked", "frustration", "allergen_unknown", "repeated_unclear", "complaint", null] }
+          }
+        },
+        "clarify": { "type": ["string", "null"], "maxLength": 300 },
+        "reply": { "type": "string", "maxLength": 600 }
+      }
+    },
+    "cancel_draft": {
+      "type": "object",
+      "description": "Customer message for a staff cancellation. Input is the reason code only, never reason_text.",
+      "additionalProperties": false,
+      "required": ["reply"],
+      "properties": {
+        "reply": { "type": "string", "minLength": 1, "maxLength": 400 }
+      }
+    },
+    "profile_note": {
+      "type": "object",
+      "description": "Profile changes read from one staff comment (docs/backend.md#customer-profile-and-staff-comments).",
+      "additionalProperties": false,
+      "required": ["ops", "summary"],
+      "properties": {
+        "ops": {
+          "type": "array",
+          "maxItems": 12,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["op", "kind", "value"],
+            "properties": {
+              "op": { "type": "string", "enum": ["set", "add", "remove"] },
+              "kind": { "type": "string", "enum": ["diet", "milk", "sugar", "spice", "seating", "allergy", "dislike", "like", "other"] },
+              "value": { "type": "string", "minLength": 1, "maxLength": 40 }
+            }
+          }
+        },
+        "summary": { "type": "string", "maxLength": 200 }
+      }
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "$comment": "Customer profile kinds (docs/backend.md#customer-profile-and-staff-comments). single = one value replaces the last; list = values are added and removed. Values are at most 40 chars.",
+  "max_value_length": 40,
+  "kinds": [
+    { "id": "allergy", "label": "Allergy", "cardinality": "list", "values": "allergen id from allergens.json where it fits, else as written" },
+    { "id": "dislike", "label": "Dislikes", "cardinality": "list" },
+    { "id": "diet", "label": "Diet", "cardinality": "single", "values": ["veg", "vegan", "jain", "eggetarian", "non_veg"] },
+    { "id": "milk", "label": "Milk", "cardinality": "single" },
+    { "id": "sugar", "label": "Sugar", "cardinality": "single" },
+    { "id": "spice", "label": "Spice", "cardinality": "single", "values": ["0", "1", "2", "3"] },
+    { "id": "seating", "label": "Seating", "cardinality": "single" },
+    { "id": "like", "label": "Likes", "cardinality": "list" },
+    { "id": "other", "label": "Other", "cardinality": "list" }
+  ]
+}

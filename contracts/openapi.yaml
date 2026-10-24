@@ -1,0 +1,612 @@
+openapi: 3.1.0
+info:
+  title: Restro api
+  version: 0.1.0
+  description: |
+    Console and webhook REST API (docs/data-and-api.md#api). Contract: change only in a PR that updates
+    backend, console and docs together.
+
+    Reads go through Supabase (RLS + Realtime); every write is one of these endpoints.
+    Every console call sends `Authorization: Bearer <Supabase JWT>` and `X-Cafe-Id` (picks among the caller's
+    own memberships; the resource's café wins and a mismatch is 403). No endpoint accepts `cafe_id` in a body
+    or query string. Money is integer paise. Every write returns the changed row and writes one `audit_log` row.
+    Set-state calls are no-ops (200, no second audit row or message) when the value is already set.
+
+    Local-only routes (`/dev/sim/*`, simulator) and worker routes (`/internal/*`) are not part of this contract.
+servers:
+  - url: http://localhost:8000
+    description: local api
+
+security:
+  - bearer: []
+
+tags:
+  - name: orders
+  - name: requests
+  - name: conversations
+  - name: menu
+  - name: cafes
+  - name: customers
+  - name: notifications
+  - name: telemetry
+  - name: webhooks
+
+paths:
+  /orders/{id}/transition:
+    post:
+      tags: [orders]
+      summary: Accept, Mark ready, Mark served (shift_manager+)
+      description: Customer message is queued for +5 s so Undo can stop it. Audit `order.transition`.
+      parameters: [{ $ref: "#/components/parameters/Id" }, { $ref: "#/components/parameters/CafeId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [to, expected_version]
+              properties:
+                to: { type: string, enum: [ACCEPTED, READY, SERVED] }
+                expected_version: { type: integer, minimum: 1 }
+      responses:
+        "200": { $ref: "#/components/responses/Order" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/OrderConflict" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /orders/{id}/cancel:
+    post:
+      tags: [orders]
+      summary: Staff cancel with reason (shift_manager+ while NEW; manager+ from ACCEPTED or READY)
+      description: |
+        `reason_text` is required for `other`, shown to staff only, never sent to the customer or the LLM.
+        Queues the AI-drafted customer message at +5 s; writes one `notifications` row per active manager and owner.
+        Audit `order.cancel`.
+      parameters: [{ $ref: "#/components/parameters/Id" }, { $ref: "#/components/parameters/CafeId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [reason_code, expected_version]
+              properties:
+                reason_code: { type: string, enum: [out_of_stock, kitchen_issue, customer_asked, other] }
+                reason_text: { type: [string, "null"], maxLength: 120 }
+                expected_version: { type: integer, minimum: 1 }
+      responses:
+        "200": { $ref: "#/components/responses/Order" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/OrderConflict" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /orders/{id}/undo:
+    post:
+      tags: [orders]
+      summary: Revert the caller's last transition within 5 s
+      description: The queued customer message is never sent. 422 `invalid_transition` after 5 s or for another actor. Audit `order.undo`.
+      parameters: [{ $ref: "#/components/parameters/Id" }, { $ref: "#/components/parameters/CafeId" }]
+      responses:
+        "200": { $ref: "#/components/responses/Order" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /orders/{id}/delay:
+    post:
+      tags: [orders]
+      summary: Delay an order (NEW or ACCEPTED) and tell the customer at once
+      parameters: [{ $ref: "#/components/parameters/Id" }, { $ref: "#/components/parameters/CafeId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [minutes]
+              properties:
+                minutes: { type: integer, minimum: 1, maximum: 99 }
+                note: { type: [string, "null"], maxLength: 120 }
+      responses:
+        "200": { $ref: "#/components/responses/Order" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /orders/manual:
+    post:
+      tags: [orders]
+      summary: Manual order (offline fallback), priced by code, created ACCEPTED, no customer messages
+      parameters:
+        - { $ref: "#/components/parameters/CafeId" }
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, minLength: 8, maxLength: 80 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [table_id, items]
+              properties:
+                table_id: { type: string, format: uuid }
+                items:
+                  type: array
+                  minItems: 1
+                  maxItems: 30
+                  items:
+                    type: object
+                    additionalProperties: false
+                    required: [item_id, qty]
+                    properties:
+                      item_id: { type: string, format: uuid }
+                      qty: { type: integer, minimum: 1, maximum: 20 }
+                      note: { type: [string, "null"], maxLength: 120 }
+                allergy_note: { type: [string, "null"], maxLength: 200 }
+      responses:
+        "200": { $ref: "#/components/responses/Order" }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /requests/{id}/ack:
+    post:
+      tags: [requests]
+      summary: Acknowledge a help, allergy or bill request (low_rating needs manager+)
+      parameters: [{ $ref: "#/components/parameters/Id" }, { $ref: "#/components/parameters/CafeId" }]
+      responses:
+        "200": { $ref: "#/components/responses/Request" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /requests/{id}/resolve:
+    post:
+      tags: [requests]
+      summary: Resolve a request; resolving help or allergy hands the chat back to the bot
+      parameters: [{ $ref: "#/components/parameters/Id" }, { $ref: "#/components/parameters/CafeId" }]
+      responses:
+        "200": { $ref: "#/components/responses/Request" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /bills/{table_session_id}/deliver:
+    post:
+      tags: [requests]
+      summary: Bill delivered — resolve the bill request and close the table session
+      parameters:
+        - { name: table_session_id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { $ref: "#/components/parameters/CafeId" }
+      responses:
+        "200":
+          description: Closed session and its bill
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Bill" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /conversations/{id}/takeover:
+    post:
+      tags: [conversations]
+      summary: Human mode, assigned to the caller
+      parameters: [{ $ref: "#/components/parameters/Id" }, { $ref: "#/components/parameters/CafeId" }]
+      responses:
+        "200": { $ref: "#/components/responses/Conversation" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /conversations/{id}/reply:
+    post:
+      tags: [conversations]
+      summary: Staff reply through the send layer; takes over from bot mode
+      description: 409 `window_closed` when the customer's last message is older than 24 h.
+      parameters: [{ $ref: "#/components/parameters/Id" }, { $ref: "#/components/parameters/CafeId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [text]
+              properties:
+                text: { type: string, minLength: 1, maxLength: 1000 }
+      responses:
+        "200": { $ref: "#/components/responses/Conversation" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /conversations/{id}/handback:
+    post:
+      tags: [conversations]
+      summary: Back to bot mode
+      parameters: [{ $ref: "#/components/parameters/Id" }, { $ref: "#/components/parameters/CafeId" }]
+      responses:
+        "200": { $ref: "#/components/responses/Conversation" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /conversations/open:
+    post:
+      tags: [conversations]
+      summary: Message a table — open the table session's chat in human mode
+      parameters: [{ $ref: "#/components/parameters/CafeId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [table_session_id]
+              properties:
+                table_session_id: { type: string, format: uuid }
+      responses:
+        "200": { $ref: "#/components/responses/Conversation" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /menu/{id}/availability:
+    post:
+      tags: [menu]
+      summary: Sold-out toggle (shift_manager+)
+      parameters: [{ $ref: "#/components/parameters/Id" }, { $ref: "#/components/parameters/CafeId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [available]
+              properties:
+                available: { type: boolean }
+      responses:
+        "200":
+          description: Updated item
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MenuItem" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /cafes/{id}/pause-ordering:
+    post:
+      tags: [cafes]
+      summary: Pause or resume WhatsApp ordering (manager+)
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [paused]
+              properties:
+                paused: { type: boolean }
+      responses:
+        "200":
+          description: Café settings after the change
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, settings]
+                properties:
+                  id: { type: string, format: uuid }
+                  settings: { type: object }
+        "403": { $ref: "#/components/responses/Error" }
+
+  /customers/{id}/notes:
+    post:
+      tags: [customers]
+      summary: Add a staff comment; the worker applies the AI's profile changes
+      description: Returns the note with `ai_status = pending`; the result arrives by Realtime. Audit `customer.note`.
+      parameters: [{ $ref: "#/components/parameters/Id" }, { $ref: "#/components/parameters/CafeId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [text]
+              properties:
+                text: { type: string, minLength: 1, maxLength: 500 }
+      responses:
+        "200": { $ref: "#/components/responses/CustomerNote" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /customer-notes/{id}/undo:
+    post:
+      tags: [customers]
+      summary: Reverse a comment's applied profile changes
+      description: 409 `version_conflict` when a later comment changed the same value. Audit `customer.profile_undo`.
+      parameters: [{ $ref: "#/components/parameters/Id" }, { $ref: "#/components/parameters/CafeId" }]
+      responses:
+        "200": { $ref: "#/components/responses/CustomerNote" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /customers/{id}/preferences/remove:
+    post:
+      tags: [customers]
+      summary: Remove one profile value (the chip ×)
+      parameters: [{ $ref: "#/components/parameters/Id" }, { $ref: "#/components/parameters/CafeId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [kind, value]
+              properties:
+                kind: { $ref: "#/components/schemas/PreferenceKind" }
+                value: { type: string, minLength: 1, maxLength: 40 }
+      responses:
+        "200":
+          description: The customer's preferences after the change
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Preference" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /notifications/{id}/ack:
+    post:
+      tags: [notifications]
+      summary: Mark one of the caller's notifications read (manager+)
+      parameters: [{ $ref: "#/components/parameters/Id" }, { $ref: "#/components/parameters/CafeId" }]
+      responses:
+        "200": { description: Marked read }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /notifications/ack-all:
+    post:
+      tags: [notifications]
+      summary: Mark all of the caller's notifications read (manager+)
+      parameters: [{ $ref: "#/components/parameters/CafeId" }]
+      responses:
+        "200": { description: Marked read }
+
+  /telemetry/console:
+    post:
+      tags: [telemetry]
+      summary: Console connection events, recorded as metrics only
+      parameters: [{ $ref: "#/components/parameters/CafeId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [events]
+              properties:
+                events:
+                  type: array
+                  maxItems: 50
+                  items:
+                    type: object
+                    additionalProperties: false
+                    required: [kind, at]
+                    properties:
+                      kind: { type: string, enum: [realtime_disconnect, realtime_reconnect, offline_banner] }
+                      at: { type: string, format: date-time }
+      responses:
+        "204": { description: Recorded }
+
+  /webhooks/whatsapp:
+    get:
+      tags: [webhooks]
+      summary: Meta verification handshake
+      security: []
+      parameters:
+        - { name: hub.mode, in: query, schema: { type: string } }
+        - { name: hub.verify_token, in: query, schema: { type: string } }
+        - { name: hub.challenge, in: query, schema: { type: string } }
+      responses:
+        "200": { description: Echoes hub.challenge, content: { text/plain: { schema: { type: string } } } }
+        "403": { description: Wrong verify token }
+    post:
+      tags: [webhooks]
+      summary: Meta webhook (messages, statuses, account events)
+      description: X-Hub-Signature-256 checked on raw bytes before parsing. Always 200 within 300 ms once stored.
+      security: []
+      parameters:
+        - { name: X-Hub-Signature-256, in: header, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "200": { description: Stored }
+        "401": { description: Bad signature; nothing stored }
+
+components:
+  securitySchemes:
+    bearer: { type: http, scheme: bearer, bearerFormat: JWT }
+
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    CafeId:
+      name: X-Cafe-Id
+      in: header
+      required: true
+      schema: { type: string, format: uuid }
+
+  responses:
+    Error:
+      description: Error
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    OrderConflict:
+      description: 409 version_conflict; `error.details.current` is the order as it is now
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Order:
+      description: Order after the change
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Order" }
+    Request:
+      description: Request after the change
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Request" }
+    Conversation:
+      description: Conversation after the change
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Conversation" }
+    CustomerNote:
+      description: Note after the change
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/CustomerNote" }
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              enum: [bad_request, unauthenticated, forbidden, not_found, version_conflict, code_already_used,
+                     window_closed, invalid_transition, invalid_code, rate_limited, internal]
+            message: { type: string, description: Safe to show to staff }
+            details: { type: object }
+
+    OrderStatus: { type: string, enum: [NEW, ACCEPTED, READY, SERVED, CANCELLED] }
+
+    Order:
+      type: object
+      required: [id, number, status, flags, version, total_paise, expected_minutes, delay_minutes, source, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        number: { type: integer }
+        status: { $ref: "#/components/schemas/OrderStatus" }
+        flags:
+          type: array
+          items: { type: string, enum: [escalated, overdue, delayed, edited, item_sold_out, near_closing] }
+        version: { type: integer }
+        customer_id: { type: [string, "null"], format: uuid }
+        table_session_id: { type: [string, "null"], format: uuid }
+        allergy_note: { type: [string, "null"] }
+        expected_minutes: { type: integer }
+        delay_minutes: { type: integer }
+        total_paise: { type: integer, description: Sum of lines; prices include GST }
+        source: { type: string, enum: [qr, campaign, manual] }
+        cancel_reason_code: { type: [string, "null"], enum: [out_of_stock, kitchen_issue, customer_asked, other, customer, null] }
+        cancel_reason_text: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+        accepted_at: { type: [string, "null"], format: date-time }
+        ready_at: { type: [string, "null"], format: date-time }
+        served_at: { type: [string, "null"], format: date-time }
+        cancelled_at: { type: [string, "null"], format: date-time }
+        undo_until: { type: [string, "null"], format: date-time, description: Set after a staff transition; Undo works until then }
+
+    Request:
+      type: object
+      required: [id, kind, status]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { type: string, enum: [help, bill, allergy, low_rating] }
+        status: { type: string, enum: [open, acknowledged, resolved] }
+        reason_tag: { type: [string, "null"] }
+        conversation_id: { type: [string, "null"], format: uuid }
+        table_session_id: { type: [string, "null"], format: uuid }
+        acknowledged_by: { type: [string, "null"], format: uuid }
+        acknowledged_at: { type: [string, "null"], format: date-time }
+        resolved_at: { type: [string, "null"], format: date-time }
+
+    Conversation:
+      type: object
+      required: [id, mode]
+      properties:
+        id: { type: string, format: uuid }
+        customer_id: { type: string, format: uuid }
+        mode: { type: string, enum: [bot, human] }
+        assigned_to: { type: [string, "null"], format: uuid }
+        table_session_id: { type: [string, "null"], format: uuid }
+
+    Bill:
+      type: object
+      required: [table_session_id, orders, total_paise]
+      properties:
+        table_session_id: { type: string, format: uuid }
+        closed_at: { type: [string, "null"], format: date-time }
+        orders:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string, format: uuid }
+              number: { type: integer }
+              total_paise: { type: integer }
+        discount_paise: { type: integer, default: 0 }
+        total_paise: { type: integer, description: "Total (incl. GST)" }
+
+    MenuItem:
+      type: object
+      required: [id, name, available, version]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        category: { type: string }
+        available: { type: boolean }
+        version: { type: integer }
+
+    PreferenceKind: { type: string, enum: [diet, milk, sugar, spice, seating, allergy, dislike, like, other] }
+
+    Preference:
+      type: object
+      required: [id, kind, value, source]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { $ref: "#/components/schemas/PreferenceKind" }
+        value: { type: string }
+        source: { type: string, enum: [chat, staff_note] }
+        note_id: { type: [string, "null"], format: uuid }
+
+    CustomerNote:
+      type: object
+      required: [id, customer_id, text, ai_status, ai_ops, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        customer_id: { type: string, format: uuid }
+        author_id: { type: string, format: uuid }
+        text: { type: string }
+        ai_status: { type: string, enum: [pending, applied, no_changes, failed] }
+        ai_ops:
+          type: array
+          items:
+            type: object
+            properties:
+              op: { type: string, enum: [set, add, remove] }
+              kind: { $ref: "#/components/schemas/PreferenceKind" }
+              value: { type: string }
+              previous: { type: [string, "null"] }
+        ai_summary: { type: [string, "null"] }
+        undone_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }

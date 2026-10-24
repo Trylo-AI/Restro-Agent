@@ -28,7 +28,7 @@ The order creates the customer, the meal earns the opt-in, a redeemed code links
 
 | Role | Who | Can |
 |---|---|---|
-| `shift_manager` | The one on-shift person (base role; replaces v0.1's waiter / kitchen `staff`) | Live orders and status changes, calls and bills, redeem codes, chats and human mode, sold-out toggle, manual order, customer name and past orders; **cancel an order in `NEW`** with a reason |
+| `shift_manager` | The one on-shift person (base role; replaces v0.1's waiter / kitchen `staff`) | Live orders and status changes, calls and bills, redeem codes, chats and human mode, sold-out toggle, manual order, customer profile (name, visits, allergies, preferences, feedback, complaints, past orders) and comments that update it; **cancel an order in `NEW`** with a reason |
 | `manager` | Runs shifts, owns the menu | + cancel from `ACCEPTED` or `READY`, menu edits, pause ordering, low ratings, service report, cancellation notifications. Escalation level 1 |
 | `owner` | Café owner | + Today, customers, campaigns, analytics, setup (team, tables and QR), CSV import, consent register, data deletion, cancellation notifications. Escalation level 2 |
 | `platform_admin` | Restro team (`platform_admins` table) | All cafés: onboarding, templates, number health, costs, AI review, audit log. Café actions only in support mode, every action audited |
@@ -52,6 +52,7 @@ Café roles nest `shift_manager` ⊂ `manager` ⊂ `owner` (`memberships.role`).
 | Text-only handling (voice, image, sticker → "please type") | P0 | 4 |
 | Cancellation notification (in-app) to managers and owner | P1 | 4 |
 | Customer edit or cancel while `NEW`; shared table sessions; Calls and bills | P1 | 4 |
+| Customer profile from the order card (at-a-glance box, feedback, complaints, orders); staff comments the AI applies to the profile | P1 | 4 |
 | Opening hours, last-order cutoff, pause ordering; print ticket, offline banner, manual order, menu CSV import; Setup; service report | P1 | 4 |
 | Feedback 1–5, opt-in after `SERVED`, counter QR, STOP; "same again?"; template sync | P1 | 5 |
 | Campaign wizard, sender, funnel report; redemption at the bill; Customers (profiles, segments, consent register, delete data) | P2 | 5 |
@@ -73,13 +74,13 @@ Indicative, for 2–3 developers plus Claude Code. A phase ends only when its ex
 | 6 Pilot readiness | 11–17 Dec | Two full dry runs at the café; Supabase paid plan; all alerts on |
 | 7 Pilot | from ~18 Dec, 3 months | Month 1 stability · month 2 first campaigns, Today · month 3 Analytics, platform screens, post-trial budget |
 
-**Parallel from 20 Oct:** Console built from the mock on MSW (Claude Code, ~5 weeks; each screen switches to the real API as its endpoints land) · Meta business verification, display name and template drafts (non-dev track).
+**Parallel from 20 Oct:** Console built from the mock against the local backend with seed data (Claude Code, ~5 weeks) · Meta business verification, display name and template drafts (non-dev track).
 
 ### Phase work
 
 | Phase | Work |
 |---|---|
-| 0 | The five [contracts](#contracts); local env (Docker, Supabase CLI, tunnel, local queue and signal shims); Postgres work queue (`pending_work`) + conversation leases, retries and dead letters; Meta developer account, business verification, test number; monorepo and CI; CI/CD identity: GitHub Actions → GCP through Workload Identity Federation, no keys (deploy workflows run from Phase 3); console scaffold, design tokens, role nav, MSW; first 50 eval cases; draft all five templates; pilot menu with allergens |
+| 0 | The five [contracts](#contracts); local env (Docker, Supabase CLI, tunnel, local queue and signal shims); Postgres work queue (`pending_work`) + conversation leases, retries and dead letters; Meta developer account, business verification, test number; monorepo and CI; CI/CD identity: GitHub Actions → GCP through Workload Identity Federation, no keys (deploy workflows run from Phase 3); console scaffold, design tokens, role nav (against the local backend; MSW only for demo builds); first 50 eval cases; draft all five templates; pilot menu with allergens |
 | 1 | Webhook ingress; worker on the work queue with the 1 s debounce and routing; deterministic flows; LLM v1 (one model, structured output, menu validation); `transition()` and status messages; send layer with outbound step records; metering from the first call; Live orders on local Realtime |
 | 2 | Eval set to 150–250 cases; prompt (compact menu, cached prefix, Hinglish few-shots); all guardrails; run Flash-Lite and Flash; choose routing |
 | 3 | GCP trial with every [guardrail](#credit-guardrails) on day one; `gcloud` infra scripts; deploy `api`, `worker`, Pub/Sub, queues, secrets, Vertex AI, Supabase cloud, console hosting; tune concurrency, pool, queue rates; pilot WABA and number; submit templates; load test |
@@ -185,12 +186,6 @@ Build against the default. When decided, move it to [decisions](decisions.md) an
 | Opt-out `source` | Which `source` do STOP / button / 131050 rows get? | Add `keyword`, `button`, `meta_block` | Phase 5 |
 | Chat retention | How long is chat text kept? | Kept for the pilot; removed on deletion | Phase 6 |
 | Pilot number | New dedicated number or the café's existing one? | Dedicated | Phase 3 |
-| Message body | `wa_messages` has no body; Chats and the simulator need what was sent ([G1](ordering-slice.md#gaps-in-the-docs)) | Add `wa_messages.payload jsonb`, purged on deletion | Ordering slice S2 |
-| Order subtotal and GST | Only `total_paise` is stored ([G2](ordering-slice.md#gaps-in-the-docs)) | Add `orders.subtotal_paise`, `orders.gst_paise` snapshots | Ordering slice S2 |
-| WhatsApp simulator | Not in the design ([G3](ordering-slice.md#gaps-in-the-docs)) | `simulator/` app + `api/dev/` router, local only | Ordering slice S1 |
-| Console on MSW first | Needed when the real backend runs locally? ([G4](ordering-slice.md#gaps-in-the-docs)) | Skip for the ordering slice; real local API + seed | Ordering slice S1 |
-| Local task shim | In-memory shim drops timers on restart ([G5](ordering-slice.md#gaps-in-the-docs)) | Accept locally; `stuck_inbound_check` covers inbound | Ordering slice S4 |
-| LLM debug traces | Raw LLM output isn't stored ([G6](ordering-slice.md#gaps-in-the-docs)) | Dev-only `dev_turn_traces`, never in staging or prod | Ordering slice S3 |
 
 ## Risks
 

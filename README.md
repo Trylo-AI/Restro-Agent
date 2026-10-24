@@ -43,6 +43,7 @@ Planned; each folder is created with its first real file.
 | `frontend/` | Restro Console (React + Vite + TypeScript) |
 | `supabase/` | Migrations, RLS, views, seed |
 | `contracts/` | Frozen schema, OpenAPI, events, LLM schema, state machines |
+| `simulator/` | Local-only WhatsApp simulator for testing without a Meta number |
 | `evals/` | LLM eval set and runner |
 | `loadtest/` | Webhook simulator and scenarios |
 | `infra/` | `gcloud` scripts per environment |

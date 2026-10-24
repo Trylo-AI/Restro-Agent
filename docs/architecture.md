@@ -37,7 +37,7 @@ flowchart LR
 - One Python 3.12 + FastAPI image, two services: `main_api` and `main_worker`. Fully async; one shared HTTP client for Meta and Gemini.
 - `asia-south1` + Supabase Mumbai. Supabase pooler in transaction mode, small pool per instance. Gemini runs on the Vertex AI **global endpoint**, which gives no data-residency guarantee; accepted for the MVP ([decision 13](decisions.md#13-gemini-on-vertex-ai-global-endpoint)).
 - Never used: GKE, Cloud SQL, Memorystore, load balancers, Cloud Armor, NAT, static IPs. Pub/Sub carries signals only, never work. A new resource needs a [decision](decisions.md).
-- Local dev: Docker + Supabase CLI + Meta test number + tunnel (cloudflared or ngrok) + local queue and signal shims.
+- Local dev: Docker + Supabase CLI + Meta test number + tunnel (cloudflared or ngrok) + local queue and signal shims. Without a Meta number, the **WhatsApp simulator** (`simulator/` + the `api` dev router, mounted only when `APP_ENV=local` and `SIMULATOR_ENABLED=true`) posts signed Meta-format webhooks to the real route and receives sends through the `simulator` transport ([ordering slice](ordering-slice.md#simulator)). The local shims are in memory: a restart drops pending timers, while inbound work stays safe in `pending_work`.
 
 ### Latency budget
 
@@ -212,14 +212,14 @@ Dependencies point one way: `api → domain → integrations | db`; `core` is us
 | `conversation` | Work queue, lease, retries and dead letters; one turn: batch, route, steps, deterministic flows | `conversations`, `inbound_messages`, `pending_work` |
 | `ai_agent` | Prompt, the LLM call, output validation, guardrails, cancellation drafts, kill switch | `llm_calls` |
 | `menu` | Items, availability, allergens, CSV import, menu version | `menu_items`, `menu_item_allergens` |
-| `cart` | Cart ops, pricing, GST, confirmation | `conversations.state.cart` |
+| `cart` | Cart ops, pricing, confirmation | `conversations.state.cart` |
 | `orders` | `transition()`, flags, delay, manual order, table sessions, bills | `orders`, `order_items`, `order_events`, `tables`, `table_sessions` |
 | `handoff` | Requests, human mode, escalation | `requests`, `escalations` |
 | `notifications` | In-app notifications for `manager` and `owner` | `notifications` |
 | `outbound` | The only send path | `wa_messages`, `templates` |
 | `consent` | Opt-in, opt-out, register | `consents` |
 | `campaigns` | Audience, codes, sender, redemption | `campaigns`, `campaign_recipients`, `redemptions` |
-| `customers` | Identity, summary, preferences, segments, deletion | `customers`, `customer_preferences`, `data_deletion_requests` |
+| `customers` | Identity, summary, profile, staff comments, preferences, segments, deletion | `customers`, `customer_preferences`, `customer_notes`, `data_deletion_requests` |
 | `feedback` | Rating ask and answer, low-rating request | `feedback` |
 | `timers` | `schedule(kind, subject_id, delay)` and dispatch | — |
 | `analytics` | Reads of `v_*` views, reports | `v_*` |
@@ -284,7 +284,7 @@ Meta app secret: during the swap `api` accepts signatures from the current and p
 Under India's DPDP Act the customer is the data principal, the café the data fiduciary, Restro the processor (never uses one café's data for another). The data-ownership agreement is signed before go-live.
 
 - Phone numbers are shown only masked (`+91 98••• ••421`) — in the console, CSV exports and support mode. The full number never reaches the SPA, the prompt or logs.
-- The prompt gets a SQL customer summary (first name, visits, recent items, stated preferences), never the number or other customers.
+- The prompt gets a SQL customer summary (first name, visits, recent items, stated preferences except allergies), never the number or other customers. A staff comment goes to the LLM only to read it into profile changes, with the current profile and nothing else.
 - Real customer data goes only to Gemini on Vertex AI (GCP terms); never the free tier, staging or a laptop. The global endpoint gives no data-residency guarantee: prompts may be processed outside India. Accepted for the MVP; the privacy policy says so.
 - `webhook_events` kept 30 days. Orders, consents, redemptions, `llm_calls` (no content), `audit_log` kept for the pilot.
 
@@ -300,7 +300,7 @@ Under India's DPDP Act the customer is the data principal, the café the data fi
 
 A customer deletion doesn't rewrite backups; deleted data ages out with the backup window, and a restore re-runs completed `data_deletion_requests` before the DB goes back into service. Logs never hold numbers or message text, so they need no deletion pass.
 
-**Customer data deletion** (owner `POST /customers/{id}/delete`, Meta callback `POST /webhooks/meta/data-deletion`, or a chat request routed to the owner). One transaction: clear `name`; replace `wa_id` with a random token; delete `customer_preferences`; purge chat text, conversation state and matching `webhook_events`; clear feedback text (rating kept). Orders, items, redemptions, campaign recipients and consents stay, anonymous. Set `completed_at`, audit `customer.delete`. Irreversible: the same number later is a new customer with no consent.
+**Customer data deletion** (owner `POST /customers/{id}/delete`, Meta callback `POST /webhooks/meta/data-deletion`, or a chat request routed to the owner). One transaction: clear `name`; replace `wa_id` with a random token; delete `customer_preferences` and `customer_notes`; purge chat text (`inbound_messages.payload`, `wa_messages.payload`), conversation state and matching `webhook_events`; clear feedback text (rating kept). Orders, items, redemptions, campaign recipients and consents stay, anonymous. Set `completed_at`, audit `customer.delete`. Irreversible: the same number later is a new customer with no consent.
 
 Meta app review needs a privacy policy, terms and data-deletion instructions on our domain (Firebase Hosting, from Phase 3).
 
@@ -312,7 +312,7 @@ Meta app review needs a privacy policy, terms and data-deletion instructions on 
 | Backend | `docker compose`, one image | Cloud Run `api` + `worker` | Cloud Run `api` + `worker` |
 | Async | Queue and signal shims; jobs by hand | Pub/Sub + Cloud Tasks + Scheduler | Pub/Sub + Cloud Tasks + Scheduler |
 | Database | Supabase CLI | Supabase Mumbai, free tier | Supabase Mumbai, paid plan with backups |
-| Console | Vite, against MSW or local `api` | Firebase Hosting | Firebase Hosting |
+| Console | Vite, against the local `api` (MSW only for demo builds) | Firebase Hosting | Firebase Hosting |
 | WhatsApp | Meta test number via tunnel | Test number → staging; team phones, load simulator | Pilot café's WABA on the prod Meta app |
 | LLM | Gemini free tier, synthetic data | Vertex AI, global endpoint | Vertex AI, global endpoint |
 | Data | Seed generator | Seed + synthetic | Real, never copied out |

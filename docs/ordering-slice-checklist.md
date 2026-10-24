@@ -10,7 +10,7 @@ Tracks [ordering-slice.md](ordering-slice.md). Ticked in the same commit as the 
 |---|---|---|
 | S0 Setup and plan approval | To do | — |
 | S1 Scaffold | Done | S1 commit |
-| S2 Contracts and doc updates | To do | — |
+| S2 Contracts and doc updates | Done | S2 commit |
 | S3 Database and seed | To do | — |
 | S4 Backend core | To do | — |
 | S5 WhatsApp ingress, send layer, dev router | To do | — |
@@ -57,17 +57,17 @@ Tracks [ordering-slice.md](ordering-slice.md). Ticked in the same commit as the 
 
 ## S2 · Contracts and doc updates
 
-- [ ] `contracts/schema.sql` (G1 `wa_messages.payload`; G2 only `total_paise`, no GST settings)
-- [ ] `contracts/state-machines.md` (order states, conversation steps, `mode`)
-- [ ] `contracts/llm_output.schema.json` (turn output, cancellation draft, profile-note ops)
-- [ ] `contracts/openapi.yaml` (slice endpoints incl. customer notes, note undo, preference remove + error body)
-- [ ] `contracts/events.md` (10 Realtime tables incl. `customer_notes`, `customer_preferences`)
-- [ ] `contracts/allergens.json`, `contracts/preference_kinds.json`
-- [ ] Console types generated from `openapi.yaml`
-- [ ] Docs updated for G1–G6: backend (Cart, Confirmation, Bill sheet), data-and-api, console (Setup), rules (cart tests), architecture, decisions, plan open decisions, CLAUDE.md + README layout
-- [ ] Docs updated for G7–G10: console (card Profile button, Customer profile panel, Chats panel, print ticket), backend (Customers, AI agent prompt and call types, Allergens), data-and-api (`customer_notes`, `customer_preferences`, RLS for `feedback`, endpoints, Realtime), architecture (deletion, cost), plan (roles), decisions
-- [ ] Name-check script: every table, column and endpoint in the docs exists in the contracts
-- [ ] **Exit:** contracts match the docs; docs updated
+- [x] `contracts/schema.sql` (G1 `wa_messages.payload`; G2 only `total_paise`, no GST settings; `customer_notes`; `customer_preferences.note_id`; `cafe_counters`; `memberships.display_name`; `llm_calls.purpose` / `note_id`; append-only triggers; `v_customer_card`)
+- [x] `contracts/state-machines.md` (orders with roles, conversation steps and mode, work queue, outbound steps, requests, customer notes)
+- [x] `contracts/llm_output.schema.json` (turn output incl. `complaint` handoff, cancellation draft, profile-note ops)
+- [x] `contracts/openapi.yaml` (slice endpoints incl. customer notes, note undo, preference remove + error body incl. `window_closed`)
+- [x] `contracts/events.md` (10 Realtime tables incl. `customer_notes`, `customer_preferences`)
+- [x] `contracts/allergens.json` (with Hinglish aliases), `contracts/preference_kinds.json`
+- [x] Console types generated from `openapi.yaml` (`frontend/src/lib/api/schema.d.ts`)
+- [x] Docs updated for G1–G6: backend (Cart, Confirmation, Bill sheet), data-and-api, console (shell, Setup), rules (cart tests), architecture, decisions, plan open decisions, CLAUDE.md + README layout
+- [x] Docs updated for G7–G10: console (card Profile button, Customer profile section, Chats panel), backend (Customers, AI agent prompt and call types, Allergens, print ticket), data-and-api (`customer_notes`, `customer_preferences`, RLS for `feedback`, endpoints, Realtime, `v_customer_card`), architecture (deletion, prompt), rules (tests, never), plan (roles, features), decisions (#16 + smaller decisions)
+- [x] Name-check script `scripts/check_contracts.py`: every doc table and column exists in `schema.sql`, every contract endpoint and Realtime table is in the docs (verified it fails on a planted mismatch)
+- [x] **Exit:** contracts match the docs; docs updated
 
 ## S3 · Database and seed
 

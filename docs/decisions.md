@@ -126,11 +126,25 @@ Infra is idempotent `gcloud` scripts per environment in `infra/`, applied by han
 - **Rejected:** Terraform (state to host and lock); service-account JSON keys in GitHub secrets.
 - **Cost:** no drift detection or plan step; scripts must stay idempotent by discipline.
 
+## 16. Staff comments update the customer profile automatically
+
+Staff (`shift_manager`+) add free-text comments to a customer's profile. One structured LLM call turns each comment into profile ops; code validates them against a fixed list of kinds and applies them at once, allergies included, with Undo and an audit row. Profile allergies are shown to staff (order card, print ticket) and never sent to the LLM. Decided by Aman, 24 Oct 2026.
+
+- **Why:** the shift manager hears preferences at the table and has no time to fill a form; one sentence keeps the profile current.
+- **Rejected:** AI proposes and staff confirm each change (one more tap per comment); auto-apply except allergies; manual profile forms.
+- **Cost:** an AI misread can add or remove an allergy without anyone confirming it. Mitigated by showing every change under its comment with Undo, chip × removal, the audit log, and keeping profile allergies a staff-only warning that never answers an allergen question.
+
 ## Smaller decisions
 
 | Topic | Decision |
 |---|---|
-| GST | Inclusive or exclusive is a café setting; computed only in the cart |
+| GST | No GST setting for now: menu prices include GST, orders store only `total_paise` (sum of lines), customers see "Total (incl. GST)". Replaces the earlier inclusive / exclusive setting (Aman, 24 Oct 2026) |
+| Outbound message body | `wa_messages.payload` holds the rendered outbound message for Chats and the simulator; purged by customer data deletion |
+| WhatsApp simulator | Local `simulator/` app + `api` dev router post signed Meta-format webhooks to the real route; the `simulator` transport replaces only the last hop of a send. Never mounted outside `APP_ENV=local` |
+| Console mock | Development runs against the real local backend with seed data; MSW only for demo builds |
+| Local shims | In-memory signal and task shims locally; a restart drops pending timers, inbound work stays in `pending_work` |
+| Dev traces | `dev_turn_traces` (raw LLM output, guardrail actions) only in `supabase/dev/`, written only when `DEV_TRACES=true` |
+| Profile visibility | Every member (`shift_manager`+) sees the full customer profile, including feedback and complaints |
 | Order edits | Customer edits or cancels only while `NEW` |
 | Staff cancel | `shift_manager` cancels in `NEW`; `manager`+ from `ACCEPTED` or `READY`. Reason from a fixed list + custom text. P0 |
 | Cancellation message | AI-written (intent + café tone) under guardrails with a fixed fallback; one extra LLM call per staff cancel. Managers and owner get an in-app `notifications` row, no WhatsApp |

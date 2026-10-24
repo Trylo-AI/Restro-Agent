@@ -46,6 +46,7 @@ backend/     FastAPI api + worker (app/core, api, domain, integrations, db; test
 frontend/    Restro Console (src/features/ one folder per screen)
 supabase/    migrations, RLS, views, seed
 contracts/   frozen interfaces: schema, OpenAPI, events, LLM schema, state machines
+simulator/   local-only WhatsApp simulator (never deployed)
 infra/       gcloud scripts per environment (no Terraform)
 evals/       LLM eval set + runner
 loadtest/    webhook simulator + scenarios

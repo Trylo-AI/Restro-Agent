@@ -1,0 +1,16 @@
+{
+  "$comment": "Fixed allergen list (docs/backend.md#allergens). Ids are stored in menu_item_allergens.allergen and customer_preferences (kind allergy) where they fit.",
+  "allergens": [
+    { "id": "gluten", "label": "Gluten", "aliases": ["wheat", "maida", "atta", "barley", "rye"] },
+    { "id": "milk", "label": "Milk", "aliases": ["dairy", "lactose", "doodh", "paneer", "cheese", "butter", "ghee", "cream"] },
+    { "id": "eggs", "label": "Eggs", "aliases": ["egg", "anda"] },
+    { "id": "peanuts", "label": "Peanuts", "aliases": ["peanut", "groundnut", "moongphali"] },
+    { "id": "tree_nuts", "label": "Tree nuts", "aliases": ["nuts", "almond", "badam", "cashew", "kaju", "walnut", "akhrot", "pistachio", "pista", "hazelnut"] },
+    { "id": "soy", "label": "Soy", "aliases": ["soya", "tofu"] },
+    { "id": "sesame", "label": "Sesame", "aliases": ["til", "gingelly"] },
+    { "id": "fish", "label": "Fish", "aliases": ["machli"] },
+    { "id": "shellfish", "label": "Shellfish", "aliases": ["prawn", "shrimp", "crab", "lobster", "jhinga"] },
+    { "id": "mustard", "label": "Mustard", "aliases": ["sarson", "rai"] },
+    { "id": "sulphites", "label": "Sulphites", "aliases": ["sulfites", "sulphite", "sulfite"] }
+  ]
+}

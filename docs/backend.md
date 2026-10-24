@@ -66,7 +66,7 @@ Reply ids are `action[:arg[:arg]]`. Handlers act on the id, never the title, and
 
 ## AI agent
 
-One structured Gemini call (Vertex AI, global endpoint) per free-text turn, only in `bot` mode, at most once per turn (plus one retry). No tools, no loop. The LLM interprets and drafts; code decides. The only other call is the [cancellation message](#transitions) draft.
+One structured Gemini call (Vertex AI, global endpoint) per free-text turn, only in `bot` mode, at most once per turn (plus one retry). No tools, no loop. The LLM interprets and drafts; code decides. The only other calls are the [cancellation message](#transitions) draft and reading a [staff comment](#customer-profile-and-staff-comments) into profile changes.
 
 ### Output
 
@@ -77,7 +77,7 @@ Contract `contracts/llm_output.schema.json`, JSON-schema output mode. Output tha
 | `intent` | `browse` · `ask_question` · `add_items` · `modify_cart` · `confirm` · `cancel` · `order_status` · `human` · `smalltalk` · `unclear` | Picks the handler (below) |
 | `cart_ops[]` | `{op: add\|remove\|set_qty\|set_note, item_ref, qty, note}` | Resolves each `item_ref` against the live menu, rejects unknown and sold-out, applies the rest |
 | `allergen_question` | `{allergen, item_ref}` or null | Answers from `menu_item_allergens` |
-| `needs_human` | `{flag, reason: asked\|frustration\|allergen_unknown\|repeated_unclear}` | Handoff with that reason |
+| `needs_human` | `{flag, reason: asked\|frustration\|complaint\|allergen_unknown\|repeated_unclear}` | Handoff with that reason |
 | `clarify` | string or null | Sent instead of acting; +1 strike |
 | `reply` | string | Checked (no amounts, length) and sent with code-rendered blocks |
 
@@ -102,7 +102,7 @@ An order is created only by `confirm:{cart_version}` or `confirm` on an unchange
 |---|---|---|
 | Prefix: rules | Role; hard rules (never state a price, total, discount or time; never invent dishes); reply in the customer's language (Hinglish first-class); café name; tone; Hinglish few-shots | Yes |
 | Prefix: menu | One line per available item `id\|name\|price\|veg\|spice\|tags`; sold-out excluded | Yes |
-| Suffix: customer | First name, visit count, recent orders (90 days), favourites, stated preferences — from SQL | No |
+| Suffix: customer | First name, visit count, recent orders (90 days), favourites, profile diet / likes / dislikes / other preferences — from SQL. Never profile allergies | No |
 | Suffix: state | Open / closed / paused / near closing; cart lines; step | No |
 | Suffix: history | Last ~6 turns | No |
 
@@ -139,16 +139,15 @@ Timeout 6 s. Error, timeout, Vertex 429 or invalid output → one retry on the o
 
 | Value | Rule |
 |---|---|
-| Line / subtotal | `price_paise × qty` / sum of lines |
-| GST `inclusive` | Total = subtotal; "incl. GST" |
-| GST `exclusive` | GST = subtotal × `gst_rate`, rounded half-up to the paise, on the total; total = subtotal + GST |
+| Line | `price_paise × qty` |
+| Total | Sum of lines. Menu prices are final (GST included); shown as "Total (incl. GST)". No GST setting, no separate GST line ([decisions](decisions.md#smaller-decisions)) |
 | `expected_minutes` | Max `prep_minutes` of the items |
 
 Notes never change the price. No discounts in the cart; codes are redeemed at the [bill](#bill-sheet). Availability is checked at every op, every summary and again at Confirm.
 
 ### Confirmation
 
-Rendered by code: `Your order · Table 7`, one line per item `2 × Cold Brew Tonic ₹480` with its note, "Allergy noted: nuts — the team will check", Subtotal, GST, Total, "Ready in about 10 min". Buttons Confirm · Edit · Cancel, each carrying the cart version.
+Rendered by code: `Your order · Table 7`, one line per item `2 × Cold Brew Tonic ₹480` with its note, "Allergy noted: nuts — the team will check", "Total (incl. GST) ₹ 760", "Ready in about 10 min". Buttons Confirm · Edit · Cancel, each carrying the cart version.
 
 Confirm runs:
 
@@ -235,7 +234,7 @@ Due = `accepted_at` + `expected_minutes` + `delay_minutes`. `allergy_note` is a 
 - **Delay** (`NEW` or `ACCEPTED`): +2 / +5 / +10 / custom minutes, optional note ≤ 120 chars. Adds to `delay_minutes`, sets `delayed`, clears `overdue`, re-creates the `overdue` timer, sends "Sorry for the wait — your order needs about N more minutes. <note>" at once.
 - **Cancel reasons:** Out of stock · Kitchen issue · Customer asked · Other (custom text). See [staff cancel](#transitions). Cancelled orders are excluded from revenue, visits and spend.
 - **Manual order** (`shift_manager`+, offline fallback): table, items, optional allergy note; cart pricing rules; `source = manual`; no customer messages. Open: created as `NEW` or `ACCEPTED` ([plan](plan.md#open-decisions)).
-- **Print ticket:** browser print, no endpoint. Number, table, time, first name, `qty × name` + note, allergy boxed at the top in large type, Edited / Near closing marks, expected time. No prices.
+- **Print ticket:** browser print, no endpoint. Number, table, time, first name, `qty × name` + note, allergy (this visit's `allergy_note` and profile allergies) boxed at the top in large type, Edited / Near closing marks, expected time. No prices.
 - **Table sessions:** QR text "Hi, I'm at Table N" joins the table's open session or opens one. Several customers at one table share the session and one bill. A session closes on "Bill delivered" or after 3 h with no order.
 
 ## Human help
@@ -281,7 +280,7 @@ Each level writes an `escalations` row; orders also get `escalated`. Handlers st
 
 ### Bill sheet
 
-One bill per table session: all its non-cancelled orders, subtotal, one offer code ([redemption](#redemption)), discount, total. "Bill delivered" resolves the `bill` request and closes the session. Open: whole table vs per person; counter vs café POS for payment.
+One bill per table session: all its non-cancelled orders, their sum, one offer code ([redemption](#redemption)), discount, "Total (incl. GST)". "Bill delivered" resolves the `bill` request and closes the session. Open: whole table vs per person; counter vs café POS for payment.
 
 ## Menu
 
@@ -305,6 +304,8 @@ One bill per table session: all its non-cancelled orders, subtotal, one offer co
 
 Allergies mentioned in chat go to `state.allergy_note` and then `orders.allergy_note`. They are never inferred from past orders and never stored as preferences unless stated.
 
+**Profile allergies** (`customer_preferences` kind `allergy`, from a [staff comment](#customer-profile-and-staff-comments)) are for staff: "On profile: <allergen>" in the order card's allergy banner and boxed on the print ticket. They never go to the LLM and never answer an allergen question; only `menu_item_allergens` does.
+
 ### CSV import
 
 Owner only; validated in the console and again in the backend. Required `name`, `category`, `price` (rupees), `prep_minutes`, `veg` (yes/no). Optional `description`, `spice`, `contains`, `free_from`, `available`. All or nothing: any invalid row rejects the file with row and column errors. Rows match by name: update matches, insert new, leave missing items alone; unlisted allergens stay `unknown`.
@@ -313,9 +314,32 @@ Owner only; validated in the console and again in the backend. Required `name`, 
 
 - Key `(cafe_id, wa_id)`. Upserted on every inbound (`first_seen_at`, `last_inbound_at`); `last_visit_at` set on order creation. One conversation per customer.
 - Name asked once; only the first name goes to the LLM.
-- Returning summary (SQL, never the LLM): first name, visits, last order's items, top 3 items (90 days), stated preferences. Never phone, spend or ratings.
-- `customer_preferences` only when stated (e.g. `diet = vegan`, `milk = oat`). A stored allergy is shown to staff, never used to answer allergen questions.
+- Returning summary (SQL, never the LLM): first name, visits, last order's items, top 3 items (90 days), stated preferences except allergies. Never phone, spend or ratings.
+- `customer_preferences` only when stated by the customer, in chat or to staff (e.g. `diet = vegan`, `milk = oat`). A stored allergy is shown to staff, never used to answer allergen questions.
 - Segments: **Lapsed** no order in 30 days · **Regular** 3+ orders in 60 days · **New** exactly 1 visit (checked in that order).
+
+### Customer profile and staff comments
+
+Staff (`shift_manager`+) open a customer's profile from an order card, Chats or Calls and bills ([console](console.md#customer-profile)) and add comments about what the customer told them. The AI turns each comment into profile changes; code validates and applies them.
+
+| Kind | Values | Single or list |
+|---|---|---|
+| `diet` | `veg` · `vegan` · `jain` · `eggetarian` · `non_veg` | single |
+| `milk` · `sugar` · `seating` | short text, e.g. `oat`, `less`, `window` | single |
+| `spice` | `0`–`3` | single |
+| `allergy` | one of the [allergens](#allergens) where it fits, else as written | list |
+| `dislike` · `like` · `other` | short text ≤ 40, e.g. `mushrooms` | list |
+
+Fixed list in `contracts/preference_kinds.json`. `source` is `chat` (stated on WhatsApp) or `staff_note` (with `note_id`).
+
+1. `POST /customers/{id}/notes` stores the comment word for word in `customer_notes` (`ai_status = pending`) and enqueues a `profile_note` task. `api` never calls the LLM.
+2. The worker makes one structured call: the comment, the customer's current profile values, the fixed kinds and allergens. Never the phone, `wa_id`, orders or other customers.
+3. Output `{ops: [{op: set | add | remove, kind, value}], summary}`. Code drops any op with an unknown kind, a value over 40 chars, or anything about consent, offers, prices or orders. Single kinds are set; list kinds add or remove.
+4. One transaction applies the valid ops (allergies included, no confirmation step), stores them on the note (`ai_status = applied`, or `no_changes`), writes `audit_log` `customer.profile_update`. LLM failure after one retry → `failed`, profile unchanged, comment kept.
+5. **Undo** (`POST /customer-notes/{id}/undo`) reverses that note's ops, unless a later note changed the same value (409). Staff can also remove one value by hand (`POST /customers/{id}/preferences/remove`). Both audited.
+6. A comment never changes marketing consent; only the customer can ([consent](#consent)).
+
+Every call writes `llm_calls`. Comment text is never logged and is removed by [customer data deletion](architecture.md#data-protection).
 
 ### Feedback
 
