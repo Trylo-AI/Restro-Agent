@@ -22,6 +22,8 @@ node_modules/
 dist/
 .vite/
 *.local
+test-results/
+playwright-report/
 
 # Supabase CLI
 supabase/.branches/

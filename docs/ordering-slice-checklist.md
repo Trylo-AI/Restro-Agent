@@ -21,10 +21,10 @@ Tracks [ordering-slice.md](ordering-slice.md). Ticked in the same commit as the 
 | S10 Human help | Done | S9–S12 commit |
 | S11 Menu availability | Done | S9–S12 commit |
 | S12 Customer profile backend | Done | S9–S12 commit |
-| S13 Console shell | To do | — |
-| S14 Live orders | To do | — |
+| S13 Console shell | Done | S13–S14 commit |
+| S14 Live orders | Done | S13–S14 commit |
 | S15 Chats, Calls and bills, Menu | To do | — |
-| S16 End to end | To do | — |
+| S16 End to end | In progress | Playwright set up; Live orders specs pass |
 
 ## S0 · Setup and plan approval (Aman)
 
@@ -243,31 +243,35 @@ Built with S10 and S11 and committed together (they share the handoff wiring).
 
 ## S13 · Console shell
 
-- [ ] Login (email + password); demo role picker behind `VITE_DEMO`
-- [ ] Café context; `X-Cafe-Id` on every call
-- [ ] `shift_manager` nav: sidebar ≥ 768 px, tab bar on phones
-- [ ] Typed API client
-- [ ] Realtime hooks: subscribe → buffer → read → apply; refetch on reconnect / visible / switch and every 30 s; disconnects to `POST /telemetry/console`
-- [ ] Banners: Offline, Paused, Alerts off
-- [ ] Urgency engine (every row of the severity tables) + sounds + alerts gate + browser notifications
-- [ ] Undo toast
-- [ ] 403 / 409 / network handling
-- [ ] **Exit:** shift manager lands on Live orders; Offline banner within 5 s of stopping `api`
+- [x] Login (email + password); demo role picker behind `VITE_DEMO`
+- [x] Café context; `X-Cafe-Id` on every call
+- [x] `shift_manager` nav: sidebar ≥ 768 px, tab bar on phones
+- [x] Typed API client (`openapi-fetch` + types from `contracts/openapi.yaml`; all writes in `lib/mutations.ts`)
+- [x] Realtime hooks: subscribe, then read; any event refetches; refetch on reconnect / visible / switch and every 30 s; disconnects to `POST /telemetry/console`
+- [x] Banners: Offline, Paused, Alerts off
+- [x] Urgency engine (every row of the severity tables) + sounds + alerts gate + browser notifications. Fixed in testing: first load no longer fires the repeat alarm for criticals already open
+- [x] Undo toast (ends on a new transition, route change, café switch, sign-out)
+- [x] 403 / 409 / network handling
+- [x] Tests: `urgency.test.ts` (every table row + ringing rules), `format.test.ts`, login screen
+- [x] **Exit:** shift manager lands on Live orders; Offline banner 5–6.5 s after the api drops (e2e, ping every 1.5 s + 5 s grace)
+- [ ] Gap for Aman: RLS lets a `shift_manager` read only their own `memberships` row, so "Acknowledged by Ravi" and comment authors show "A teammate" unless the reader is the owner. Proposed fix: a `v_staff_names` view (`cafe_id`, `user_id`, `display_name`) for members. That needs a contract change, so it hasn't been made
 
 ## S14 · Live orders
 
-- [ ] Columns New / Accepted / Ready with counts and dots; Tabs / Board toggle
-- [ ] Summary strip; type chips; legend
-- [ ] Card: allergy banner (incl. "On profile: …"), table, number / name / visit, **Profile** button, chips, timer, progress, items, chain, "Total (incl. GST)"
-- [ ] Customer profile panel (shared): at-a-glance box, chip ×, Feedback, Complaints, Recent orders, Comments with applied changes + Undo, Add a comment ("Updating profile…" → result by Realtime)
-- [ ] Print ticket allergy box includes profile allergies
-- [ ] Pause button (`manager`+ only)
-- [ ] Accept / Mark ready / Mark served with `expected_version`; Undo
-- [ ] Delay panel with preview; Cancel dialog with reason + Other text (Cancel only on New for `shift_manager`)
-- [ ] Message (opens chat); manual order; print ticket
-- [ ] 409 and 422 messages
-- [ ] Tests: profile box for each seeded customer type; comment → pending → applied → Undo
-- [ ] **Exit:** the [Live orders](console.md#live-orders) "Done when" list passes at 375 px and desktop; Profile opens in one tap and the top box needs no scrolling at 375 px
+- [x] Columns New / Accepted / Ready with counts and dots; Tabs / Board toggle (phones always Tabs; choice kept per device)
+- [x] Summary strip; type chips; legend
+- [x] Card: allergy banner (incl. "On profile: …"), table, number / name / visit, **Profile** button, chips, timer, progress, items, chain, "Total (incl. GST)"
+- [x] Customer profile panel (shared, `features/customer-profile`): at-a-glance box, chip ×, Feedback, Complaints, Recent orders, Comments with applied changes + Undo, Add a comment ("Updating profile…" → result by Realtime)
+- [x] Print ticket allergy box includes profile allergies (customer text written as text nodes, never HTML)
+- [x] Pause button (`manager`+ only)
+- [x] Accept / Mark ready / Mark served with `expected_version`; Undo
+- [x] Delay panel with preview (same text as the backend); Cancel dialog with reason + Other text (Cancel only on New for `shift_manager`)
+- [x] Message (opens chat); manual order (no client-side total: money only from the API); print ticket
+- [x] 409 and 422 messages
+- [x] Tests: `orders.test.tsx` (card, dialogs, `canCancel`, transition + Undo, 409/422) and `profile.test.tsx` (regular and first-visit profiles, chip ×, details, applied / pending / no-change / failed comments, Undo 409)
+- [x] E2E (`npm run e2e`, real stack): simulated WhatsApp order → card ≤ 10 s → Accept → Undo → Accept (customer gets "being made") → Profile → Ready → Served; Offline banner; 375 px tabs with no horizontal scroll
+- [x] **Exit:** "Done when" checked at desktop and 375 px. Not automated yet: allergy 30 s repeat in a real browser (unit-tested), and a missed Realtime event showing up within 30 s (covered by the 30 s refetch)
+- [ ] Not built: redeemed code on the card (campaigns are outside this slice); support-mode hiding (no `platform_admin` in this slice)
 
 ## S15 · Chats, Calls and bills, Menu
 
@@ -278,7 +282,8 @@ Built with S10 and S11 and committed together (they share the handoff wiring).
 
 ## S16 · End to end
 
-- [ ] Playwright: goal path with simulator and console side by side
+- [x] Playwright set up (`frontend/playwright.config.ts`, `frontend/e2e/`; reads the git-ignored env files; `E2E_CHROMIUM` can point at an already-downloaded Chromium)
+- [ ] Playwright: goal path with simulator and console side by side (the order → Served half is done in `e2e/orders.spec.ts`; Chats is S15)
 - [ ] Playwright: edit while `NEW`, edit after `ACCEPTED`, sold out mid-order, allergy handoff, call waiter, delay, cancel with Other text
 - [ ] Playwright: Profile → comment → profile updated → Undo, seen on two consoles
 - [ ] Playwright: dead letter and ambiguous send via fault injection (one message, never two)
