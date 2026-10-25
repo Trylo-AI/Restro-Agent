@@ -21,3 +21,8 @@ TEST_ENV = {
 os.environ["RESTRO_TEST"] = "1"
 for key, value in TEST_ENV.items():
     os.environ.setdefault(key, value)
+
+# Ops runs written by tests are tagged service=test-*, which the dashboard hides unless asked for.
+from app.ops.tracing import recorder  # noqa: E402
+
+recorder.configure("test")

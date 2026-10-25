@@ -36,7 +36,8 @@ async def ingest_message(ev: InboundEvent) -> bool:
                 tracing.count(duplicate=1)
                 return False
             await pending_work.upsert_turn(c, cafe.id, conversation_id, debounce=not ev.is_tap and ev.type == "text")
-    tracing.subject("conversation", conversation_id)
+    tracing.subject("inbound", ev.wamid)  # the unit is the message; the conversation is in the span
+    tracing.annotate(conversation_id=conversation_id)
     log.info("inbound_stored", cafe_id=cafe.id, conversation_id=conversation_id, wamid=ev.wamid, type=ev.type)
     with tracing.span("webhook.signal"):
         try:

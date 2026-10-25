@@ -5,6 +5,7 @@ import base64
 import contextvars
 import json
 import time
+import uuid
 from typing import Any
 
 import httpx
@@ -21,7 +22,7 @@ RETRY_DELAYS = (0.5, 1, 2, 4, 8)
 
 
 async def _post(path: str, body: dict[str, Any], transport: httpx.AsyncBaseTransport | None,
-                trace: dict[str, str] | None = None, eta: float | None = None) -> None:
+                trace: dict[str, str] | None = None, eta: float | None = None, task_name: str | None = None) -> None:
     """Delivers like Cloud Tasks: the same retry-count, ETA and traceparent headers reach the worker."""
     url = get_settings().worker_url.rstrip("/") + path
     async with httpx.AsyncClient(timeout=30, transport=transport) as client:
@@ -31,6 +32,8 @@ async def _post(path: str, body: dict[str, Any], transport: httpx.AsyncBaseTrans
             headers = {**internal_headers(), **(trace or {}), "X-CloudTasks-TaskRetryCount": str(attempt)}
             if eta is not None:
                 headers["X-CloudTasks-TaskETA"] = f"{eta:.3f}"
+            if task_name:
+                headers["X-CloudTasks-TaskName"] = task_name
             try:
                 r = await client.post(url, json=body, headers=headers)
                 if r.status_code < 300:
@@ -82,10 +85,11 @@ class LocalTaskQueue(_Background):
             self._names.add(name)
         with tracing.span("queue.enqueue", target=queue, delay_s=delay_s):
             trace, eta = _trace_headers(), time.time() + delay_s
+            task_name = name or f"{queue}-{uuid.uuid4().hex}"  # Cloud Tasks names every task too
 
         async def run() -> None:
             if delay_s > 0:
                 await asyncio.sleep(delay_s)
-            await _post(QUEUE_PATHS[queue], body, self.transport, trace, eta)
+            await _post(QUEUE_PATHS[queue], body, self.transport, trace, eta, task_name)
 
         self.spawn(run())

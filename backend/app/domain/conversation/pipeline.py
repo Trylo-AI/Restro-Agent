@@ -107,8 +107,8 @@ async def _process(lease: lease_mod.Lease, work_id: str) -> None:
     tracing.set_input_size(len(msgs), "messages")
     with tracing.span("turn.devhooks"):
         fault = await devhooks.consume_fault("turn")
-    if fault == "turn_crash":
-        raise RuntimeError("simulated turn crash")
+        if fault == "turn_crash":
+            raise RuntimeError("simulated turn crash")
     if _handler is None:
         raise RuntimeError("no turn handler registered")
 

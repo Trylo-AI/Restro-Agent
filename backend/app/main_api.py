@@ -56,6 +56,9 @@ def create_app() -> FastAPI:
 
     app.include_router(webhooks.router)
     app.include_router(staff.router)
+    from app.ops import api as ops_api
+
+    app.include_router(ops_api.router)  # /api/ops/*: off (404) unless OPS_DASHBOARD_TOKEN is set
     if settings.simulator_on:
         from app.api.dev import sim
 

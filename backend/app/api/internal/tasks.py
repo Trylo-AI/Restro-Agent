@@ -18,10 +18,13 @@ TIMER_SUBJECT = {"help_escalation": "request", "idle_handback": "conversation", 
                  "send_check": "wa_message"}
 
 
-def _task_run(request: Request, name: str, subject: tuple[str, str] | None, cafe_id: str | None) -> tracing.run:
-    """One ops run per task attempt. Cloud Tasks headers (the local shim sends the same ones) give the attempt,
-    the scheduled time and the traceparent of the run that enqueued it."""
+def _task_run(request: Request, name: str, cafe_id: str | None) -> tracing.run:
+    """One ops run per task attempt; the task (its Cloud Tasks name) is the unit, so retries group together.
+    Cloud Tasks headers (the local shim sends the same ones) give the name, the attempt, the scheduled time and
+    the traceparent of the run that enqueued it."""
     h = request.headers
+    task = h.get("x-cloudtasks-taskname")
+    subject = ("task", task[-100:]) if task else None
     retries = h.get("x-cloudtasks-taskretrycount", "0")
     eta = h.get("x-cloudtasks-tasketa")
     try:
@@ -44,10 +47,10 @@ def _retry_outcome(run: Any, exc: Exception) -> None:
 async def timer(request: Request, body: dict[str, Any] = Body(...)) -> dict[str, str]:
     # 2xx only when the work is done or deliberately skipped; an exception makes the queue retry.
     kind = str(body.get("kind"))
-    subject = (TIMER_SUBJECT.get(kind, "order"), str(body.get("subject_id")))
-    async with _task_run(request, f"timer.{kind}", subject, str(body.get("cafe_id"))) as run:
+    subject_type = TIMER_SUBJECT.get(kind, "order")
+    async with _task_run(request, f"timer.{kind}", str(body.get("cafe_id"))) as run:
         try:
-            with tracing.span("task.handle", timer=kind):
+            with tracing.span("task.handle", timer=kind, subject_type=subject_type, subject_id=str(body.get("subject_id"))):
                 await timers.dispatch(body)
         except Exception as exc:
             _retry_outcome(run, exc)
@@ -59,8 +62,8 @@ async def timer(request: Request, body: dict[str, Any] = Body(...)) -> dict[str,
 async def ack(request: Request, body: dict[str, Any] = Body(...)) -> dict[str, str]:
     """Mark read + typing right after the webhook, so the customer sees activity within a second."""
     cafe_id, conversation_id, wamid = str(body["cafe_id"]), str(body["conversation_id"]), str(body["wamid"])
-    async with _task_run(request, "task.ack", ("conversation", conversation_id), cafe_id):
-        with tracing.span("task.handle"):
+    async with _task_run(request, "task.ack", cafe_id):
+        with tracing.span("task.handle", conversation_id=conversation_id, wamid=wamid):
             async with conn() as c:
                 cafe = await cafes.get(c, cafe_id)
                 convo = await conversations.get(c, cafe_id, conversation_id)
@@ -82,9 +85,9 @@ async def profile_note(request: Request, body: dict[str, Any] = Body(...)) -> di
     from app.domain import customers
 
     cafe_id, note_id = str(body["cafe_id"]), str(body["note_id"])
-    async with _task_run(request, "task.profile_note", ("customer_note", note_id), cafe_id) as run:
+    async with _task_run(request, "task.profile_note", cafe_id) as run:
         try:
-            with tracing.span("task.handle"):
+            with tracing.span("task.handle", note_id=note_id):
                 status = await customers.process_note(cafe_id, note_id)
         except Exception as exc:
             _retry_outcome(run, exc)

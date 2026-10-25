@@ -81,6 +81,15 @@ Contract: `contracts/schema.sql`. Implemented by `supabase/migrations/`.
 | `audit_log` | `actor_id`, `actor_role`, `support`, `cafe_id`, `action`, `change`, `at` | append-only; no secrets or full numbers in `change` |
 | `webhook_events` | `received_at`, `signature_valid`, `payload`, `processed_at` | Deleted after 30 days |
 
+**Ops tables** (performance dashboard, [OPS_PLAN](OPS_PLAN.md)). Not tenant data: written only by `app/ops/tracing`, read only by `/api/ops`; RLS on with no policies and no client grants. Ids, timings and redacted error classes only, never message text, prompts, phones or SQL values.
+
+| Table | Key columns | Keys and checks |
+|---|---|---|
+| `ops_runs` | `run_id`, `service`, `kind`, `name`, `subject_type`, `subject_id`, `tenant_id`, `attempt`, `started_at`, `duration_ms`, `queue_wait_ms`, `outcome`, `error_stage`, `error_code`, `failure_fingerprint`, `degradations`, `stage_ms`, `dep_ms`, `dep_calls`, `counts`, `labels`, `git_sha`, `config_hash`, `upstream_trace` | one row per attempt; `outcome` `RUNNING` / `SUCCEEDED` / `SUCCEEDED_DEGRADED` / `REJECTED` / `RETRYING` / `FAILED` / `CANCELLED` / `SUPERSEDED` / `ABANDONED`; kept 365 days |
+| `ops_spans` | `run_id`, `span_id`, `parent_id`, `name`, `level`, `kind`, `start_ms`, `duration_ms`, `outcome`, `target`, `attrs` | PK (`run_id`, `span_id`); names from the registry; level 3 kept 14 days, others 90 |
+| `ops_run_events` | `run_id`, `seq`, `at_ms`, `level`, `span_name`, `message`, `detail` | ≤ 200 per run; kept 90 days |
+| `ops_deploys` · `ops_instances` · `ops_insight_state` | deploy markers · process heartbeats · dismissed insights | |
+
 **Schema rules**
 
 - Append-only tables (`consents`, `order_events`, `redemptions`, `llm_calls`, `audit_log`): the backend role has no UPDATE or DELETE grant.

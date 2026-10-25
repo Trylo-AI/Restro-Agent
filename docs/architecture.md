@@ -372,7 +372,9 @@ PR → CI → merge to `main` → build image once (tag = commit SHA) → migrat
 
 ## Monitoring
 
-JSON logs, one event per line; errors to Error Reporting; uptime check on `api`. `request_id` is passed from the entry point into Pub/Sub attributes and Cloud Tasks headers.
+JSON logs, one event per line; errors to Error Reporting; uptime check on `api`. Every entry point starts an ops run; its id travels as a W3C `traceparent` in Pub/Sub attributes and Cloud Tasks headers, so a webhook, the turn it wakes and the timers that turn schedules link up (this replaces the `request_id` planned earlier, which was never built).
+
+**Performance dashboard** ([OPS_PLAN](OPS_PLAN.md), Performance Dashboard Standard v1.0). `backend/app/ops/tracing` records one run per attempt at every unit of work (webhook, staff request, turn, task, timer, job) with its stages, every SQL statement, model call and send, the silent fallbacks, and WARNING+ log lines. It never runs inside a business transaction, never raises, and writes off the request path (one statement per run). `/api/ops/*` on `api` serves it to `/platform/ops` in the console (ops token until platform_admin login exists). Kill switch `OPS_TRACING_ENABLED=false`.
 
 **Logging rule.** Phone numbers and message text never go in logs: not the customer's, not ours, not LLM prompts or output. Ids are fine (`wamid`, `cafe_id`, `conversation_id`, `order_id`, `pending_work` id). Never log tokens, secrets, PINs or `wa_id` either.
 

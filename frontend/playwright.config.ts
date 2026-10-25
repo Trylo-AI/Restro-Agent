@@ -13,6 +13,7 @@ const consoleEnv = envFile("./.env.local");
 const simEnv = envFile("../simulator/.env.local");
 process.env.E2E_STAFF_PASSWORD ??= consoleEnv.VITE_DEMO_PASSWORD;
 process.env.E2E_SIM_TOKEN ??= simEnv.VITE_SIMULATOR_TOKEN;
+process.env.E2E_OPS_TOKEN ??= envFile("../backend/.env").OPS_DASHBOARD_TOKEN;
 process.env.E2E_API_URL ??= consoleEnv.VITE_API_URL ?? "http://localhost:8000";
 
 export default defineConfig({

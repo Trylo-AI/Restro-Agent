@@ -4,7 +4,7 @@ Commit: `d28e61d` + S16 work in progress   Date: 24 Oct 2026   Standard: PDS v1.
 Docs read: `CLAUDE.md`, [architecture](architecture.md) (System, Latency budget, Message pipeline, Queues, Monitoring, Cost), [backend](backend.md), [data-and-api](data-and-api.md), [rules](rules.md), [plan](plan.md#open-decisions), [ordering-slice](ordering-slice.md), [checklist](ordering-slice-checklist.md)
 Code areas read: `backend/app/main_api.py`, `main_worker.py`, `api/*`, `core/logging.py`, `db/pool.py`, `db/tx.py`, `domain/conversation/pipeline.py`, `domain/ai_agent/calls.py`, `domain/outbound`, `domain/jobs.py`, `domain/timers`, `integrations/llm/*`, `integrations/whatsapp/client.py`, `integrations/tasks/local.py`
 
-**Status: approved 24 Oct 2026 (Gate 0), being built.** Aman's answers:
+**Status: built 25 Oct 2026, local stack (phases 1–6, gates below).** Approved 24 Oct 2026 (Gate 0). Aman's answers:
 
 | Question | Answer | What it means for the build |
 |---|---|---|
@@ -134,6 +134,8 @@ Pilot (one café): ~2,500 runs/day × ~15 spans (L3 DB calls dominate: a turn ma
 `queued_at`: `pending_work.created_at` for turns (exact), Cloud Tasks schedule time for timers, `received_at` for acks.
 
 ### Spans: the registry (`backend/app/ops/tracing/names.py`)
+
+As built, `names.py` is the source of truth. `turn.claim`, `turn.debounce` and `turn.release` were not built as spans: the claim happens before the run starts, and the debounce shows as queue wait. Added: `turn.finish`, `turn.devhooks`, `task.handle`, `job.handle`, `request.handle`, `outbound.deliver`, `db.acquire`.
 
 | Name | Level | Kind | Where | Attrs | Q |
 |---|---|---|---|---|---|
@@ -292,7 +294,7 @@ PDS defaults: runs 365 days, spans L1–L2 90 days, L3 14 days, events 90 days. 
 | P13 | Resource sampling | Off; optional `db_pool_in_use` sample | Cloud Run has the rest |
 | P14 | Queue-entry time | `pending_work.created_at` (exact) | |
 
-## 7. Open questions for you
+## 7. Open questions for you (answered 24 Oct 2026: see the top)
 
 - **Q-A (contract):** adding `ops_*` tables changes the frozen `contracts/schema.sql`. Approve as part of this work (one PR: contract, migration, backend, console)?
 - **Q-B (S16 finding):** the S16 run with 10 simultaneous simulated customers failed: the api took > 20 s to answer. Cause found by measurement: each `/dev/sim/thread` poll costs ~0.9 s because every query round-trips ~150–200 ms from this PC to the hosted Supabase, and 10 pollers at 0.5 s need ~14 connection-seconds per second from a pool of 5. In Cloud Run next to the DB that round trip is a few ms. The same ratio means a turn locally makes 10–25 round trips (~2–4 s). Do you want the DB-round-trip view (D3 / D17) built first, so this is measured instead of estimated?
@@ -302,13 +304,47 @@ PDS defaults: runs 365 days, spans L1–L2 90 days, L3 14 days, events 90 days. 
 
 ## 8. Departures from PDS
 
-1. **Dashboard in the existing console** (P11), not static pages served by `api`. Same pages, routes `/platform/ops/#…` → `/platform/ops/...`.
-2. **`llm.call` cost comes from the existing `llm_calls` meter** (`pricing.py`, `pricing_version`), not a separate `OPS_PRICES` table. Spans carry `llm_call_id`.
-3. **Package path** `backend/app/ops/` (read side) and `backend/app/ops/tracing/` (write side) to fit `app/` layout.
-4. **Logs page is local-only**; in the cloud it links to Cloud Logging by `run_id`.
+1. **Dashboard in the existing console** (P11): `/platform/ops/...` (React + TS, hand-drawn SVG charts), not static pages served by `api`. The ops API is not in `contracts/openapi.yaml` (internal tooling; `frontend/src/lib/ops.ts` is its only client).
+2. **No `cost_usd`** until prices are tracked on GCP; Efficiency shows tokens and model calls per order and per turn; D15 is not built. The `llm_calls` meter is reused for tokens.
+3. **Package path** `backend/app/ops/` (read side) and `backend/app/ops/tracing/` (write side).
+4. **Logs page is local-only** (`backend/logs/<service>.jsonl`, 20 MB × 5); in the cloud it links to Cloud Logging by `run_id`.
 5. **Batches page and resource sampling dropped** (no batches; Cloud Run covers resources).
+6. **`ops_instances`** (process heartbeats, also the DB clock offset) added: the sweeper needs it and PDS names no table for it.
+7. **Writes use the app's pool**, one connection at a time, from a background writer started with an empty context; a run's end is one statement (run upsert + spans + events). A separate pool would cost connections for no gain at this volume.
+8. **DB clock correction:** times that start on the DB clock (`pending_work.next_attempt_at`, `inbound_messages.created_at`) are shifted by the offset each heartbeat measures. This PC runs 1.37 s ahead of the DB; without it queue wait and reply time were inflated by that much.
+9. **Units:** a turn's unit is its `pending_work` row; a webhook's is the inbound `wamid`; a task's is its Cloud Tasks name (the local shim sends `X-CloudTasks-TaskName`, `-TaskRetryCount`, `-TaskETA` and `traceparent` like Cloud Tasks). The business subject of a task is in its `task.handle` span.
+10. **Reply time** (`counts.reply_ms`: the customer's last message reaching us → our first reply sent) is the headline latency, next to PDS work time, because the latency budget is about what the customer waits.
+11. **Test isolation:** test runs record as `service = test`; the dashboard shows `api` and `worker` unless a service is picked.
 
-## Build order after approval
+## 9. Gates (evidence)
+
+| Gate | Result | Evidence |
+|---|---|---|
+| 0 | Approved 24 Oct 2026 | answers above |
+| 1 | **Pass** | `scripts/ops_gate1.py` on the live stack: crash once → `RETRYING`, `SUCCEEDED`, first reason kept; four crashes → 3 × `RETRYING` + `FAILED` (`DEAD_LETTER`); ambiguous send and model failure → `SUCCEEDED_DEGRADED` with the reason; Σ stage time within 5 % for 8/8 turns; 16 turns linked to their webhook by `traceparent`. Killing the worker mid-turn left a `RUNNING` run that the sweeper marked `ABANDONED` (85 s) and the stuck-work job reran. Existing suite unchanged: 181 passed (1 network timeout, passed on rerun), unit 128 |
+| 2 | **Pass on CPU; end-to-end below the noise** | `scripts/ops_overhead.py`: one span 10 µs, one statement hook 9 µs → 0.23 ms per 20-statement turn = 0.006 % of its 3.7 s. Wall clock on vs off (10 alternating reps × 5 turns): +162 ms ± 190 ms (1 SE), min-to-min +1 %: indistinguishable from network jitter to the hosted DB; rerun in the cloud region |
+| 3 | **Pass** | `e2e/ops.spec.ts`: Overview → Customer turns → a turn → its waterfall in 3 clicks; metric definitions tested on fixture rows with known answers (`tests/integration/test_ops_queries.py`) |
+| 4 | **Pass** | planted +50 ms in one stage of cohort B: Compare flags that span only (Mann-Whitney), the other span not significant |
+| 5 | **Pass** | planted 12 identical statements under one stage: the N+1 detector reports it with calls per run, a saving per day and an example run that opens |
+
+## 10. First findings (measured on the local stack, 25 Oct 2026)
+
+- **Every DB round trip from this PC costs ~114 ms** (median `select 1`), and a turn makes ~23 statements: Postgres is ~75 % of turn time. Button reply p95 10.8 s and webhook p95 4.1 s against 1 s / 300 ms budgets locally; expected to fall sharply next to the DB in `asia-south1`; to be measured there before any optimisation.
+- **Simulator hooks cost ~1.4 s per local turn** (`turn.devhooks`: a new HTTP connection per fault check and event push). Local only; worth a shared client if local testing gets slow.
+- The S16 harness failure at 10 parallel customers was pool saturation from polling, not the pipeline (see the checklist).
+
+## 11. Using it
+
+- **Open:** console → Platform → Performance (owner login shows the link; the route works for any signed-in user) → paste `OPS_DASHBOARD_TOKEN` from `backend/.env` (kept in that tab only). No token configured → `/api/ops/*` is off (404).
+- **Settings:** `OPS_TRACING_ENABLED` (kill switch), `OPS_DASHBOARD_TOKEN`, `OPS_LOG_DIR`, `OPS_TASK_MAX_ATTEMPTS`.
+- **Endpoints:** `/api/ops/meta`, `overview`, `live`, `runs`, `runs/{run_id}`, `subjects/{type}/{id}/runs`, `endpoints`, `failures`, `degradations`, `degradations/{reason}/runs`, `latency` (+ `compare`, `cohorts`, `scatter`), `dependencies` (+ `/{kind}/{target}`), `efficiency`, `insights` (+ `/{key}/dismiss`, `/restore`), `logs`.
+- **Retention:** `ops_retention` job daily (5,000 rows per batch); `ops_sweep` every 60 s.
+- **Add a span:** register the name in `app/ops/tracing/names.py` (level, kind, one line), then `with tracing.span("stage.name", key=value):` at the boundary. Ids and values go in attrs, never in the name. `tests/unit/test_ops_tracing.py` fails on an unregistered name.
+- **Add a fallback reason:** register it in `REASONS` (mark `cost_only` if it is a cost, not a fault) and call `tracing.degraded("reason", detail=...)` where the fallback happens.
+- **Never** put message text, prompts, phones, `wa_id` or secrets in attrs or labels: they are redacted, but don't rely on it.
+
+## Build order (done)
+
 
 Each phase ends at its PDS gate, with evidence, before the next starts:
 
