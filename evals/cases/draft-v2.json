@@ -1,0 +1,2806 @@
+[
+ {
+  "id": "v2-cle-1",
+  "category": "clean_english",
+  "text": "one espresso",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Espresso",
+     "qty": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-cle-2",
+  "category": "clean_english",
+  "text": "Two cafe lattes please",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Café Latte",
+     "qty": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-cle-3",
+  "category": "clean_english",
+  "text": "I'd like a mocha and a tiramisu",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Mocha",
+     "qty": 1
+    },
+    {
+     "dish": "Tiramisu",
+     "qty": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-cle-4",
+  "category": "clean_english",
+  "text": "3 masala chai",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Masala Chai",
+     "qty": 3
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-cle-5",
+  "category": "clean_english",
+  "text": "Could I have the mushroom risotto?",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Mushroom Risotto",
+     "qty": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-cle-6",
+  "category": "clean_english",
+  "text": "One cold brew tonic and one lemon iced tea",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Cold Brew Tonic",
+     "qty": 1
+    },
+    {
+     "dish": "Lemon Iced Tea",
+     "qty": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-cle-7",
+  "category": "clean_english",
+  "text": "a granola bowl",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Granola Bowl",
+     "qty": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-cle-8",
+  "category": "clean_english",
+  "text": "Get me 2 bombay sandwiches",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Bombay Sandwich",
+     "qty": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-cle-9",
+  "category": "clean_english",
+  "text": "one hot chocolate for my daughter",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Hot Chocolate",
+     "qty": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-cle-10",
+  "category": "clean_english",
+  "text": "Butter chicken bowl, one",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Butter Chicken Bowl",
+     "qty": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-cle-11",
+  "category": "clean_english",
+  "text": "I'll take the thai green curry bowl",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Thai Green Curry Bowl",
+     "qty": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-cle-12",
+  "category": "clean_english",
+  "text": "a filter coffee and a poha",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Filter Coffee",
+     "qty": 1
+    },
+    {
+     "dish": "Poha",
+     "qty": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-cle-13",
+  "category": "clean_english",
+  "text": "two banoffee jars",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Banoffee Jar",
+     "qty": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-cle-14",
+  "category": "clean_english",
+  "text": "one paneer tikka sandwich please",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Paneer Tikka Sandwich",
+     "qty": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-cle-15",
+  "category": "clean_english",
+  "text": "A mango smoothie",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Mango Smoothie",
+     "qty": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-cle-16",
+  "category": "clean_english",
+  "text": "chicken club sandwich x2",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Chicken Club Sandwich",
+     "qty": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-cle-17",
+  "category": "clean_english",
+  "text": "One upma and one masala omelette",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Upma",
+     "qty": 1
+    },
+    {
+     "dish": "Masala Omelette",
+     "qty": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-cle-18",
+  "category": "clean_english",
+  "text": "4 cappuccinos for the table",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Cappuccino",
+     "qty": 4
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-cle-19",
+  "category": "clean_english",
+  "text": "one iced hazelnut latte",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Iced Hazelnut Latte",
+     "qty": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-cle-20",
+  "category": "clean_english",
+  "text": "chilli cheese toast",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Chilli Cheese Toast",
+     "qty": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-cle-21",
+  "category": "clean_english",
+  "text": "Can we get two flat whites and two brownies",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Flat White",
+     "qty": 2
+    },
+    {
+     "dish": "Chocolate Brownie",
+     "qty": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-hin-1",
+  "category": "hinglish",
+  "text": "ek cappuccino dena",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Cappuccino",
+     "qty": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-hin-2",
+  "category": "hinglish",
+  "text": "do masala chai aur ek poha",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Masala Chai",
+     "qty": 2
+    },
+    {
+     "dish": "Poha",
+     "qty": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-hin-3",
+  "category": "hinglish",
+  "text": "bhaiya 3 cold coffee bhej do",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Cold Coffee",
+     "qty": 3
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-hin-4",
+  "category": "hinglish",
+  "text": "ek avocado toast, chilli bilkul nahi",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Avocado Toast",
+     "qty": 1,
+     "note": "chilli"
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-hin-5",
+  "category": "hinglish",
+  "text": "mujhe ek mocha chahiye",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Mocha",
+     "qty": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-hin-6",
+  "category": "hinglish",
+  "text": "2 bombay sandwich, ek mein cheese extra",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Bombay Sandwich",
+     "qty": 2,
+     "note": "cheese"
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-hin-7",
+  "category": "hinglish",
+  "text": "ek filter coffee kam cheeni wali",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Filter Coffee",
+     "qty": 1,
+     "note": "sugar"
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-hin-8",
+  "category": "hinglish",
+  "text": "teen hot chocolate bacchon ke liye",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Hot Chocolate",
+     "qty": 3
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-hin-9",
+  "category": "hinglish",
+  "text": "ek butter chicken bowl aur do brownie",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Butter Chicken Bowl",
+     "qty": 1
+    },
+    {
+     "dish": "Chocolate Brownie",
+     "qty": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-hin-10",
+  "category": "hinglish",
+  "text": "ek granola bowl please, honey thoda kam",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Granola Bowl",
+     "qty": 1,
+     "note": "honey"
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-hin-11",
+  "category": "hinglish",
+  "text": "do cold brew de do",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Cold Brew",
+     "qty": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-hin-12",
+  "category": "hinglish",
+  "text": "ek masala omelette, pyaaz mat dalna",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Masala Omelette",
+     "qty": 1,
+     "note": "onion"
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-hin-13",
+  "category": "hinglish",
+  "text": "upma ek plate",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Upma",
+     "qty": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-hin-14",
+  "category": "hinglish",
+  "text": "ek paneer tikka sandwich aur ek lemon iced tea",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Paneer Tikka Sandwich",
+     "qty": 1
+    },
+    {
+     "dish": "Lemon Iced Tea",
+     "qty": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-hin-15",
+  "category": "hinglish",
+  "text": "4 chai le aao",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Masala Chai",
+     "qty": 4
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-hin-16",
+  "category": "hinglish",
+  "text": "ek tiramisu bhi add kar do",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Tiramisu",
+     "qty": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-hin-17",
+  "category": "hinglish",
+  "text": "mango smoothie do glass",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Mango Smoothie",
+     "qty": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-hin-18",
+  "category": "hinglish",
+  "text": "ek risotto mushroom wala",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Mushroom Risotto",
+     "qty": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-hin-19",
+  "category": "hinglish",
+  "text": "thai curry bowl ek, spicy kam",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Thai Green Curry Bowl",
+     "qty": 1,
+     "note": "spic"
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-hin-20",
+  "category": "hinglish",
+  "text": "ek latte oat milk mein",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Café Latte",
+     "qty": 1,
+     "note": "oat"
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-hin-21",
+  "category": "hinglish",
+  "text": "do flat white, ek decaf",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Flat White",
+     "qty": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-hin-22",
+  "category": "hinglish",
+  "text": "ek chicken club sandwich, mayo nahi",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Chicken Club Sandwich",
+     "qty": 1,
+     "note": "mayo"
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-hin-23",
+  "category": "hinglish",
+  "text": "chilli cheese toast do plate",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Chilli Cheese Toast",
+     "qty": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-hin-24",
+  "category": "hinglish",
+  "text": "ek espresso double shot",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Espresso",
+     "qty": 1,
+     "note": "double"
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-hin-25",
+  "category": "hinglish",
+  "text": "banoffee jar ek",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Banoffee Jar",
+     "qty": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-hin-26",
+  "category": "hinglish",
+  "text": "ek iced hazelnut latte, ice kam",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Iced Hazelnut Latte",
+     "qty": 1,
+     "note": "ice"
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-hin-27",
+  "category": "hinglish",
+  "text": "cold brew tonic ek dena bhai",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Cold Brew Tonic",
+     "qty": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-hin-28",
+  "category": "hinglish",
+  "text": "2 poha aur 2 chai",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Poha",
+     "qty": 2
+    },
+    {
+     "dish": "Masala Chai",
+     "qty": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-hin-29",
+  "category": "hinglish",
+  "text": "ek cold coffee aur ek brownie, brownie garam karke",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Cold Coffee",
+     "qty": 1
+    },
+    {
+     "dish": "Chocolate Brownie",
+     "qty": 1,
+     "note": "warm"
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-hin-30",
+  "category": "hinglish",
+  "text": "teen cappuccino, ek mein sugar nahi",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Cappuccino",
+     "qty": 3,
+     "note": "sugar"
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-hin-31",
+  "category": "hinglish",
+  "text": "ek hot chocolate whipped cream ke saath",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Hot Chocolate",
+     "qty": 1,
+     "note": "cream"
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-hin-32",
+  "category": "hinglish",
+  "text": "do avocado toast",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Avocado Toast",
+     "qty": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-hin-33",
+  "category": "hinglish",
+  "text": "ek mocha aur ek cappuccino jaldi",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Mocha",
+     "qty": 1
+    },
+    {
+     "dish": "Cappuccino",
+     "qty": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-hin-34",
+  "category": "hinglish",
+  "text": "lemon iced tea teen",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Lemon Iced Tea",
+     "qty": 3
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-hin-1",
+  "category": "hindi_script",
+  "text": "एक कैपुचीनो",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Cappuccino",
+     "qty": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-hin-2",
+  "category": "hindi_script",
+  "text": "दो मसाला चाय",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Masala Chai",
+     "qty": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-hin-3",
+  "category": "hindi_script",
+  "text": "एक पोहा और एक चाय",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Poha",
+     "qty": 1
+    },
+    {
+     "dish": "Masala Chai",
+     "qty": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-hin-4",
+  "category": "hindi_script",
+  "text": "तीन कोल्ड कॉफी",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Cold Coffee",
+     "qty": 3
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-hin-5",
+  "category": "hindi_script",
+  "text": "एक हॉट चॉकलेट",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Hot Chocolate",
+     "qty": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-hin-6",
+  "category": "hindi_script",
+  "text": "एक बॉम्बे सैंडविच",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Bombay Sandwich",
+     "qty": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-hin-7",
+  "category": "hindi_script",
+  "text": "दो ब्राउनी",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Chocolate Brownie",
+     "qty": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-hin-8",
+  "category": "hindi_script",
+  "text": "एक उपमा",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Upma",
+     "qty": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-hin-9",
+  "category": "hindi_script",
+  "text": "एक मसाला ऑमलेट",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Masala Omelette",
+     "qty": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-hin-10",
+  "category": "hindi_script",
+  "text": "एक फ़िल्टर कॉफ़ी",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Filter Coffee",
+     "qty": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-hin-11",
+  "category": "hindi_script",
+  "text": "एक मैंगो स्मूदी",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Mango Smoothie",
+     "qty": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-hin-12",
+  "category": "hindi_script",
+  "text": "दो लेमन आइस्ड टी",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Lemon Iced Tea",
+     "qty": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-hin-13",
+  "category": "hindi_script",
+  "text": "एक पनीर टिक्का सैंडविच",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Paneer Tikka Sandwich",
+     "qty": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-mul-1",
+  "category": "multi_item",
+  "text": "2 cold coffee, one without sugar, and a brownie warmed up",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Cold Coffee",
+     "qty": 2,
+     "note": "sugar"
+    },
+    {
+     "dish": "Chocolate Brownie",
+     "qty": 1,
+     "note": "warm"
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-mul-2",
+  "category": "multi_item",
+  "text": "1 granola bowl no honey, 2 flat whites, 1 espresso",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Granola Bowl",
+     "qty": 1,
+     "note": "honey"
+    },
+    {
+     "dish": "Flat White",
+     "qty": 2
+    },
+    {
+     "dish": "Espresso",
+     "qty": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-mul-3",
+  "category": "multi_item",
+  "text": "three masala chai less sugar and two poha extra lemon",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Masala Chai",
+     "qty": 3,
+     "note": "sugar"
+    },
+    {
+     "dish": "Poha",
+     "qty": 2,
+     "note": "lemon"
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-mul-4",
+  "category": "multi_item",
+  "text": "a latte with oat milk, a cappuccino with extra foam",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Café Latte",
+     "qty": 1,
+     "note": "oat"
+    },
+    {
+     "dish": "Cappuccino",
+     "qty": 1,
+     "note": "foam"
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-mul-5",
+  "category": "multi_item",
+  "text": "avocado toast no chilli, chilli cheese toast extra chilli",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Avocado Toast",
+     "qty": 1,
+     "note": "chilli"
+    },
+    {
+     "dish": "Chilli Cheese Toast",
+     "qty": 1,
+     "note": "chilli"
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-mul-6",
+  "category": "multi_item",
+  "text": "2 butter chicken bowls mild, 1 thai curry bowl",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Butter Chicken Bowl",
+     "qty": 2,
+     "note": "mild"
+    },
+    {
+     "dish": "Thai Green Curry Bowl",
+     "qty": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-mul-7",
+  "category": "multi_item",
+  "text": "one mocha extra hot, one hot chocolate, two tiramisu",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Mocha",
+     "qty": 1,
+     "note": "hot"
+    },
+    {
+     "dish": "Hot Chocolate",
+     "qty": 1
+    },
+    {
+     "dish": "Tiramisu",
+     "qty": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-mul-8",
+  "category": "multi_item",
+  "text": "upma without mustard seeds and a filter coffee strong",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Upma",
+     "qty": 1,
+     "note": "mustard"
+    },
+    {
+     "dish": "Filter Coffee",
+     "qty": 1,
+     "note": "strong"
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-mul-9",
+  "category": "multi_item",
+  "text": "two chicken club sandwiches, one without mustard",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Chicken Club Sandwich",
+     "qty": 2,
+     "note": "mustard"
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-mul-10",
+  "category": "multi_item",
+  "text": "1 mango smoothie no ice, 1 lemon iced tea less ice",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Mango Smoothie",
+     "qty": 1,
+     "note": "ice"
+    },
+    {
+     "dish": "Lemon Iced Tea",
+     "qty": 1,
+     "note": "ice"
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-mul-11",
+  "category": "multi_item",
+  "text": "bombay sandwich toasted, paneer tikka sandwich, 2 cold brew",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Bombay Sandwich",
+     "qty": 1,
+     "note": "toast"
+    },
+    {
+     "dish": "Paneer Tikka Sandwich",
+     "qty": 1
+    },
+    {
+     "dish": "Cold Brew",
+     "qty": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-mul-12",
+  "category": "multi_item",
+  "text": "4 cappuccino and 4 brownies for a birthday",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Cappuccino",
+     "qty": 4
+    },
+    {
+     "dish": "Chocolate Brownie",
+     "qty": 4
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-mul-13",
+  "category": "multi_item",
+  "text": "masala omelette with extra green chilli and toast on the side",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Masala Omelette",
+     "qty": 1,
+     "note": "chilli"
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-mul-14",
+  "category": "multi_item",
+  "text": "a cold brew tonic with lots of ice and a banoffee jar",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Cold Brew Tonic",
+     "qty": 1,
+     "note": "ice"
+    },
+    {
+     "dish": "Banoffee Jar",
+     "qty": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-mul-15",
+  "category": "multi_item",
+  "text": "mushroom risotto extra parmesan, one iced hazelnut latte",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Mushroom Risotto",
+     "qty": 1,
+     "note": "parmesan"
+    },
+    {
+     "dish": "Iced Hazelnut Latte",
+     "qty": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-mul-16",
+  "category": "multi_item",
+  "text": "2 espresso, 1 flat white with almond milk",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Espresso",
+     "qty": 2
+    },
+    {
+     "dish": "Flat White",
+     "qty": 1,
+     "note": "almond"
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-mul-17",
+  "category": "multi_item",
+  "text": "ek cold coffee extra ice cream, ek mocha, do poha",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Cold Coffee",
+     "qty": 1,
+     "note": "ice cream"
+    },
+    {
+     "dish": "Mocha",
+     "qty": 1
+    },
+    {
+     "dish": "Poha",
+     "qty": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-amb-1",
+  "category": "ambiguous",
+  "text": "1 expresso",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Espresso",
+     "qty": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-amb-2",
+  "category": "ambiguous",
+  "text": "two capuccino",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Cappuccino",
+     "qty": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-amb-3",
+  "category": "ambiguous",
+  "text": "a cafe late",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Café Latte",
+     "qty": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-amb-4",
+  "category": "ambiguous",
+  "text": "cold cofee",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Cold Coffee",
+     "qty": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-amb-5",
+  "category": "ambiguous",
+  "text": "masla chai",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Masala Chai",
+     "qty": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-amb-6",
+  "category": "ambiguous",
+  "text": "tiramisoo",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Tiramisu",
+     "qty": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-amb-7",
+  "category": "ambiguous",
+  "text": "one avacado toast",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Avocado Toast",
+     "qty": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-amb-8",
+  "category": "ambiguous",
+  "text": "brownie",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Chocolate Brownie",
+     "qty": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-amb-9",
+  "category": "ambiguous",
+  "text": "hazelnut iced latte",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Iced Hazelnut Latte",
+     "qty": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-amb-10",
+  "category": "ambiguous",
+  "text": "bannoffee",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Banoffee Jar",
+     "qty": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-amb-11",
+  "category": "ambiguous",
+  "text": "risoto",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Mushroom Risotto",
+     "qty": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-amb-12",
+  "category": "ambiguous",
+  "text": "paneer sandwich",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Paneer Tikka Sandwich",
+     "qty": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-amb-13",
+  "category": "ambiguous",
+  "text": "club sandwich",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Chicken Club Sandwich",
+     "qty": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-amb-14",
+  "category": "ambiguous",
+  "text": "green curry",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Thai Green Curry Bowl",
+     "qty": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-amb-15",
+  "category": "ambiguous",
+  "text": "smoothie mango wala",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Mango Smoothie",
+     "qty": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-amb-16",
+  "category": "ambiguous",
+  "text": "omlet",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Masala Omelette",
+     "qty": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-amb-17",
+  "category": "ambiguous",
+  "text": "cheese chilli toast",
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ],
+   "cart": [
+    {
+     "dish": "Chilli Cheese Toast",
+     "qty": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "v2-amb-18",
+  "category": "ambiguous",
+  "text": "the usual",
+  "expect": {
+   "intent": [
+    "unclear",
+    "ask_question",
+    "browse",
+    "add_items",
+    "modify_cart"
+   ]
+  }
+ },
+ {
+  "id": "v2-amb-19",
+  "category": "ambiguous",
+  "text": "same as last time",
+  "expect": {
+   "intent": [
+    "unclear",
+    "ask_question",
+    "browse",
+    "add_items",
+    "modify_cart"
+   ]
+  }
+ },
+ {
+  "id": "v2-amb-20",
+  "category": "ambiguous",
+  "text": "something nice",
+  "expect": {
+   "intent": [
+    "unclear",
+    "ask_question",
+    "browse",
+    "add_items",
+    "modify_cart"
+   ]
+  }
+ },
+ {
+  "id": "v2-amb-21",
+  "category": "ambiguous",
+  "text": "coffee",
+  "expect": {
+   "intent": [
+    "unclear",
+    "ask_question",
+    "browse",
+    "add_items",
+    "modify_cart"
+   ]
+  }
+ },
+ {
+  "id": "v2-amb-22",
+  "category": "ambiguous",
+  "text": "a sandwich",
+  "expect": {
+   "intent": [
+    "unclear",
+    "ask_question",
+    "browse",
+    "add_items",
+    "modify_cart"
+   ]
+  }
+ },
+ {
+  "id": "v2-rec-1",
+  "category": "recommendation",
+  "text": "what do you recommend?",
+  "expect": {
+   "intent": [
+    "browse",
+    "ask_question"
+   ]
+  }
+ },
+ {
+  "id": "v2-rec-2",
+  "category": "recommendation",
+  "text": "something light for breakfast",
+  "expect": {
+   "intent": [
+    "browse",
+    "ask_question"
+   ]
+  }
+ },
+ {
+  "id": "v2-rec-3",
+  "category": "recommendation",
+  "text": "best dessert here?",
+  "expect": {
+   "intent": [
+    "browse",
+    "ask_question"
+   ]
+  }
+ },
+ {
+  "id": "v2-rec-4",
+  "category": "recommendation",
+  "text": "kuch thanda pina hai",
+  "expect": {
+   "intent": [
+    "browse",
+    "ask_question"
+   ]
+  }
+ },
+ {
+  "id": "v2-rec-5",
+  "category": "recommendation",
+  "text": "I want something without caffeine",
+  "expect": {
+   "intent": [
+    "browse",
+    "ask_question"
+   ]
+  }
+ },
+ {
+  "id": "v2-rec-6",
+  "category": "recommendation",
+  "text": "what's vegetarian and filling?",
+  "expect": {
+   "intent": [
+    "browse",
+    "ask_question"
+   ]
+  }
+ },
+ {
+  "id": "v2-rec-7",
+  "category": "recommendation",
+  "text": "suggest a non-veg main",
+  "expect": {
+   "intent": [
+    "browse",
+    "ask_question"
+   ]
+  }
+ },
+ {
+  "id": "v2-rec-8",
+  "category": "recommendation",
+  "text": "kya accha hai yahan?",
+  "expect": {
+   "intent": [
+    "browse",
+    "ask_question"
+   ]
+  }
+ },
+ {
+  "id": "v2-rec-9",
+  "category": "recommendation",
+  "text": "something sweet but not too heavy",
+  "expect": {
+   "intent": [
+    "browse",
+    "ask_question"
+   ]
+  }
+ },
+ {
+  "id": "v2-rec-10",
+  "category": "recommendation",
+  "text": "any vegan options?",
+  "expect": {
+   "intent": [
+    "browse",
+    "ask_question"
+   ]
+  }
+ },
+ {
+  "id": "v2-rec-11",
+  "category": "recommendation",
+  "text": "koi spicy cheez batao",
+  "expect": {
+   "intent": [
+    "browse",
+    "ask_question"
+   ]
+  }
+ },
+ {
+  "id": "v2-rec-12",
+  "category": "recommendation",
+  "text": "what goes well with a cappuccino?",
+  "expect": {
+   "intent": [
+    "browse",
+    "ask_question"
+   ]
+  }
+ },
+ {
+  "id": "v2-rec-13",
+  "category": "recommendation",
+  "text": "kuch protein wala",
+  "expect": {
+   "intent": [
+    "browse",
+    "ask_question"
+   ]
+  }
+ },
+ {
+  "id": "v2-rec-14",
+  "category": "recommendation",
+  "text": "a good coffee for someone who hates bitter",
+  "expect": {
+   "intent": [
+    "browse",
+    "ask_question"
+   ]
+  }
+ },
+ {
+  "id": "v2-rec-15",
+  "category": "recommendation",
+  "text": "what's popular?",
+  "expect": {
+   "intent": [
+    "browse",
+    "ask_question"
+   ]
+  }
+ },
+ {
+  "id": "v2-rec-16",
+  "category": "recommendation",
+  "text": "healthy breakfast options?",
+  "expect": {
+   "intent": [
+    "browse",
+    "ask_question"
+   ]
+  }
+ },
+ {
+  "id": "v2-rec-17",
+  "category": "recommendation",
+  "text": "something for a kid",
+  "expect": {
+   "intent": [
+    "browse",
+    "ask_question"
+   ]
+  }
+ },
+ {
+  "id": "v2-rec-18",
+  "category": "recommendation",
+  "text": "iced drinks kaun se hain?",
+  "expect": {
+   "intent": [
+    "browse",
+    "ask_question"
+   ]
+  }
+ },
+ {
+  "id": "v2-all-1",
+  "category": "allergen",
+  "text": "is there milk in the cold brew?",
+  "expect": {
+   "intent": [
+    "ask_question"
+   ],
+   "allergen": "milk"
+  }
+ },
+ {
+  "id": "v2-all-2",
+  "category": "allergen",
+  "text": "does the poha have peanuts?",
+  "expect": {
+   "intent": [
+    "ask_question"
+   ],
+   "allergen": "peanuts"
+  }
+ },
+ {
+  "id": "v2-all-3",
+  "category": "allergen",
+  "text": "is the upma gluten free?",
+  "expect": {
+   "intent": [
+    "ask_question"
+   ],
+   "allergen": "gluten"
+  }
+ },
+ {
+  "id": "v2-all-4",
+  "category": "allergen",
+  "text": "any nuts in the iced hazelnut latte?",
+  "expect": {
+   "intent": [
+    "ask_question"
+   ],
+   "allergen": "tree_nuts"
+  }
+ },
+ {
+  "id": "v2-all-5",
+  "category": "allergen",
+  "text": "does the avocado toast have sesame?",
+  "expect": {
+   "intent": [
+    "ask_question"
+   ],
+   "allergen": "sesame"
+  }
+ },
+ {
+  "id": "v2-all-6",
+  "category": "allergen",
+  "text": "is the omelette made with eggs?",
+  "expect": {
+   "intent": [
+    "ask_question"
+   ],
+   "allergen": "eggs"
+  }
+ },
+ {
+  "id": "v2-all-7",
+  "category": "allergen",
+  "text": "butter chicken mein kaju hai?",
+  "expect": {
+   "intent": [
+    "ask_question"
+   ],
+   "allergen": "tree_nuts"
+  }
+ },
+ {
+  "id": "v2-all-8",
+  "category": "allergen",
+  "text": "mocha mein soy hai kya?",
+  "expect": {
+   "intent": [
+    "ask_question"
+   ],
+   "allergen": "soy"
+  }
+ },
+ {
+  "id": "v2-all-9",
+  "category": "allergen",
+  "text": "tiramisu mein anda hai?",
+  "expect": {
+   "intent": [
+    "ask_question"
+   ],
+   "allergen": "eggs"
+  }
+ },
+ {
+  "id": "v2-all-10",
+  "category": "allergen",
+  "text": "is the chicken club sandwich mustard free?",
+  "expect": {
+   "intent": [
+    "ask_question"
+   ],
+   "allergen": "mustard"
+  }
+ },
+ {
+  "id": "v2-all-11",
+  "category": "allergen",
+  "text": "lemon iced tea mein gluten?",
+  "expect": {
+   "intent": [
+    "ask_question"
+   ],
+   "allergen": "gluten"
+  }
+ },
+ {
+  "id": "v2-all-12",
+  "category": "allergen",
+  "text": "does the granola have almonds?",
+  "expect": {
+   "intent": [
+    "ask_question"
+   ],
+   "allergen": "tree_nuts"
+  }
+ },
+ {
+  "id": "v2-all-13",
+  "category": "allergen",
+  "text": "I'm allergic to milk, can I have the cold brew tonic?",
+  "expect": {
+   "intent": [
+    "ask_question"
+   ],
+   "allergen": "milk"
+  }
+ },
+ {
+  "id": "v2-all-14",
+  "category": "allergen",
+  "text": "is the mushroom risotto gluten free?",
+  "expect": {
+   "intent": [
+    "ask_question"
+   ],
+   "allergen": "gluten"
+  }
+ },
+ {
+  "id": "v2-all-15",
+  "category": "allergen",
+  "text": "brownie mein nuts toh nahi?",
+  "expect": {
+   "intent": [
+    "ask_question"
+   ],
+   "allergen": "tree_nuts"
+  }
+ },
+ {
+  "id": "v2-all-16",
+  "category": "allergen",
+  "text": "does the hot chocolate contain soy?",
+  "expect": {
+   "intent": [
+    "ask_question"
+   ],
+   "allergen": "soy"
+  }
+ },
+ {
+  "id": "v2-all-17",
+  "category": "allergen",
+  "text": "any sulphites in the cold brew tonic?",
+  "expect": {
+   "intent": [
+    "ask_question"
+   ],
+   "allergen": "sulphites"
+  }
+ },
+ {
+  "id": "v2-sol-1",
+  "category": "sold_out",
+  "text": "2 vietnamese iced coffee",
+  "expect": {
+   "never": [
+    "Vietnamese Iced Coffee"
+   ]
+  }
+ },
+ {
+  "id": "v2-sol-2",
+  "category": "sold_out",
+  "text": "pesto pasta please",
+  "expect": {
+   "never": [
+    "Pesto Pasta"
+   ]
+  }
+ },
+ {
+  "id": "v2-sol-3",
+  "category": "sold_out",
+  "text": "ek vietnamese coffee",
+  "expect": {
+   "never": [
+    "Vietnamese Iced Coffee"
+   ]
+  }
+ },
+ {
+  "id": "v2-sol-4",
+  "category": "sold_out",
+  "text": "can I get the pesto pasta and a cold coffee",
+  "expect": {
+   "never": [
+    "Pesto Pasta"
+   ]
+  }
+ },
+ {
+  "id": "v2-sol-5",
+  "category": "sold_out",
+  "text": "vietnamese iced coffee and a brownie",
+  "expect": {
+   "never": [
+    "Vietnamese Iced Coffee"
+   ]
+  }
+ },
+ {
+  "id": "v2-sol-6",
+  "category": "sold_out",
+  "text": "pasta pesto wala do",
+  "expect": {
+   "never": [
+    "Pesto Pasta"
+   ]
+  }
+ },
+ {
+  "id": "v2-sol-7",
+  "category": "sold_out",
+  "text": "one viet coffee",
+  "expect": {
+   "never": [
+    "Vietnamese Iced Coffee"
+   ]
+  }
+ },
+ {
+  "id": "v2-sol-8",
+  "category": "sold_out",
+  "text": "pesto pasta x2",
+  "expect": {
+   "never": [
+    "Pesto Pasta"
+   ]
+  }
+ },
+ {
+  "id": "v2-han-1",
+  "category": "handoff",
+  "text": "can I speak to the manager?",
+  "expect": {
+   "human": true
+  }
+ },
+ {
+  "id": "v2-han-2",
+  "category": "handoff",
+  "text": "I want to talk to a human",
+  "expect": {
+   "human": true
+  }
+ },
+ {
+  "id": "v2-han-3",
+  "category": "handoff",
+  "text": "waiter ko bhejo",
+  "expect": {
+   "human": true
+  }
+ },
+ {
+  "id": "v2-han-4",
+  "category": "handoff",
+  "text": "this is wrong, my order is cold",
+  "expect": {
+   "human": true
+  }
+ },
+ {
+  "id": "v2-han-5",
+  "category": "handoff",
+  "text": "I've been waiting 40 minutes, this is ridiculous",
+  "expect": {
+   "human": true
+  }
+ },
+ {
+  "id": "v2-han-6",
+  "category": "handoff",
+  "text": "kisi insaan se baat karao",
+  "expect": {
+   "human": true
+  }
+ },
+ {
+  "id": "v2-han-7",
+  "category": "handoff",
+  "text": "my food has a hair in it",
+  "expect": {
+   "human": true
+  }
+ },
+ {
+  "id": "v2-han-8",
+  "category": "handoff",
+  "text": "you charged me twice",
+  "expect": {
+   "human": true
+  }
+ },
+ {
+  "id": "v2-han-9",
+  "category": "handoff",
+  "text": "I need help with my bill, someone please come",
+  "expect": {
+   "human": true
+  }
+ },
+ {
+  "id": "v2-han-10",
+  "category": "handoff",
+  "text": "staff please",
+  "expect": {
+   "human": true
+  }
+ },
+ {
+  "id": "v2-han-11",
+  "category": "handoff",
+  "text": "the coffee is terrible, I want a refund",
+  "expect": {
+   "human": true
+  }
+ },
+ {
+  "id": "v2-han-12",
+  "category": "handoff",
+  "text": "bot se nahi, kisi se baat karni hai",
+  "expect": {
+   "human": true
+  }
+ },
+ {
+  "id": "v2-off-1",
+  "category": "off_topic",
+  "text": "tell me a joke",
+  "expect": {
+   "intent": [
+    "smalltalk",
+    "unclear",
+    "ask_question"
+   ],
+   "human": false
+  }
+ },
+ {
+  "id": "v2-off-2",
+  "category": "off_topic",
+  "text": "who won the IPL?",
+  "expect": {
+   "intent": [
+    "smalltalk",
+    "unclear",
+    "ask_question"
+   ],
+   "human": false
+  }
+ },
+ {
+  "id": "v2-off-3",
+  "category": "off_topic",
+  "text": "what's the weather today?",
+  "expect": {
+   "intent": [
+    "smalltalk",
+    "unclear",
+    "ask_question"
+   ],
+   "human": false
+  }
+ },
+ {
+  "id": "v2-off-4",
+  "category": "off_topic",
+  "text": "are you a robot?",
+  "expect": {
+   "intent": [
+    "smalltalk",
+    "unclear",
+    "ask_question"
+   ],
+   "human": false
+  }
+ },
+ {
+  "id": "v2-off-5",
+  "category": "off_topic",
+  "text": "kya haal hai",
+  "expect": {
+   "intent": [
+    "smalltalk",
+    "unclear",
+    "ask_question"
+   ],
+   "human": false
+  }
+ },
+ {
+  "id": "v2-off-6",
+  "category": "off_topic",
+  "text": "what's the wifi password?",
+  "expect": {
+   "intent": [
+    "smalltalk",
+    "unclear",
+    "ask_question"
+   ],
+   "human": false
+  }
+ },
+ {
+  "id": "v2-off-7",
+  "category": "off_topic",
+  "text": "how old are you?",
+  "expect": {
+   "intent": [
+    "smalltalk",
+    "unclear",
+    "ask_question"
+   ],
+   "human": false
+  }
+ },
+ {
+  "id": "v2-off-8",
+  "category": "off_topic",
+  "text": "write me a poem",
+  "expect": {
+   "intent": [
+    "smalltalk",
+    "unclear",
+    "ask_question"
+   ],
+   "human": false
+  }
+ },
+ {
+  "id": "v2-edi-1",
+  "category": "edits",
+  "text": "remove the brownie",
+  "cart_lines": [
+   "m29 Chocolate Brownie ×1",
+   "m7 Cold Coffee ×1"
+  ],
+  "expect": {
+   "intent": [
+    "modify_cart"
+   ]
+  }
+ },
+ {
+  "id": "v2-edi-2",
+  "category": "edits",
+  "text": "actually make it 2 chai",
+  "cart_lines": [
+   "m12 Masala Chai ×1"
+  ],
+  "expect": {
+   "intent": [
+    "modify_cart",
+    "add_items"
+   ]
+  }
+ },
+ {
+  "id": "v2-edi-3",
+  "category": "edits",
+  "text": "cancel everything",
+  "cart_lines": [
+   "m2 Cappuccino ×2"
+  ],
+  "expect": {
+   "intent": [
+    "cancel",
+    "modify_cart"
+   ]
+  }
+ },
+ {
+  "id": "v2-edi-4",
+  "category": "edits",
+  "text": "no avocado toast, change to bombay sandwich",
+  "cart_lines": [
+   "m20 Avocado Toast ×1"
+  ],
+  "expect": {
+   "intent": [
+    "modify_cart",
+    "add_items"
+   ]
+  }
+ },
+ {
+  "id": "v2-edi-5",
+  "category": "edits",
+  "text": "add one more cold coffee",
+  "cart_lines": [
+   "m7 Cold Coffee ×1"
+  ],
+  "expect": {
+   "intent": [
+    "add_items",
+    "modify_cart"
+   ]
+  }
+ },
+ {
+  "id": "v2-edi-6",
+  "category": "edits",
+  "text": "brownie hata do",
+  "cart_lines": [
+   "m29 Chocolate Brownie ×1",
+   "m12 Masala Chai ×2"
+  ],
+  "expect": {
+   "intent": [
+    "modify_cart"
+   ]
+  }
+ },
+ {
+  "id": "v2-edi-7",
+  "category": "edits",
+  "text": "chai teen kar do",
+  "cart_lines": [
+   "m12 Masala Chai ×2"
+  ],
+  "expect": {
+   "intent": [
+    "modify_cart",
+    "add_items"
+   ]
+  }
+ },
+ {
+  "id": "v2-edi-8",
+  "category": "edits",
+  "text": "make the latte oat milk",
+  "cart_lines": [
+   "m3 Café Latte ×1"
+  ],
+  "expect": {
+   "intent": [
+    "modify_cart"
+   ]
+  }
+ },
+ {
+  "id": "v2-edi-9",
+  "category": "edits",
+  "text": "that's all, confirm",
+  "cart_lines": [
+   "m7 Cold Coffee ×2"
+  ],
+  "expect": {
+   "intent": [
+    "confirm"
+   ]
+  }
+ },
+ {
+  "id": "v2-edi-10",
+  "category": "edits",
+  "text": "order cancel kar do",
+  "cart_lines": [
+   "m2 Cappuccino ×1"
+  ],
+  "expect": {
+   "intent": [
+    "cancel",
+    "modify_cart"
+   ]
+  }
+ },
+ {
+  "id": "v2-edi-11",
+  "category": "edits",
+  "text": "one less cappuccino",
+  "cart_lines": [
+   "m2 Cappuccino ×3"
+  ],
+  "expect": {
+   "intent": [
+    "modify_cart"
+   ]
+  }
+ },
+ {
+  "id": "v2-edi-12",
+  "category": "edits",
+  "text": "swap the mocha for a hot chocolate",
+  "cart_lines": [
+   "m6 Mocha ×1"
+  ],
+  "expect": {
+   "intent": [
+    "modify_cart",
+    "add_items"
+   ]
+  }
+ },
+ {
+  "id": "v2-edi-13",
+  "category": "edits",
+  "text": "where is my order?",
+  "cart_lines": [],
+  "expect": {
+   "intent": [
+    "order_status"
+   ]
+  }
+ }
+]

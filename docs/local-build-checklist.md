@@ -14,7 +14,7 @@ Tracks [local-build.md](local-build.md). A step is Done when its tests pass and 
 | L8 Customers | Done | L8 commit |
 | L9 Campaigns | Done | L9 commit |
 | L10 Today and weekly report | Done | L10 commit |
-| L11 Eval set | To do | — |
+| L11 Eval set | Done | 215 cases (32 v1 + 183 draft v2) |
 | L12 Load-test harness | To do | — |
 | L13 Public pages | To do | — |
 | L14 Cloud adapters and infra scripts | To do | — |
@@ -106,3 +106,9 @@ Tracks [local-build.md](local-build.md). A step is Done when its tests pass and 
 - [x] Service right now (New / being made / ready / overdue → Live orders), Next campaign, Last week (revenue, orders, returning %, top dish)
 - [x] Tests: e2e (owner lands on Today, pause → card → Resume clears it; managers redirected), owner specs re-run green with the new landing page
 - [ ] Deviation: the weekly report is computed live on Today (last full Mon–Sun week) instead of a stored Monday 09:00 job: there's no table or channel for it yet (no WhatsApp template for owners)
+
+## L11 · Eval set
+
+- [x] `evals/cases/draft-v2.json`: 183 new synthetic cases, ids `v2-…`, exact seed dish names; with v1 the set is 215: clean English 25, Hinglish 40, Hindi script 15, multi-item with notes 20, ambiguous / misspelt 25, recommendations 20, allergens 20, sold out 10, human asks 15, off-topic 10, edits / cancels / status 15
+- [x] Loads and scores with `evals/run.py --stub` (no quota needed); a real run backs off on 429 and reports rate-limited cases as skipped, not wrong
+- [ ] Not run against Gemini: needs model quota. The cases are drafts for the team to review (expected intents for the vaguest asks, "coffee", "the usual", are deliberately broad)
