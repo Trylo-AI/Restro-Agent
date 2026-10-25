@@ -1,6 +1,6 @@
 // Shell: sidebar (≥ 768 px) or tab bar, header with the active café, banners, toasts, alerts gate.
 import { useQueryClient } from "@tanstack/react-query";
-import { Activity, BellRing, ClipboardList, MessageCircle, PhoneCall, UtensilsCrossed } from "lucide-react";
+import { Activity, BellRing, ClipboardList, MessageCircle, PhoneCall, Settings, UtensilsCrossed } from "lucide-react";
 import { useEffect, useRef, type ReactNode } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 
@@ -19,7 +19,7 @@ const NAV = [
   { to: "/menu", label: "Menu", short: "Menu", icon: UtensilsCrossed, area: null },
 ];
 
-const TITLES: Record<string, string> = { "/orders": "Live orders", "/calls": "Calls and bills", "/chats": "Chats", "/menu": "Menu", "/platform": "Performance" };
+const TITLES: Record<string, string> = { "/orders": "Live orders", "/calls": "Calls and bills", "/chats": "Chats", "/menu": "Menu", "/setup": "Setup", "/platform": "Performance" };
 
 function Banners({ offline, retry }: { offline: boolean; retry: () => void }) {
   const cafe = useCafe();
@@ -96,6 +96,12 @@ export function Shell() {
                 {n.area && <Badge {...badges[n.area]} />}
               </NavLink>
             ))}
+            {atLeast(role, "owner") && (
+              <>
+                <div className="nav-group">Owner</div>
+                <NavLink to="/setup/tables" className={({ isActive }) => (isActive ? "active" : "")}><Settings size={18} /> Setup</NavLink>
+              </>
+            )}
             {atLeast(role, "owner") && (
               <>
                 {/* Platform tooling; the ops token is the real gate until platform_admin login exists (OPS_PLAN Q-E). */}

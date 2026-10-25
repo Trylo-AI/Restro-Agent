@@ -63,6 +63,21 @@ export const menu = {
     })),
 };
 
+export type CafeSettingsInput = components["schemas"]["CafeSettings"];
+export type TableInput = components["schemas"]["TableInput"];
+export type Role = "shift_manager" | "manager" | "owner";
+
+export const setup = {
+  saveSettings: (cafeId: string, body: CafeSettingsInput) =>
+    call(api.PUT("/cafes/{id}/settings", { params: { path: { id: cafeId } }, body })),
+  createTable: (body: TableInput) => call(api.POST("/tables", { params: cafeHeader(), body })),
+  updateTable: (tableId: string, body: TableInput) => call(api.PUT("/tables/{id}", { params: id(tableId), body })),
+  invite: (email: string, role: Role, displayName: string | null) =>
+    call(api.POST("/team/invite", { params: cafeHeader(), body: { email, role, display_name: displayName } })),
+  updateMember: (membershipId: string, body: { role?: Role; active?: boolean }) =>
+    call(api.PATCH("/team/{membership_id}", { params: { ...cafeHeader(), path: { membership_id: membershipId } }, body })),
+};
+
 export const cafes = {
   pause: (cafeId: string, paused: boolean) =>
     call(api.POST("/cafes/{id}/pause-ordering", { params: { path: { id: cafeId } }, body: { paused } })),

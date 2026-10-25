@@ -69,7 +69,7 @@ export function useCafe() {
   const { cafeId } = useSession();
   return useLive<Cafe | null>({
     key: ["cafe", cafeId], enabled: !!cafeId, cafeId, tables: ["cafes"],
-    fetcher: async () => (await rows<Cafe[]>(supabase.from("cafes").select("id, name, status, settings, updated_at").eq("id", cafeId!)))[0] ?? null,
+    fetcher: async () => (await rows<Cafe[]>(supabase.from("cafes").select("id, name, status, settings, updated_at, opening_hours, cutoff_minutes, display_phone_number").eq("id", cafeId!)))[0] ?? null,
   });
 }
 
@@ -269,6 +269,29 @@ export function useItemAllergens(itemId: string | null) {
         .select("allergen, state").eq("cafe_id", cafeId!).eq("item_id", itemId!));
       return Object.fromEntries(list.map((a) => [a.allergen, a.state]));
     },
+  });
+}
+
+export interface TableRow { id: string; label: string; area: string | null; seats: number | null; qr_text: string }
+
+export function useTableList() {
+  const { cafeId } = useSession();
+  return useLive<TableRow[]>({
+    key: ["table-list", cafeId], enabled: !!cafeId, cafeId, tables: [],
+    fetcher: async () => (await rows<TableRow[]>(supabase.from("tables").select("id, label, area, seats, qr_text").eq("cafe_id", cafeId!)))
+      .sort((a, b) => a.label.localeCompare(b.label, "en", { numeric: true })), // T2 before T10
+  });
+}
+
+export interface TeamMember { id: string; user_id: string; role: "shift_manager" | "manager" | "owner"; active: boolean; display_name: string | null }
+
+/** The owner sees every membership of the café (RLS); others see only their own row. */
+export function useTeam() {
+  const { cafeId } = useSession();
+  return useLive<TeamMember[]>({
+    key: ["team", cafeId], enabled: !!cafeId, cafeId, tables: [],
+    fetcher: () => rows(supabase.from("memberships").select("id, user_id, role, active, display_name")
+      .eq("cafe_id", cafeId!).order("role").order("display_name")),
   });
 }
 

@@ -320,3 +320,35 @@ label.field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; 
 .plain { list-style: none; padding: 0; margin: 0 0 var(--space-3); display: flex; flex-direction: column; gap: var(--space-2); }
 .plist li.unread { border-left: 3px solid var(--color-text); padding-left: var(--space-2); }
 .row.wrap { flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+
+/* Setup (L6) */
+.setup { display: flex; flex-direction: column; gap: var(--space-4); }
+.tabs-row { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.tabs-row a { text-decoration: none; }
+.qr-grid { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--space-3); }
+.qr-card { display: flex; gap: var(--space-3); align-items: center; background: var(--color-card); border: 1px solid var(--color-border); padding: var(--space-3); }
+.qr-card.counter { border-style: dashed; }
+.qr { display: block; image-rendering: pixelated; background: #fff; }
+.qr.placeholder { display: inline-block; width: 112px; height: 112px; background: var(--color-surface); }
+.invite { gap: var(--space-2); align-items: flex-end; flex-wrap: wrap; }
+.table.team tr.inactive td { color: var(--color-muted); }
+.settings { display: flex; flex-direction: column; gap: var(--space-3); max-width: 560px; }
+.hours { border: 1px solid var(--color-border); padding: var(--space-3); display: flex; flex-direction: column; gap: var(--space-2); }
+.hours legend { font-weight: 800; padding: 0 4px; }
+.hours-row { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.hours-row .day { width: 130px; display: flex; gap: 6px; align-items: center; }
+.hours-row input[type="time"] { font: inherit; padding: 4px; border: 1px solid var(--color-border); }
+.warning-text { color: var(--color-amber); }
+.qr-sheet { display: flex; flex-direction: column; gap: var(--space-4); }
+.sheet-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: var(--space-4); }
+.print-card { border: 1px solid var(--color-text); padding: var(--space-4); text-align: center; display: flex; flex-direction: column; align-items: center; gap: 6px; break-inside: avoid; background: #fff; }
+.print-card .cafe { font-weight: 700; color: var(--color-muted); }
+.print-card .title { font-size: 26px; font-weight: 800; }
+.print-card .scan { font-weight: 700; }
+.print-card .fallback { font-size: 12px; color: var(--color-muted); }
+@media print {
+  .sidebar, .tabbar, .header, .banner, .no-print { display: none !important; }
+  .shell { display: block; }
+  .content { padding: 0; }
+  .sheet-grid { grid-template-columns: repeat(2, 1fr); }
+}

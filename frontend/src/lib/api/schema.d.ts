@@ -981,7 +981,7 @@ export interface paths {
         get?: never;
         /**
          * Edit a menu item with optimistic locking (manager+). Audit `menu.update`
-         * @description 409 `version_conflict` "Someone else changed this item"; a duplicate name is 409 too.
+         * @description 409 `version_conflict` "Someone else changed this item"; a name already on the menu is 400.
          */
         put: {
             parameters: {
@@ -1887,8 +1887,10 @@ export interface components {
             version: number;
         };
         CafeSettings: {
-            /** @description {"mon": [["08:00","23:00"]], ...}; empty = always open */
-            opening_hours?: Record<string, never>;
+            /** @description {"mon": [["08:00","23:00"]], ...}; mon–sun, up to 3 windows a day; an end before the start runs past midnight; empty = always open */
+            opening_hours?: {
+                [key: string]: string[][];
+            };
             cutoff_minutes?: number;
             /** @enum {string} */
             tone?: "warm" | "crisp" | "playful";

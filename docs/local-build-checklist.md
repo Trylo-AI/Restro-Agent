@@ -9,7 +9,7 @@ Tracks [local-build.md](local-build.md). A step is Done when its tests pass and 
 | L3 Feedback and opt-in | Done | L3 commit |
 | L4 Staff names and notifications | Done | L4 commit |
 | L5 Bill read and redemption | Done | L5 commit |
-| L6 Setup | To do | — |
+| L6 Setup | Done | L6 commit |
 | L7 Service report and Analytics | To do | — |
 | L8 Customers | To do | — |
 | L9 Campaigns | To do | — |
@@ -60,3 +60,13 @@ Tracks [local-build.md](local-build.md). A step is Done when its tests pass and 
 - [x] `POST /bills/{id}/apply-code`: this café's sent / delivered / read / held codes only, not expired, campaign not cancelled; discount = `discount_percent` of the subtotal, rounded down to the paisa; one code per bill, one redemption per code; same code again on the same bill = no-op; links the session's latest order (`source = campaign`); audit `offer.redeem`. Errors: "This isn't a valid code, or it has expired." · "This code was already used today on #1041."
 - [x] Console bill sheet reads the API (the client-side `billTotal` sum is gone) and has the code field with the discount line
 - [x] Tests: 2 integration (lines, discount math, no-op, delivery total, attribution, audit; used / expired / unsent / another café's code / second code), console (2)
+
+## L6 · Setup
+
+- [x] `PUT /cafes/{id}/settings` (owner): opening hours (mon–sun, ≤ 3 windows, past-midnight allowed), last-order cutoff, tone, feedback delay, café alert number; one save; audit lists changed fields only (never the number)
+- [x] `POST /tables`, `PUT /tables/{id}` (owner): label unique, `qr_text` "Hi, I'm at Table <n>" from the label (a renamed table's QR changes and the console says to reprint)
+- [x] `POST /team/invite` (Supabase Auth invite email; an existing user is reused), `PATCH /team/{id}` (role, active); owners can't be deactivated, the last active owner can't be demoted; audit without emails
+- [x] Console `/setup/:tab` (owner only; others go back to Live orders): Tables & QR with a QR per table and the counter opt-in QR, a printable sheet (`/setup/qr-sheet`, two per page) with both fallback lines; Team; Settings; Alerts (number + sound tests)
+- [x] Dependency: `qrcode` 1.5.4 (QR images drawn in the browser; nothing leaves it)
+- [x] Tests: 3 integration (settings + validation + audit, tables + QR text joins the table, invite / role / deactivate / owner rules), 3 e2e (QR per table, edit and restore, settings round trip, team list; QR sheet with 13 cards; non-owners redirected)
+- [ ] Not tested end to end: a real invite email (Supabase's built-in mail is rate-limited; the Auth call is replaced in tests)

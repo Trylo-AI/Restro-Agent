@@ -24,6 +24,9 @@ export interface Cafe {
   status: "onboarding" | "live" | "disconnected" | "paused";
   settings: CafeSettings;
   updated_at: string;
+  opening_hours?: Record<string, [string, string][]>;
+  cutoff_minutes?: number;
+  display_phone_number?: string | null;
 }
 
 export interface OrderItem {
