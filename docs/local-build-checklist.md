@@ -13,7 +13,7 @@ Tracks [local-build.md](local-build.md). A step is Done when its tests pass and 
 | L7 Service report and Analytics | Done | L7 commit |
 | L8 Customers | Done | L8 commit |
 | L9 Campaigns | Done | L9 commit |
-| L10 Today and weekly report | To do | — |
+| L10 Today and weekly report | Done | L10 commit |
 | L11 Eval set | To do | — |
 | L12 Load-test harness | To do | — |
 | L13 Public pages | To do | — |
@@ -98,3 +98,11 @@ Tracks [local-build.md](local-build.md). A step is Done when its tests pass and 
 - [x] Seed: `feedback_request`, `weekly_offer`, `winback` (synthetic approvals, dev only) and opt-ins for half the seeded customers
 - [x] Tests: 3 integration (draft / preview / schedule rules; start → limit → deferred → resume → completed + forward-only statuses; opt-out after snapshot, cancel, the sender's own consent check), **e2e Phase 5 exit gate locally**: counter-QR opt-in → wizard → the code arrives on WhatsApp → redeemed on the bill → report shows Came back 1 → STOP
 - [ ] Not built: per-send quick-reply payloads on templates ("Stop offers" tap); STOP by text works. The preview wording approximates the approved templates (the real text lives with Meta)
+
+## L10 · Today and weekly report
+
+- [x] `/today` is the owner's home (others keep Live orders): customers today with the delta vs the same weekday last week, came back %, new opt-ins today, offer redemptions this week; refetched every 5 min
+- [x] Needs attention, critical first: WhatsApp disconnected · low ratings not handled (→ Calls) · template rejected · ordering paused (Resume writes `ordering.resume`) · number quality Medium / Low
+- [x] Service right now (New / being made / ready / overdue → Live orders), Next campaign, Last week (revenue, orders, returning %, top dish)
+- [x] Tests: e2e (owner lands on Today, pause → card → Resume clears it; managers redirected), owner specs re-run green with the new landing page
+- [ ] Deviation: the weekly report is computed live on Today (last full Mon–Sun week) instead of a stored Monday 09:00 job: there's no table or channel for it yet (no WhatsApp template for owners)

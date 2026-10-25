@@ -71,7 +71,7 @@ export function useCafe() {
   const { cafeId } = useSession();
   return useLive<Cafe | null>({
     key: ["cafe", cafeId], enabled: !!cafeId, cafeId, tables: ["cafes"],
-    fetcher: async () => (await rows<Cafe[]>(supabase.from("cafes").select("id, name, status, settings, updated_at, opening_hours, cutoff_minutes, display_phone_number").eq("id", cafeId!)))[0] ?? null,
+    fetcher: async () => (await rows<Cafe[]>(supabase.from("cafes").select("id, name, status, settings, updated_at, opening_hours, cutoff_minutes, display_phone_number, health").eq("id", cafeId!)))[0] ?? null,
   });
 }
 

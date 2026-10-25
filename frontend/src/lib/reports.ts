@@ -133,3 +133,82 @@ export function useAnalytics(days: 7 | 30 | 90) {
     },
   });
 }
+
+// ── Today (owner home) ─────────────────────────────────────────────────────
+
+export interface Today {
+  customersToday: number; customersSameDayLastWeek: number; cameBackPct: number | null; newOptIns: number; redemptionsThisWeek: number;
+  lastWeek: { start: string; end: string; revenue: number; orders: number; returningPct: number | null; topDish: string | null };
+  lowRatingsOpen: number; rejectedTemplates: string[];
+  nextCampaign: { id: string; name: string; scheduled_at: string } | null;
+}
+
+function mondayOf(day: string): string {
+  const d = new Date(`${day}T00:00:00Z`);
+  return isoDay(new Date(d.getTime() - ((d.getUTCDay() + 6) % 7) * 86_400_000 + 12 * 3600_000));
+}
+
+export function useToday() {
+  const { cafeId } = useSession();
+  return useQuery({
+    queryKey: ["today", cafeId],
+    enabled: !!cafeId,
+    refetchInterval: 5 * 60_000,
+    queryFn: async (): Promise<Today> => {
+      const now = Date.now();
+      const today = isoDay(new Date(now));
+      const sameDayLastWeek = isoDay(new Date(now - 7 * 86_400_000));
+      const weekStart = mondayOf(today);
+      const lastWeekStart = isoDay(new Date(Date.parse(`${weekStart}T12:00:00Z`) - 7 * 86_400_000));
+      const startIso = new Date(now - 15 * 86_400_000).toISOString();
+      const [revenue, orders, consents, redemptions, lowRatings, templates, next, top] = await Promise.all([
+        rows<DayRevenue>(supabase.from("v_daily_revenue").select("day, revenue_paise, orders, customers").eq("cafe_id", cafeId!).gte("day", lastWeekStart)),
+        rows<{ customer_id: string; created_at: string }>(supabase.from("orders").select("customer_id, created_at").eq("cafe_id", cafeId!)
+          .neq("status", "CANCELLED").gte("created_at", startIso).not("customer_id", "is", null)),
+        rows<{ created_at: string }>(supabase.from("consents").select("created_at").eq("cafe_id", cafeId!).eq("status", "opted_in").gte("created_at", new Date(now - 2 * 86_400_000).toISOString())),
+        rows<{ redeemed_at: string }>(supabase.from("redemptions").select("redeemed_at").eq("cafe_id", cafeId!).gte("redeemed_at", new Date(now - 8 * 86_400_000).toISOString())),
+        rows<{ id: string }>(supabase.from("requests").select("id").eq("cafe_id", cafeId!).eq("kind", "low_rating").neq("status", "resolved")),
+        rows<{ name: string; status: string }>(supabase.from("templates").select("name, status").eq("cafe_id", cafeId!)),
+        rows<{ id: string; name: string; scheduled_at: string }>(supabase.from("campaigns").select("id, name, scheduled_at").eq("cafe_id", cafeId!)
+          .eq("status", "scheduled").order("scheduled_at").limit(1)),
+        rows<TopItem>(supabase.from("v_top_items").select("day, name, qty, revenue_paise").eq("cafe_id", cafeId!).gte("day", lastWeekStart).lt("day", weekStart)),
+      ]);
+      const day = (iso: string) => isoDay(new Date(iso));
+      const todays = new Set(orders.filter((o) => day(o.created_at) === today).map((o) => o.customer_id));
+      const earlier = new Set(orders.filter((o) => day(o.created_at) < today).map((o) => o.customer_id));
+      const firstSeen = new Map<string, string>();
+      const ids = [...todays];
+      for (let i = 0; i < ids.length; i += 200) {
+        const chunk = await rows<{ id: string; first_seen_at: string }>(supabase.from("customers").select("id, first_seen_at").in("id", ids.slice(i, i + 200)));
+        for (const c of chunk) firstSeen.set(c.id, day(c.first_seen_at));
+      }
+      const cameBack = ids.filter((c) => earlier.has(c) || (firstSeen.get(c) ?? today) < today).length;
+      const lw = revenue.filter((d) => d.day >= lastWeekStart && d.day < weekStart);
+      const lwCustomers = new Set(orders.filter((o) => day(o.created_at) >= lastWeekStart && day(o.created_at) < weekStart).map((o) => o.customer_id));
+      const dishes = new Map<string, number>();
+      for (const t of top) dishes.set(t.name, (dishes.get(t.name) ?? 0) + t.qty);
+      const lwFirst = new Map<string, string>();
+      const lwIds = [...lwCustomers];
+      for (let i = 0; i < lwIds.length; i += 200) {
+        const chunk = await rows<{ id: string; first_seen_at: string }>(supabase.from("customers").select("id, first_seen_at").in("id", lwIds.slice(i, i + 200)));
+        for (const c of chunk) lwFirst.set(c.id, day(c.first_seen_at));
+      }
+      return {
+        customersToday: todays.size,
+        customersSameDayLastWeek: revenue.find((d) => d.day === sameDayLastWeek)?.customers ?? 0,
+        cameBackPct: todays.size ? Math.round((cameBack / todays.size) * 1000) / 10 : null,
+        newOptIns: consents.filter((c) => day(c.created_at) === today).length,
+        redemptionsThisWeek: redemptions.filter((r) => day(r.redeemed_at) >= weekStart).length,
+        lastWeek: {
+          start: lastWeekStart, end: isoDay(new Date(Date.parse(`${weekStart}T12:00:00Z`) - 86_400_000)),
+          revenue: lw.reduce((s, d) => s + Number(d.revenue_paise), 0), orders: lw.reduce((s, d) => s + d.orders, 0),
+          returningPct: lwCustomers.size ? Math.round((lwIds.filter((c) => (lwFirst.get(c) ?? "9999") < lastWeekStart).length / lwCustomers.size) * 1000) / 10 : null,
+          topDish: [...dishes.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null,
+        },
+        lowRatingsOpen: lowRatings.length,
+        rejectedTemplates: templates.filter((t) => t.status === "rejected").map((t) => t.name),
+        nextCampaign: next[0] ?? null,
+      };
+    },
+  });
+}

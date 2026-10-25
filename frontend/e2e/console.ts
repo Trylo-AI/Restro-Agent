@@ -6,7 +6,7 @@ export async function signIn(page: Page, email: string) {
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(process.env.E2E_STAFF_PASSWORD ?? "");
   await page.getByRole("button", { name: /^Sign in/ }).click();
-  await expect(page.getByRole("heading", { name: "Live orders" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /^(Live orders|Today)$/ })).toBeVisible(); // owners land on Today
 }
 
 export function needsStack() {

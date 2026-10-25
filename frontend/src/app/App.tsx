@@ -17,6 +17,7 @@ import { OpsDependencies, OpsEfficiency, OpsEndpoints } from "../features/ops/Ta
 import { OrdersScreen } from "../features/orders/OrdersScreen";
 import { AnalyticsScreen, ServiceReportScreen } from "../features/reports/ReportsScreen";
 import { QrSheet, SetupScreen } from "../features/setup/SetupScreen";
+import { TodayScreen } from "../features/today/TodayScreen";
 import { SessionProvider, useSession } from "../lib/session";
 import { AlertProvider } from "./alerts";
 import { Login } from "./Login";
@@ -29,6 +30,12 @@ const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 2 } } 
 
 export function useOffline(): boolean {
   return useOutletContext<{ offline: boolean } | undefined>()?.offline ?? false;
+}
+
+/** Owners land on Today; everyone else on Live orders (docs/console.md#today). */
+function Home() {
+  const { role } = useSession();
+  return <Navigate to={role === "owner" ? "/today" : "/orders"} replace />;
 }
 
 function Gate() {
@@ -73,7 +80,8 @@ function Gate() {
             <Route path="insights" element={<OpsInsights />} />
             <Route path="logs" element={<OpsLogs />} />
           </Route>
-          <Route path="*" element={<Navigate to="/orders" replace />} />
+          <Route path="/today" element={<TodayScreen />} />
+          <Route path="*" element={<Home />} />
         </Route>
       </Routes>
     </AlertProvider>

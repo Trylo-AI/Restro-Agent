@@ -27,6 +27,7 @@ export interface Cafe {
   opening_hours?: Record<string, [string, string][]>;
   cutoff_minutes?: number;
   display_phone_number?: string | null;
+  health?: { token?: string; quality?: string; messaging_tier?: string };
 }
 
 export interface OrderItem {
