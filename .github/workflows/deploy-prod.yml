@@ -1,0 +1,116 @@
+# Manual, from Phase 6 (docs/architecture.md#deploy): promote a digest that already runs in staging, after the core
+# team approves (GitHub environment "production" with required reviewers). Staging and prod are separate projects:
+# the image is copied, byte for byte, from the staging registry to the prod registry. Inert until DEPLOY_ENABLED.
+name: deploy-prod
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: Commit SHA already deployed to staging
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    if: vars.DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    environment: production  # vars: GCP_PROJECT, WIF_PROVIDER, STAGING_GCP_PROJECT, STAGING_WIF_PROVIDER,
+                             # SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, CONSOLE_ORIGIN; secret: SUPABASE_DB_URL
+    env:
+      REGION: asia-south1
+      SHA: ${{ inputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha }}
+
+      - name: Staging identity (read only)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.STAGING_WIF_PROVIDER }}
+          service_account: ci-deployer-sa@${{ vars.STAGING_GCP_PROJECT }}.iam.gserviceaccount.com
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: The digest must be what staging runs or ran
+        run: |
+          SRC="$REGION-docker.pkg.dev/${{ vars.STAGING_GCP_PROJECT }}/restro/backend"
+          DIGEST="$(gcloud artifacts docker images describe "$SRC:$SHA" --format='value(image_summary.digest)')"
+          gcloud run revisions list --service api --region "$REGION" --project "${{ vars.STAGING_GCP_PROJECT }}" \
+            --format='value(spec.containers[0].image)' | grep -q "$DIGEST" || { echo "not deployed to staging"; exit 1; }
+          gcloud auth configure-docker "$REGION-docker.pkg.dev" --quiet
+          docker pull "$SRC@$DIGEST"
+          echo "SRC_REF=$SRC@$DIGEST" >> "$GITHUB_ENV"
+          echo "DIGEST=$DIGEST" >> "$GITHUB_ENV"
+
+      - name: Prod identity
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: ci-deployer-sa@${{ vars.GCP_PROJECT }}.iam.gserviceaccount.com
+      - name: Copy the same digest into the prod registry
+        run: |
+          DST="$REGION-docker.pkg.dev/${{ vars.GCP_PROJECT }}/restro/backend"
+          gcloud auth configure-docker "$REGION-docker.pkg.dev" --quiet
+          docker tag "$SRC_REF" "$DST:$SHA"
+          docker push "$DST:$SHA"
+          test "$(gcloud artifacts docker images describe "$DST:$SHA" --format='value(image_summary.digest)')" = "$DIGEST"
+          echo "IMAGE_REF=$DST@$DIGEST" >> "$GITHUB_ENV"
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Migrate the prod DB
+        run: supabase db push --db-url "$SUPABASE_DB_URL"
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+
+      - name: Deploy worker, then api
+        run: |
+          PROJECT="${{ vars.GCP_PROJECT }}"
+          SA_SUFFIX="$PROJECT.iam.gserviceaccount.com"
+          COMMON="APP_ENV=prod,GIT_SHA=$SHA,SUPABASE_URL=${{ vars.SUPABASE_URL }},GCP_PROJECT=$PROJECT"
+          COMMON="$COMMON,LLM_BACKEND=vertex,WA_TRANSPORT=meta,SIGNAL_BACKEND=pubsub,TASKS_BACKEND=cloud_tasks"
+          COMMON="$COMMON,INTERNAL_AUTH=oidc,SECRETS_BACKEND=gcp,GCP_INVOKER_SA=invoker-sa@$SA_SUFFIX"
+          DB="SUPABASE_SECRET_KEY=supabase-service-key:latest,DATABASE_URL=supabase-db-url:latest,DATABASE_URL_SESSION=supabase-db-url-session:latest"
+          gcloud run deploy worker --image "$IMAGE_REF" --region "$REGION" --project "$PROJECT" \
+            --service-account "worker-sa@$SA_SUFFIX" --ingress internal --no-allow-unauthenticated \
+            --no-cpu-throttling --min-instances 0 --max-instances 5 --concurrency 40 --cpu-boost --timeout 60 \
+            --set-env-vars "$COMMON,RESTRO_SERVICE=worker,META_APP_SECRET=unused-in-worker,META_VERIFY_TOKEN=unused-in-worker" \
+            --set-secrets "$DB"
+          WORKER_URL="$(gcloud run services describe worker --region "$REGION" --project "$PROJECT" --format='value(status.url)')"
+          gcloud run deploy api --image "$IMAGE_REF" --region "$REGION" --project "$PROJECT" \
+            --service-account "api-sa@$SA_SUFFIX" --ingress all --allow-unauthenticated \
+            --min-instances 1 --max-instances 5 --concurrency 60 --cpu-boost --timeout 30 \
+            --set-env-vars "^@^$(echo "$COMMON,RESTRO_SERVICE=api,WORKER_URL=$WORKER_URL" | tr ',' '@')@CORS_ORIGINS=${{ vars.CONSOLE_ORIGIN }}" \
+            --set-secrets "$DB,META_APP_SECRET=meta-app-secret:latest,META_VERIFY_TOKEN=meta-verify-token:latest"
+          echo "API_URL=$(gcloud run services describe api --region "$REGION" --project "$PROJECT" --format='value(status.url)')" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Build and deploy the console
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+          npx --yes firebase-tools@13 deploy --only hosting --project "${{ vars.GCP_PROJECT }}" --non-interactive
+        env:
+          VITE_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
+          VITE_API_URL: ${{ env.API_URL }}
+          VITE_DEMO: "false"
+
+      - name: Smoke test
+        run: |
+          test "$(curl -s -o /dev/null -w '%{http_code}' "$API_URL/healthz")" = 200
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST -d '{}' "$API_URL/webhooks/whatsapp")" = 401
+          echo "Rollback = shift traffic to the previous revision: gcloud run services update-traffic api --to-revisions=<rev>=100"

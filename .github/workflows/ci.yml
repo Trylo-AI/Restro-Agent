@@ -83,3 +83,16 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npx vite build
+
+  infra:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # gcloud scripts against a fake gcloud with DRY_RUN=1: create and update paths, nothing real is called.
+      - run: bash infra/test/dry_run.sh
+      # The image builds from the repo root and finds contracts/ next to backend/.
+      - run: docker build -f backend/Dockerfile -t restro-backend:ci .
+      - run: >
+          docker run --rm -e RESTRO_SERVICE=worker restro-backend:ci python -c
+          "import app.domain.ai_agent.calls as c, app.domain.ai_agent.guardrails as g;
+          assert c.SCHEMA_FILE.exists() and g.ALLERGENS_FILE.exists()"

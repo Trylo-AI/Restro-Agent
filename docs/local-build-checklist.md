@@ -15,9 +15,9 @@ Tracks [local-build.md](local-build.md). A step is Done when its tests pass and 
 | L9 Campaigns | Done | L9 commit |
 | L10 Today and weekly report | Done | L10 commit |
 | L11 Eval set | Done | 215 cases (32 v1 + 183 draft v2) |
-| L12 Load-test harness | To do | — |
-| L13 Public pages | To do | — |
-| L14 Cloud adapters and infra scripts | To do | — |
+| L12 Load-test harness | Done | smoke PASS; steady correct, latency not gateable from here |
+| L13 Public pages | Done | legal facts left as [TO FILL] |
+| L14 Cloud adapters and infra scripts | Done | written and dry-run tested, not run on GCP |
 
 ## L1 · Contracts
 
@@ -112,3 +112,35 @@ Tracks [local-build.md](local-build.md). A step is Done when its tests pass and 
 - [x] `evals/cases/draft-v2.json`: 183 new synthetic cases, ids `v2-…`, exact seed dish names; with v1 the set is 215: clean English 25, Hinglish 40, Hindi script 15, multi-item with notes 20, ambiguous / misspelt 25, recommendations 20, allergens 20, sold out 10, human asks 15, off-topic 10, edits / cancels / status 15
 - [x] Loads and scores with `evals/run.py --stub` (no quota needed); a real run backs off on 429 and reports rate-limited cases as skipped, not wrong
 - [ ] Not run against Gemini: needs model quota. The cases are drafts for the team to review (expected intents for the vaguest asks, "coffee", "the usual", are deliberately broad)
+
+## L12 · Load-test harness
+
+- [x] `loadtest/seed.py`: an isolated load café (own `phone_number_id`, 60 tables, always open); `loadtest/run.py` with scenarios smoke 5 · steady 20 · peak 60 · burst 30 · gate 100
+- [x] Customers follow the real flow through the signed webhook (QR → name if asked → order → "that's all" → Confirm); 10 % of deliveries twice; failed deliveries retried like Meta; one DB poller for all replies
+- [x] Checks from the DB: lost, unprocessed, duplicate replies, duplicate orders, dead letters, unsent replies, webhook errors, stuck customers, inbound-to-reply p50 / p95 / max, LLM calls per order; JSON report in `loadtest/results/` (git-ignored); exit 1 on a failed check
+- [x] `LLM_BACKEND=stub_menu` (new): reads dish names and confirms, waits `LLM_STUB_DELAY_MS` (900) like a real call; the harness refuses a real-model worker without `--real-llm`
+- [ ] Team review: `stub_menu` touches `integrations/llm` (critical core). Additive, chosen only by env value, provider stays `stub`; real backends unchanged
+- [x] Safety: refuses prod, a non-local target outside staging, and `WA_TRANSPORT=meta`
+- [x] Tests: 6 unit (customer script, Confirm button, percentiles, verdict incl. the RTT rule, stub responder)
+- [x] Runs on this PC (DB ~140–200 ms away, pool 5): **smoke PASS** (5 orders, 0 lost, 0 duplicate, redeliveries deduped). **steady** 20 customers: 19 orders, 0 lost / duplicate / dead-lettered / unsent; one webhook call dropped at 28 s (ReadError) before the retry existed
+- [ ] Not measurable here: latency. A turn makes ~59 DB statements and a webhook ~13; at 140–200 ms each from a laptop that is 10 s+ per turn (reply p95 54 s at 5 customers, 220 s at 20). In-region (~1–2 ms) the same statements cost ~0.1 s. **The Phase 3 gate (100 customers, p95 ≤ 5 s, worker killed mid-run) runs on staging.** Finding for the team: ~59 statements per turn is worth trimming before then
+- [ ] Not done: killing a worker mid-run (manual step on staging; leases expire and `stuck_inbound_check` re-signals)
+
+## L13 · Public pages
+
+- [x] `frontend/public/`: `about.html` (landing), `privacy.html`, `terms.html`, `data-deletion.html`, `site.css`. Static (no scripts) so Meta's reviewers and crawlers read them; light / dark; 375 px without horizontal scroll; served with the console (`firebase.json` clean URLs: `/privacy` etc.)
+- [x] Content from the data-protection rules: café = data fiduciary, Restro = processor, never across cafés; Gemini on Vertex AI global endpoint, may be processed outside India; what the prompt sees (never the number or allergies); masked numbers; retention table; STOP and the re-ask rule; what deletion erases and what stays anonymous; backups and restore
+- [x] Tests: 4 vitest (static, titled, cross-linked; required statements; open facts only as `[TO FILL]`), 4 e2e (each page at 375 px with JS off)
+- [ ] To fill by the team / legal before Meta review (shown highlighted on the pages): legal entity, address, support and privacy emails, grievance officer, response time, minimum age, backup window, retention after the pilot, jurisdiction city, last-updated dates
+- [ ] Not built: the Meta data-deletion callback (`POST /webhooks/meta/data-deletion`). Meta's callback identifies a Facebook user, which can't be matched to a WhatsApp customer; the instructions URL (`/data-deletion`) is what the app review needs. Say if the callback is still wanted
+
+## L14 · Cloud adapters and infra scripts
+
+- [x] `integrations/gcp/cloud_tasks.py` (REST, OIDC token as invoker-sa, task name = dedupe key, `ALREADY_EXISTS` = success, traceparent header, schedule time) and `pubsub.py` (ids only, traceparent attribute); `auth.py` uses the service's own identity (no keys); errors carry Google's status, never the body. New settings `GCP_TASKS_LOCATION`, `GCP_INVOKER_SA`, `PUBSUB_TOPIC`
+- [x] `backend/Dockerfile` (repo-root context, contracts beside backend, non-root, `RESTRO_SERVICE=api|worker`) + `.dockerignore`
+- [x] `infra/lib.sh`, `setup.sh` (APIs, 4 service accounts and roles, Artifact Registry, secret containers + per-secret access, topics, 4 queues, Workload Identity Federation for this repo on main, budget), `wire.sh` (invoker on worker only, push subscription 10 s ack + DLQ after 5, Pub/Sub agent roles, 6 Scheduler jobs that exist), `environments/{dev,prod}/env.sh` (dev = staging), `infra/README.md` runbook
+- [x] `.github/workflows/deploy-staging.yml` (after green ci on main: build once → push → migrate → worker then api, same digest → console → smoke) and `deploy-prod.yml` (manual, `production` environment approval, only a digest staging ran, copied to the prod registry); both inert until `DEPLOY_ENABLED=true`. `ci.yml` gains an `infra` job (dry run + image build)
+- [x] Tests: 8 unit (task and message shape, OIDC, dedupe, errors without body, valid distinct task ids, missing config), `infra/test/dry_run.sh` (fake gcloud: create and update paths for both environments, CI never reads secrets, refuses missing project / unknown env)
+- [ ] Not run: anything on GCP; the image build (Docker Desktop doesn't start on this PC; CI builds it)
+- [ ] Team-owned before staging takes traffic (critical core `core/`, not in this plan): OIDC verification on `/internal/*` (`INTERNAL_AUTH=oidc` still refuses every call) and the Secret Manager resolver (`gcp:` refs)
+- [ ] Assumptions to review: queue rates / attempts (start values; `campaign-send` 5/s [verify]); worker gets placeholder `META_*` values because settings require them though it never verifies webhooks; migrations use a GitHub environment secret `SUPABASE_DB_URL` (the CI service account has no Secret Manager access); `firebase-tools@13`; budgets ₹5,000 dev / ₹15,000 prod as placeholders; scheduler jobs for `template_sync`, `token_health`, `quality_and_limits`, `prune_webhook_events`, `daily_summary`, `refresh_views`, `weekly_report` are added when those jobs exist

@@ -362,6 +362,13 @@ PR → CI → merge to `main` → build image once (tag = commit SHA) → migrat
 - `api` and `worker` always run the same digest; prod only runs a digest that ran in staging.
 - Migrations run first and stay backward compatible. Rollback = shift traffic to the previous revision.
 - Infra is **`gcloud` scripts**, not Terraform: idempotent shell scripts in `infra/environments/{dev,prod}` (create-if-missing, then set), applied by hand by a founder and reviewed line by line.
+  - `infra/setup.sh <env>` runs before the first deploy and `infra/wire.sh <env>` after it, because the push subscription, the invoker binding and the jobs need the worker URL.
+  - `dev` is the staging environment.
+  - Runbook: [infra/README.md](../infra/README.md).
+- The image is `backend/Dockerfile`, built from the repo root because the app reads `contracts/llm_output.schema.json` and `contracts/allergens.json`. `RESTRO_SERVICE=api|worker` picks the app.
+- The console's `firebase.json` serves the SPA and the static public pages (`/about`, `/privacy`, `/terms`, `/data-deletion`).
+- The Cloud Tasks and Pub/Sub adapters (`integrations/gcp`) call the REST APIs with the service's own identity. A Cloud Tasks task name is its dedupe key, and `ALREADY_EXISTS` counts as success.
+- The deploy workflows stay inert until the repository variable `DEPLOY_ENABLED` is `true`.
 
 | Workflow | Trigger | Gate |
 |---|---|---|

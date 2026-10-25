@@ -1,0 +1,16 @@
+# Build context is the repo root (backend/Dockerfile); only backend/ and two contract files are copied.
+**/.env
+**/.env.*
+**/.venv
+**/__pycache__
+**/node_modules
+**/logs
+.git
+frontend
+simulator
+evals
+loadtest
+docs
+supabase
+infra
+backend/tests
