@@ -8,6 +8,7 @@ import asyncio
 import contextlib
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 
@@ -21,14 +22,20 @@ from app.domain import outbound as _outbound  # noqa: F401  (registers the send_
 from app.domain.conversation import agent_turn, pipeline, router
 from app.domain.handoff import service as _help_timers  # noqa: F401  (registers help timers, dead-letter hook)
 from app.domain.orders import service as _order_timers  # noqa: F401  (registers order timers)
+from app.ops.tracing import recorder
+
+LOG_DIR = Path(__file__).resolve().parents[1] / "logs"
 
 pipeline.set_handler(router.route)
 router.set_free_text_handler(agent_turn.handle_text)
+jobs.register("ops_sweep", 60)(recorder.sweep)  # RUNNING runs of a dead process → ABANDONED
+jobs.register("ops_retention", 86_400)(recorder.retention)
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     await open_pool()
+    await recorder.heartbeat_now()
     stop = asyncio.Event()
     loop_task = asyncio.create_task(jobs.local_loop(stop)) if get_settings().tasks_backend == "local" else None
     try:
@@ -38,12 +45,15 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         if loop_task:
             with contextlib.suppress(asyncio.CancelledError):
                 await loop_task
+        await recorder.flush()
         await close_pool()
 
 
 def create_app() -> FastAPI:
     settings = get_settings()
-    configure_logging(settings.log_level, service="worker")
+    configure_logging(settings.log_level, service="worker",
+                      log_dir=(settings.ops_log_dir or str(LOG_DIR)) if settings.app_env == "local" else None)
+    recorder.configure("worker")
     app = FastAPI(title="Restro worker", lifespan=lifespan,
                   docs_url="/docs" if settings.is_local else None, redoc_url=None)
     install_error_handlers(app)

@@ -11,15 +11,20 @@ import asyncpg
 
 from app.core.config import get_settings
 
+POOL_MAX_SIZE = 5
 _pool: asyncpg.Pool | None = None
 
 
 async def _init_connection(conn: asyncpg.Connection) -> None:
     for typename in ("json", "jsonb"):
         await conn.set_type_codec(typename, encoder=json.dumps, decoder=json.loads, schema="pg_catalog")
+    if get_settings().ops_tracing_enabled:
+        from app.ops.tracing.hooks.db import on_query
+
+        conn.add_query_logger(on_query)  # one db.query span per statement inside a traced run
 
 
-async def open_pool(dsn: str | None = None, *, min_size: int = 1, max_size: int = 5) -> asyncpg.Pool:
+async def open_pool(dsn: str | None = None, *, min_size: int = 1, max_size: int = POOL_MAX_SIZE) -> asyncpg.Pool:
     global _pool
     if _pool is None:
         settings = get_settings()

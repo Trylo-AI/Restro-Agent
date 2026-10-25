@@ -4,7 +4,17 @@ Commit: `d28e61d` + S16 work in progress   Date: 24 Oct 2026   Standard: PDS v1.
 Docs read: `CLAUDE.md`, [architecture](architecture.md) (System, Latency budget, Message pipeline, Queues, Monitoring, Cost), [backend](backend.md), [data-and-api](data-and-api.md), [rules](rules.md), [plan](plan.md#open-decisions), [ordering-slice](ordering-slice.md), [checklist](ordering-slice-checklist.md)
 Code areas read: `backend/app/main_api.py`, `main_worker.py`, `api/*`, `core/logging.py`, `db/pool.py`, `db/tx.py`, `domain/conversation/pipeline.py`, `domain/ai_agent/calls.py`, `domain/outbound`, `domain/jobs.py`, `domain/timers`, `integrations/llm/*`, `integrations/whatsapp/client.py`, `integrations/tasks/local.py`
 
-**Status: awaiting approval (Gate 0).** Nothing below is built. Answer §6 and §7, then I build phase by phase.
+**Status: approved 24 Oct 2026 (Gate 0), being built.** Aman's answers:
+
+| Question | Answer | What it means for the build |
+|---|---|---|
+| Q-A contract | Add the tables | `ops_*` tables go into `contracts/schema.sql` and a migration |
+| Q-B | Measure, don't assume | DB round trips and pool waits are traced per statement first (Phase 1–2), with the overhead gate measured |
+| Q-C | If missing, add | The run id travels as a W3C `traceparent` header / attribute on every signal and task; the monitoring doc is updated |
+| Q-D | OK | Efficiency reads `llm_calls` directly until the cost views exist |
+| Q-E | Later | No platform-admin login yet: `/api/ops/*` takes `OPS_DASHBOARD_TOKEN` only; the console asks for it |
+| Where it lives | OK | `/platform/ops` in the console (departure 1) |
+| Prices | No price tracking until GCP | No `cost_usd`: cost tiles and D15 are dropped; Efficiency shows tokens per turn and per order, not money |
 
 ## 1. The app in brief
 
@@ -135,7 +145,7 @@ Pilot (one café): ~2,500 runs/day × ~15 spans (L3 DB calls dominate: a turn ma
 | `orders.transition` | 2 | internal | `domain/orders/transition` | `from`, `to` | Q5 |
 | `db.query` | 3 | db | hook on `conn()` / `tx()` (asyncpg) | `db.operation`, `db.table`, `db.statement_hash`, `db.rows` | Q5, Q9 |
 | `db.tx` | 2 | db | `tx()` | `statements` | Q5 |
-| `llm.call` | 3 | llm | `ai_agent/calls.py:61` | `llm.model`, `tokens_in/out/cached`, `cost_usd`, `outcome`, `llm_call_id` | Q5, Q8 |
+| `llm.call` | 3 | llm | `ai_agent/calls.py:61` | `llm.model`, `tokens_in/out/cached`, `outcome`, `llm_call_id` (no `cost_usd`: no price tracking yet) | Q5, Q8 |
 | `wa.send` / `wa.mark_read` | 3 | http_out | `integrations/whatsapp/client.py` | `http.status`, `send_class`, `step_id`, `wamid` | Q5 |
 | `queue.publish` / `queue.enqueue` | 3 | queue | `integrations/gcp/*`, `tasks/local.py` | `queue.name` | Q5 |
 | `auth.jwt` | 2 | http_out | `core/auth.py` | `cache_hit` | Q5 |

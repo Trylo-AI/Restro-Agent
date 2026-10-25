@@ -56,6 +56,12 @@ class Settings(BaseSettings):
     # Secrets
     secrets_backend: Literal["env", "gcp"] = "env"
 
+    # Performance dashboard (docs/OPS_PLAN.md)
+    ops_tracing_enabled: bool = True  # kill switch: false makes every tracing call a no-op
+    ops_dashboard_token: SecretStr | None = None  # /api/ops/* is off unless set (platform_admin login later)
+    ops_log_dir: str | None = None  # local only: JSON-lines logs for the Logs page; default backend/logs
+    ops_task_max_attempts: int = 6  # a task attempt below this that fails is RETRYING, at it FAILED
+
     # Local dev tools
     simulator_enabled: bool = False
     simulator_token: SecretStr | None = None

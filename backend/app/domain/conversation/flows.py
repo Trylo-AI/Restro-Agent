@@ -18,6 +18,7 @@ from app.domain import handoff, hours
 from app.domain.conversation import render
 from app.domain.conversation.turn import Reply, TurnContext, TurnResult
 from app.domain.orders import due_at
+from app.ops import tracing
 
 PAGE_SIZE = 8
 VISIT_GAP = timedelta(hours=6)
@@ -104,6 +105,7 @@ async def summary(ctx: TurnContext, state: dict[str, Any]) -> list[Reply]:
     replies: list[Reply] = []
     if priced.dropped:
         replies.append(Reply(render.dropped([d.name for d in priced.dropped])))
+        tracing.degraded("sold_out_dropped", dishes=len(priced.dropped), at="summary")
     state["cart"] = priced.cart
     if priced.is_empty:
         state["step"] = "browsing"

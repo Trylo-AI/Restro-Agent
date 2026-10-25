@@ -29,6 +29,7 @@ from app.domain import timers
 from app.integrations.whatsapp import client
 from app.integrations.whatsapp.errors import SendClass, SendError
 from app.integrations.whatsapp.messages import Message, Template, payload
+from app.ops import tracing
 
 log = get_logger(__name__)
 
@@ -77,6 +78,7 @@ async def prepare(conn: asyncpg.Connection, cafe_id: str, recipient: Recipient, 
     if not isinstance(message, Template) and not in_window(customer.last_inbound_at):
         if purpose == Purpose.ORDER_STATUS and fallback_template is not None:
             chosen = fallback_template
+            tracing.degraded("send_template_fallback", template=fallback_template.name)
         elif purpose == Purpose.STAFF_REPLY:
             raise WindowClosed()
         else:
@@ -102,6 +104,16 @@ def _meta_body(step: Step) -> dict[str, Any]:
 
 async def deliver(cafe_id: str, step_id: str) -> str:
     """Send one prepared step. Returns the final status. Safe to call twice: only one call ever sends."""
+    with tracing.span("outbound.deliver") as sp:
+        status = await _deliver(cafe_id, step_id)
+        sp.annotate(status=status)
+        if status == "failed":
+            sp.fail("send failed")
+        tracing.count(**{f"sends_{status}": 1})
+        return status
+
+
+async def _deliver(cafe_id: str, step_id: str) -> str:
     for attempt in range(len(RETRY_DELAYS) + 1):
         async with db_conn() as c:
             claimed = await steps_repo.claim_for_delivery(c, cafe_id, step_id)
@@ -120,12 +132,21 @@ async def deliver(cafe_id: str, step_id: str) -> str:
                 await steps_repo.mark_failed(c, cafe_id, step_id, "no_recipient" if not to else "disconnected")
             return "failed"
         try:
-            wamid = await client.transport().send(cafe, to, _meta_body(step), callback_data=step.id)
+            with tracing.span("wa.send", target=client.transport().__class__.__name__, step_id=step.id,
+                              attempt=attempt + 1) as sp:
+                try:
+                    wamid = await client.transport().send(cafe, to, _meta_body(step), callback_data=step.id)
+                except SendError as err:
+                    sp.fail(f"{err.cls.value}:{err.code}")
+                    sp.annotate(send_class=err.cls.value, error_code=err.code)
+                    raise
         except SendError as err:
             async with db_conn() as c:
                 if err.cls is SendClass.NOT_SENT_RETRY and attempt < len(RETRY_DELAYS):
                     await steps_repo.release_attempt(c, cafe_id, step_id, err.code)
+                    tracing.degraded("send_retry_429", error_code=err.code)
                 elif err.cls is SendClass.AMBIGUOUS:
+                    tracing.degraded("send_ambiguous", step_id=step_id)
                     await steps_repo.mark_ambiguous(c, cafe_id, step_id, err.code)
                     await timers.schedule(cafe_id, "send_check", step_id, 60, dedupe=f"send_check:{step_id}")
                     log.warning("send_ambiguous", cafe_id=cafe_id, step_id=step_id)

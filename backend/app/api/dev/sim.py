@@ -188,7 +188,7 @@ async def new_customer(phone_number_id: str = SIM_PHONE_NUMBER_ID) -> dict[str, 
     async with conn() as c:
         cafe = await _sim_cafe(c, phone_number_id)
         used = {r["wa_id"] for r in await c.fetch("select wa_id from customers where cafe_id = $1", cafe.id)}
-    for n in range(10, 100):
+    for n in range(10, 1000):  # 9199990000 + 2–3 digits: synthetic, 12–13 digits
         wa_id = f"{SIM_WA_PREFIX}{n:02d}"
         if wa_id not in used and wa_id not in _allocated:
             _allocated.add(wa_id)

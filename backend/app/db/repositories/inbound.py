@@ -12,6 +12,7 @@ class InboundMessage:
     type: str
     payload: dict[str, Any]
     received_at: datetime
+    created_at: datetime | None = None  # when it reached us (received_at is WhatsApp's send time)
 
 
 async def insert(conn: asyncpg.Connection, cafe_id: str, conversation_id: str, wamid: str, type_: str,
@@ -27,7 +28,7 @@ async def insert(conn: asyncpg.Connection, cafe_id: str, conversation_id: str, w
 
 async def unprocessed(conn: asyncpg.Connection, cafe_id: str, conversation_id: str) -> list[InboundMessage]:
     rows = await conn.fetch(
-        """select id::text, wamid, type, payload, received_at from inbound_messages
+        """select id::text, wamid, type, payload, received_at, created_at from inbound_messages
            where cafe_id = $1 and conversation_id = $2 and processed_at is null
            order by received_at, created_at""",
         cafe_id, conversation_id,

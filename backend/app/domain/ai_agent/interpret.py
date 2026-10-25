@@ -14,6 +14,7 @@ from app.db.tx import conn
 from app.domain import hours as hours_mod
 from app.domain.ai_agent import calls, guardrails, prompt
 from app.domain.conversation.turn import Turn, TurnContext
+from app.ops import tracing
 
 INTENTS = {"browse", "ask_question", "add_items", "modify_cart", "confirm", "cancel", "order_status", "human",
            "smalltalk", "unclear"}
@@ -108,6 +109,7 @@ async def interpret(ctx: TurnContext, state: dict[str, Any], turn: Turn) -> Inte
         cleaned = guardrails.clean_reply(raw if isinstance(raw, str) else None)
         if raw and cleaned is None and guardrails.has_amount(raw):
             result.guardrails.append(f"{key}_amount_dropped")
+            tracing.degraded("guardrail_reply_dropped", field=key)
         setattr(result, key, cleaned)
     if result.rejections and result.reply:
         result.reply = None  # any rejected op discards the model's reply; code says what happened

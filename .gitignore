@@ -51,3 +51,4 @@ Thumbs.db
 
 # Python packaging
 *.egg-info/
+backend/logs/

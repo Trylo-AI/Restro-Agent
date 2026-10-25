@@ -25,6 +25,7 @@ from app.domain.conversation.turn import Reply, TurnContext, TurnResult
 from app.domain.orders import CUSTOMER, transition
 from app.domain.orders.service import after_status_change
 from app.integrations.whatsapp import messages as m
+from app.ops import tracing
 
 
 def idempotency_key(conversation_id: str, cart_version: int) -> str:
@@ -53,6 +54,7 @@ async def confirm(ctx: TurnContext, state: dict[str, Any], version: int) -> Turn
     if priced.dropped:  # sold out since the summary: no order; say what went, show the new summary
         state["cart"] = priced.cart
         notice = Reply(render.dropped([d.name for d in priced.dropped]))
+        tracing.degraded("sold_out_dropped", dishes=len(priced.dropped), at="confirm")
         return TurnResult(state=state, replies=[notice] + await flows.summary(ctx, state))
 
     if not ctx.conversation.table_session_id:

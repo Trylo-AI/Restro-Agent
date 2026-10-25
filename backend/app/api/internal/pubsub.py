@@ -13,6 +13,7 @@ from fastapi import Body
 from app.api.internal import router
 from app.core.logging import get_logger
 from app.domain.conversation import pipeline
+from app.ops import tracing
 
 log = get_logger(__name__)
 _running: set[asyncio.Task[None]] = set()
@@ -33,7 +34,12 @@ async def inbound_signal(envelope: dict[str, Any] = Body(...)) -> dict[str, str]
     except (KeyError, ValueError, TypeError):
         log.warning("pubsub_bad_envelope")
         return {"status": "ignored"}  # 2xx: a malformed signal must not be redelivered forever
-    task = asyncio.create_task(_run(cafe_id, conversation_id))
+    # The turn runs started in this task link back to the run that published the signal (traceparent attribute).
+    token = tracing.set_upstream((envelope["message"].get("attributes") or {}).get("traceparent"), "api")
+    try:
+        task = asyncio.create_task(_run(cafe_id, conversation_id))
+    finally:
+        tracing.reset_upstream(token)
     _running.add(task)
     task.add_done_callback(_running.discard)
     return {"status": "accepted"}

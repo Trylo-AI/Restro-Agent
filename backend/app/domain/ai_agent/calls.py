@@ -18,6 +18,7 @@ from app.db.tx import conn
 from app.integrations import llm
 from app.integrations.llm import pricing
 from app.integrations.llm.base import LlmResult
+from app.ops import tracing
 
 log = get_logger(__name__)
 
@@ -65,31 +66,49 @@ async def call(*, cafe_id: str, cafe_model: str | None, purpose: str, system: st
     out_schema = schema(schema_name)
     fault = await devhooks.consume_fault("llm")
     last: Attempted | None = None
-    for i, model in enumerate(models(cafe_model)):
-        if i == 0 and fault == "llm_fail":
-            result = LlmResult(outcome="error", provider=llm.client().provider, model=model)
-        else:
-            result = await llm.client().generate(model=model, system=system, prompt=prompt, schema=out_schema,
-                                                 timeout_s=s.llm_timeout_seconds, max_output_tokens=max_output_tokens)
-            if i == 0 and fault == "llm_invalid":
-                result.outcome, result.data = "invalid_output", None
-        cost = pricing.cost(model, result.input_tokens, result.cached_tokens, result.output_tokens)
-        async with conn() as c:
-            call_id = await llm_calls.insert(
-                c, cafe_id, provider=result.provider, model=model, purpose=purpose, conversation_id=conversation_id,
-                message_id=message_id, order_id=order_id, note_id=note_id, input_tokens=result.input_tokens,
-                cached_tokens=result.cached_tokens, output_tokens=result.output_tokens, cost=cost,
-                currency=pricing.CURRENCY, pricing_version=pricing.PRICING_VERSION, latency_ms=result.latency_ms,
-                outcome=result.outcome,
-            )
-        last = Attempted(result, call_id)
-        log.info("llm_call", cafe_id=cafe_id, conversation_id=conversation_id, purpose=purpose, model=model,
-                 outcome=result.outcome, latency_ms=result.latency_ms)
-        if s.dev_traces and s.is_local:
-            await trace(cafe_id, conversation_id, call_id, purpose, len(system) + len(prompt), trace_suffix or prompt,
-                        result.raw, result.data, [])
-        if result.ok:
-            return last
+    if kill_switch() != "off":
+        tracing.degraded("llm_kill_switch", mode=kill_switch())
+    with tracing.span("agent.call", purpose=purpose):
+        for i, model in enumerate(models(cafe_model)):
+            if i > 0:
+                tracing.degraded("llm_fallback_model", model=model, first_outcome=last.result.outcome if last else None)
+            with tracing.span("llm.call", target=model, purpose=purpose, **{"llm.model": model}) as sp:
+                if i == 0 and fault == "llm_fail":
+                    result = LlmResult(outcome="error", provider=llm.client().provider, model=model)
+                else:
+                    result = await llm.client().generate(model=model, system=system, prompt=prompt, schema=out_schema,
+                                                         timeout_s=s.llm_timeout_seconds,
+                                                         max_output_tokens=max_output_tokens)
+                    if i == 0 and fault == "llm_invalid":
+                        result.outcome, result.data = "invalid_output", None
+                sp.annotate(**{"llm.provider": result.provider, "outcome": result.outcome,
+                               "tokens_in": result.input_tokens, "tokens_out": result.output_tokens,
+                               "tokens_cached": result.cached_tokens, "latency_ms": result.latency_ms})
+                if not result.ok:
+                    sp.fail(result.outcome)
+                if result.outcome == "rate_limited":
+                    tracing.degraded("llm_rate_limited", model=model)
+            tracing.count(llm_calls=1, tokens_in=result.input_tokens or 0, tokens_out=result.output_tokens or 0)
+            tracing.label(llm_model=model)
+            cost = pricing.cost(model, result.input_tokens, result.cached_tokens, result.output_tokens)
+            async with conn() as c:
+                call_id = await llm_calls.insert(
+                    c, cafe_id, provider=result.provider, model=model, purpose=purpose, conversation_id=conversation_id,
+                    message_id=message_id, order_id=order_id, note_id=note_id, input_tokens=result.input_tokens,
+                    cached_tokens=result.cached_tokens, output_tokens=result.output_tokens, cost=cost,
+                    currency=pricing.CURRENCY, pricing_version=pricing.PRICING_VERSION, latency_ms=result.latency_ms,
+                    outcome=result.outcome,
+                )
+            sp.annotate(llm_call_id=call_id)
+            last = Attempted(result, call_id)
+            log.info("llm_call", cafe_id=cafe_id, conversation_id=conversation_id, purpose=purpose, model=model,
+                     outcome=result.outcome, latency_ms=result.latency_ms)
+            if s.dev_traces and s.is_local:
+                await trace(cafe_id, conversation_id, call_id, purpose, len(system) + len(prompt), trace_suffix or prompt,
+                            result.raw, result.data, [])
+            if result.ok:
+                return last
+    tracing.degraded("llm_handoff", purpose=purpose)
     return None
 
 

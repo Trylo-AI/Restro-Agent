@@ -11,6 +11,7 @@ from app.db.tx import conn
 from app.domain.ai_agent import calls, guardrails
 from app.domain.conversation.render import CALL_WAITER
 from app.integrations.whatsapp import messages as m
+from app.ops import tracing
 
 REASONS = {
     "out_of_stock": "an item ran out",
@@ -47,8 +48,10 @@ async def message(cafe_id: str, order: Order) -> m.Buttons:
     )
     reply = (attempted.result.data or {}).get("reply") if attempted else None
     if not isinstance(reply, str) or guardrails.has_refund_promise(reply):
+        tracing.degraded("cancel_draft_fallback", why="no_reply" if not isinstance(reply, str) else "refund_wording")
         return fallback(order)
     cleaned = guardrails.clean_reply(reply, 400)
     if cleaned is None:
+        tracing.degraded("cancel_draft_fallback", why="amount")
         return fallback(order)
     return m.Buttons(f"{cleaned}\nOrder #{order.number}", [CALL_WAITER])

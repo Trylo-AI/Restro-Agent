@@ -16,6 +16,7 @@ from app.db.repositories import order_writes
 from app.db.repositories import orders as repo
 from app.db.repositories.orders import Order
 from app.domain import audit
+from app.ops import tracing
 
 ALLOWED = {
     ("NEW", "NEW"), ("NEW", "ACCEPTED"), ("ACCEPTED", "READY"), ("READY", "SERVED"),
@@ -47,6 +48,12 @@ async def transition(conn: asyncpg.Connection, cafe_id: str, order_id: str, to: 
                      expected_version: int, *, reason: str | None = None,
                      extra: dict[str, Any] | None = None) -> Order:
     """The only way an order's status changes. Caller provides the transaction."""
+    with tracing.span("orders.transition", to=to, actor=actor.type):
+        return await _transition(conn, cafe_id, order_id, to, actor, expected_version, reason=reason, extra=extra)
+
+
+async def _transition(conn: asyncpg.Connection, cafe_id: str, order_id: str, to: str, actor: OrderActor,
+                      expected_version: int, *, reason: str | None, extra: dict[str, Any] | None) -> Order:
     order = await repo.get(conn, cafe_id, order_id)
     if order is None:
         raise NotFound()

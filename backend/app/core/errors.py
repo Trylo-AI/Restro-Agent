@@ -66,17 +66,22 @@ def error_body(code: str, message: str, details: dict[str, Any] | None = None) -
 
 
 def install_error_handlers(app: FastAPI) -> None:
+    from app.ops import tracing
+
     @app.exception_handler(AppError)
     async def _app_error(_: Request, exc: AppError) -> JSONResponse:
+        tracing.error_info(code=exc.code, error=exc)
         return JSONResponse(error_body(exc.code, exc.message, exc.details), status_code=exc.status)
 
     @app.exception_handler(RequestValidationError)
     async def _validation(_: Request, exc: RequestValidationError) -> JSONResponse:
         # Field locations only; never echo submitted values (they may hold text or numbers).
         fields = [".".join(str(p) for p in e.get("loc", ())) for e in exc.errors()]
+        tracing.error_info(code="VALIDATION")
         return JSONResponse(error_body("bad_request", "That request isn't valid.", {"fields": fields}), status_code=400)
 
     @app.exception_handler(Exception)
     async def _unexpected(_: Request, exc: Exception) -> JSONResponse:
         log.error("unhandled_error", error_class=type(exc).__name__)
+        tracing.error_info(code="UNEXPECTED", error=exc)
         return JSONResponse(error_body("internal", AppError.default_message), status_code=500)

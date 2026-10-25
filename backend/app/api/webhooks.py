@@ -13,6 +13,7 @@ from app.db.repositories import webhook_events
 from app.db.tx import conn
 from app.domain.conversation import ingress
 from app.integrations.whatsapp.parser import parse
+from app.ops import tracing
 
 log = get_logger(__name__)
 router = APIRouter(tags=["webhooks"])
@@ -33,9 +34,12 @@ async def verify(
 @router.post("/webhooks/whatsapp")
 async def receive(request: Request) -> Response:
     raw = await request.body()
-    if not signature.verify(raw, request.headers.get("X-Hub-Signature-256"),
-                            get_settings().meta_app_secret.get_secret_value()):
+    with tracing.span("webhook.verify"):
+        ok = signature.verify(raw, request.headers.get("X-Hub-Signature-256"),
+                              get_settings().meta_app_secret.get_secret_value())
+    if not ok:
         log.warning("webhook_bad_signature")
+        tracing.error_info(code="BAD_SIGNATURE")
         return JSONResponse({"error": {"code": "unauthenticated", "message": "Bad signature."}}, status_code=401)
     try:
         body = json.loads(raw)
@@ -46,10 +50,13 @@ async def receive(request: Request) -> Response:
         event_id = await webhook_events.insert(c, body, True)
 
     batch = parse(body)
+    tracing.count(messages=len(batch.messages), statuses=len(batch.statuses))
+    tracing.label(event="messages" if batch.messages else "statuses" if batch.statuses else "other")
     for message in batch.messages:
         await ingress.ingest_message(message)
     for status in batch.statuses:
-        await ingress.ingest_status(status)
+        with tracing.span("webhook.status", status=status.status):
+            await ingress.ingest_status(status)
     for other in batch.other:
         log.info("webhook_account_event", field=other.field)  # template / quality / account handling: later phases
 

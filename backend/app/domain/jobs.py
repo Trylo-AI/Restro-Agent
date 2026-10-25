@@ -66,7 +66,13 @@ def register(name: str, interval_s: int | None = None) -> Callable[[Callable[[],
 
 
 async def run_job(name: str) -> dict[str, int]:
-    return await JOBS[name]()
+    from app.ops import tracing
+
+    async with tracing.run("cron", f"job.{name}"):
+        with tracing.span("job.handle"):
+            result = await JOBS[name]()
+        tracing.count(**{k: v for k, v in result.items() if isinstance(v, int | float)})
+    return result
 
 
 async def local_loop(stop: asyncio.Event) -> None:

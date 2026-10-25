@@ -27,16 +27,23 @@ def _scrub(_: Any, __: str, event_dict: MutableMapping[str, Any]) -> MutableMapp
     return event_dict
 
 
-def configure_logging(level: str = "info", service: str = "api") -> None:
+def configure_logging(level: str = "info", service: str = "api", log_dir: str | None = None) -> None:
+    """`log_dir` (local only): the same JSON lines also go to <log_dir>/<service>.jsonl for the ops Logs page."""
+    from app.ops.tracing.hooks import logs as ops_logs
+
     logging.basicConfig(format="%(message)s", stream=sys.stdout, level=level.upper())
+    if log_dir:
+        ops_logs.open_file(log_dir, service)
     structlog.configure(
         processors=[
             structlog.contextvars.merge_contextvars,
             structlog.processors.add_log_level,
             structlog.processors.TimeStamper(fmt="iso", utc=True),
             _scrub,
+            ops_logs.processor,  # run_id + span on every line; warnings become the run's events
             structlog.processors.format_exc_info,
             structlog.processors.JSONRenderer(),
+            ops_logs.tee,
         ],
         wrapper_class=structlog.make_filtering_bound_logger(logging.getLevelName(level.upper())),
         logger_factory=structlog.PrintLoggerFactory(),
