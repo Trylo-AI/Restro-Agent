@@ -7,6 +7,7 @@ from typing import Any
 from app.core.auth import Principal
 from app.core.errors import BadRequest, InvalidTransition, NotFound
 from app.core.logging import get_logger
+from app.db.repositories import cafes as cafes_repo
 from app.db.repositories import memberships, order_writes
 from app.db.repositories import menu as menu_repo
 from app.db.repositories import orders as repo
@@ -52,6 +53,12 @@ async def after_status_change(order: Order, *, message: bool) -> None:
         await timers.schedule(order.cafe_id, "overdue", order.id, delay, extra={"version": order.version})
     elif order.status == "READY":
         await timers.schedule(order.cafe_id, "auto_served", order.id, AUTO_SERVED_AFTER, extra={"version": order.version})
+    elif order.status == "SERVED" and order.customer_id:
+        from app.domain import feedback  # the rating ask (docs/backend.md#feedback)
+
+        async with conn() as c:
+            cafe = await cafes_repo.get(c, order.cafe_id)
+        await feedback.schedule(order.cafe_id, order.id, int((cafe.settings if cafe else {}).get("feedback_delay_minutes") or 30))
     if message and order.customer_id and order.status in ("ACCEPTED", "READY", "CANCELLED"):
         await timers.schedule(order.cafe_id, "status_message", order.id, STATUS_MESSAGE_DELAY,
                               extra={"to": order.status, "version": order.version},
@@ -212,7 +219,8 @@ async def auto_served(cafe_id: str, order_id: str, _: dict[str, object]) -> None
             return
         if (datetime.now(UTC) - order.ready_at).total_seconds() < AUTO_SERVED_AFTER - 1:
             return
-        await transition(c, cafe_id, order_id, "SERVED", SYSTEM, order.version, reason="auto_served")
+        served = await transition(c, cafe_id, order_id, "SERVED", SYSTEM, order.version, reason="auto_served")
+    await after_status_change(served, message=False)
 
 
 @timers.handler("status_message")

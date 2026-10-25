@@ -97,7 +97,8 @@ export function useOpenRequests() {
         .eq("cafe_id", cafeId!).neq("status", "resolved").order("created_at"));
       const customerIds = [...new Set(data.map((r) => r.conversations?.customer_id).filter((x): x is string => !!x))];
       const convIds = data.map((r) => r.conversation_id).filter((x): x is string => !!x);
-      const [cardMap, names, escalations, words] = await Promise.all([
+      const ratedOrders = data.filter((r) => r.kind === "low_rating" && r.order_id).map((r) => r.order_id!);
+      const [cardMap, names, escalations, words, ratings] = await Promise.all([
         cards(customerIds),
         staffNames(cafeId!),
         data.length ? rows<Escalation[]>(supabase.from("escalations").select("*").eq("subject_type", "request")
@@ -105,6 +106,8 @@ export function useOpenRequests() {
         convIds.length ? rows<{ conversation_id: string; payload: { text?: { body?: string } }; received_at: string }[]>(
           supabase.from("inbound_messages").select("conversation_id, payload, received_at").in("conversation_id", convIds)
             .eq("type", "text").order("received_at", { ascending: false }).limit(200)) : Promise.resolve([]),
+        ratedOrders.length ? rows<{ order_id: string; rating: number; text: string | null }[]>(
+          supabase.from("feedback").select("order_id, rating, text").in("order_id", ratedOrders)) : Promise.resolve([]),
       ]);
       return data.map((r) => {
         const customerId = r.conversations?.customer_id ?? null;
@@ -116,7 +119,10 @@ export function useOpenRequests() {
           customerName: customerId ? cardMap.get(customerId)?.first_name || null : null,
           escalations: escalations.filter((e) => e.subject_id === r.id),
           ackName: r.acknowledged_by ? (r.acknowledged_by === userId ? "You" : names.get(r.acknowledged_by) ?? "a teammate") : null,
-          words: last?.payload?.text?.body ?? null,
+          // A low rating shows the stars and what they wrote, not the chat's last line.
+          words: r.kind === "low_rating"
+            ? (() => { const f = ratings.find((x) => x.order_id === r.order_id); return f ? `${f.rating}★${f.text ? ` · ${f.text}` : ""}` : null; })()
+            : last?.payload?.text?.body ?? null,
         };
       });
     },

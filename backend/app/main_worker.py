@@ -17,6 +17,7 @@ from app.core.config import get_settings
 from app.core.errors import install_error_handlers
 from app.core.logging import configure_logging
 from app.db.pool import close_pool, open_pool
+from app.domain import feedback as _feedback  # noqa: F401  (registers the feedback timer)
 from app.domain import jobs
 from app.domain import outbound as _outbound  # noqa: F401  (registers the send_check timer)
 from app.domain.conversation import agent_turn, pipeline, router

@@ -27,7 +27,7 @@ from app.db.repositories import menu as menu_repo
 from app.db.repositories import tables as tables_repo
 from app.db.tx import conn
 from app.domain import cart as cart_mod
-from app.domain import consent
+from app.domain import consent, feedback
 from app.domain.conversation import confirm, flows, render
 from app.domain.conversation.turn import Reply, Turn, TurnContext, TurnResult
 from app.integrations.whatsapp.messages import Text
@@ -117,7 +117,9 @@ async def route(ctx: TurnContext, turn: Turn) -> TurnResult:
             await arm_idle_handback(ctx.cafe.id, ctx.conversation.id)
         return TurnResult(after=[rearm])
 
-    # 3 · table QR
+    # 3 · table QR (and the counter QR that asks for offers)
+    if text and normalise(text) == normalise(feedback.COUNTER_QR_TEXT):
+        return feedback.counter_qr(ctx, state)
     if text:
         async with conn() as c:
             table = await tables_repo.by_qr_text(c, ctx.cafe.id, text)
@@ -152,6 +154,11 @@ async def route(ctx: TurnContext, turn: Turn) -> TurnResult:
                 replies = [Reply(render.name_saved(name))]
             return TurnResult(state=state, commit=[save_name], replies=replies)
         state["awaiting"] = None  # an order instead of a name: ask again after the order
+    elif state.get("awaiting") == "feedback_text":
+        if not kw and not set(re.findall(r"[^\W\d_]+", text.lower())) & await _dish_words(ctx.cafe.id):
+            return feedback.save_text(ctx, state, text)
+        state["awaiting"] = None  # a keyword or an order instead: a normal turn
+        state.pop("feedback_order", None)
     elif state.get("awaiting") == "table":
         async with conn() as c:
             tables = await tables_repo.all_tables(c, ctx.cafe.id)
@@ -160,6 +167,13 @@ async def route(ctx: TurnContext, turn: Turn) -> TurnResult:
         if match:
             return await _set_table(ctx, state, match)
         return TurnResult(state=state, replies=[Reply(render.ask_table(tables))])
+
+    # 6b · a typed rating while an ask is open ("2. Food took 25 minutes")
+    typed = feedback.parse_typed(text) if text else None
+    if typed:
+        order_id = await feedback.open_ask_for(ctx.cafe.id, ctx.customer.id)
+        if order_id:
+            return feedback.rate(ctx, state, order_id, typed[0], typed[1])
 
     # 7 · keywords
     if kw == "help":
@@ -246,6 +260,10 @@ async def _tap(ctx: TurnContext, state: dict[str, Any], reply_id: str) -> TurnRe
         return result
     if action == "status":
         return TurnResult(state=state, replies=await flows.status(ctx))
+    if action == "rate" and len(args) == 2 and args[1] in ("1", "2", "3", "4", "5"):
+        return feedback.rate(ctx, state, args[0], int(args[1]))
+    if action == "optin" and args and args[0] in ("yes", "no"):
+        return feedback.answer_opt_in(ctx, state, args[0] == "yes", args[1] if len(args) > 1 else "feedback_flow")
     if action in ("edit_order", "cancel_order", "apply_edit", "keep_order") and arg:
         if action == "edit_order":
             return await confirm.start_edit(ctx, state, arg)

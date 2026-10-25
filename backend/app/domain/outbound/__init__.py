@@ -42,6 +42,7 @@ class Purpose:
     ORDER_STATUS = "order_status"  # outside the window → `order_update` template
     STAFF_REPLY = "staff_reply"    # outside the window → WindowClosed (Chats disables the composer)
     ALERT = "alert"                # `new_order_alert` template to a staff alert number (no customer)
+    FEEDBACK = "feedback"          # rating ask; outside the window → `feedback_request` template
 
 
 @dataclass(frozen=True)
@@ -76,7 +77,7 @@ async def prepare(conn: asyncpg.Connection, cafe_id: str, recipient: Recipient, 
         raise ValueError("unknown customer for this café")
     chosen: Message = message
     if not isinstance(message, Template) and not in_window(customer.last_inbound_at):
-        if purpose == Purpose.ORDER_STATUS and fallback_template is not None:
+        if purpose in (Purpose.ORDER_STATUS, Purpose.FEEDBACK) and fallback_template is not None:
             chosen = fallback_template
             tracing.degraded("send_template_fallback", template=fallback_template.name)
         elif purpose == Purpose.STAFF_REPLY:

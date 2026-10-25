@@ -6,7 +6,7 @@ Tracks [local-build.md](local-build.md). A step is Done when its tests pass and 
 |---|---|---|
 | L1 Contracts | Done | L1–L2 commit |
 | L2 Menu editing | Done | L1–L2 commit |
-| L3 Feedback and opt-in | To do | — |
+| L3 Feedback and opt-in | Done | L3 commit |
 | L4 Staff names and notifications | To do | — |
 | L5 Bill read and redemption | To do | — |
 | L6 Setup | To do | — |
@@ -34,3 +34,14 @@ Tracks [local-build.md](local-build.md). A step is Done when its tests pass and 
 - [x] Console: New item (manager+), Edit per row (manager+), Import CSV (owner) with template download and the error table; edit is a side sheet on desktop and a bottom sheet at 375 px; price typed in ₹ saved as paise; every allergen Contains / Free from / Not sure; 409 → Reload
 - [x] Tests: CSV parser (6), API (3: roles, version, allergens, name clash, edit-to-unavailable flags orders, import update + insert + all-or-nothing), console (5), e2e (manager edits at 375 px on the real stack)
 - [ ] Not built: dish photo (needs Supabase Storage upload; later)
+
+## L3 · Feedback and opt-in
+
+- [x] `feedback` timer at SERVED (staff Mark served and auto-served) after the café's delay (15 / 30 / 60, default 30); re-checks SERVED, not rated, not in human mode
+- [x] Ask: 1–5 list inside 24 h, else `feedback_request` template (new send purpose `feedback`); reply ids carry the order, so taps need no conversation state
+- [x] Typed rating while an ask is open (leading digit 1–5, the rest kept as text), found by a DB check, not state
+- [x] Replies per rating; 1–2★ → `low_rating` request (bot stays on); after 1–3★ the next text is saved as `feedback.text` unless it's a keyword or names a dish (then a normal turn)
+- [x] Opt-in Yes / No (`wording_version` 1) after the rating (after the text for 1–3★); never after STOP / button / 131050; after "No" not within 30 days; counter QR text "Hi, send me offers" asks with source `counter_qr`
+- [x] Calls: a low-rating card shows the stars and the customer's words
+- [x] Tests: 6 integration (5★ + Yes, typed 2★ with text + low_rating, 3★ text + No + re-ask after 30 days, an order instead of text, STOP blocks the ask but the counter QR still asks), typed-rating parser
+- [ ] Not in a browser test: the 15-minute minimum delay; covered by the pipeline tests
