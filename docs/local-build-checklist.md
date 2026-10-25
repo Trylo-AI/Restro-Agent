@@ -10,7 +10,7 @@ Tracks [local-build.md](local-build.md). A step is Done when its tests pass and 
 | L4 Staff names and notifications | Done | L4 commit |
 | L5 Bill read and redemption | Done | L5 commit |
 | L6 Setup | Done | L6 commit |
-| L7 Service report and Analytics | To do | — |
+| L7 Service report and Analytics | Done | L7 commit |
 | L8 Customers | To do | — |
 | L9 Campaigns | To do | — |
 | L10 Today and weekly report | To do | — |
@@ -70,3 +70,11 @@ Tracks [local-build.md](local-build.md). A step is Done when its tests pass and 
 - [x] Dependency: `qrcode` 1.5.4 (QR images drawn in the browser; nothing leaves it)
 - [x] Tests: 3 integration (settings + validation + audit, tables + QR text joins the table, invite / role / deactivate / owner rules), 3 e2e (QR per table, edit and restore, settings round trip, team list; QR sheet with 13 cards; non-owners redirected)
 - [ ] Not tested end to end: a real invite email (Supabase's built-in mail is rate-limited; the Auth call is replaced in tests)
+
+## L7 · Service report and Analytics
+
+- [x] `/service-report` (`manager`+, fixed last 7 days): median prep (placed → ready), % overdue, peak overdue hour, slowest 3 dishes (`v_service_report`), ratings average and every 1–3★ with text (`v_feedback_summary`)
+- [x] `/analytics` (owner, 7 / 30 / 90 days): revenue, orders, average order, average rating, returning % with deltas vs the previous period; revenue bars (weekly at 90 days); top 5 dishes; the same service report for the period; 1–3★ ratings. "WhatsApp orders only; walk-in cash and UPI aren't included."
+- [x] Nav: Service report for `manager`+, Analytics for owner; others are sent back to Live orders
+- [x] Returning = a customer of the period first seen before it started (documented in `lib/reports.ts`)
+- [x] Tests: summaries on fixed rows (2), e2e (owner analytics + period switch, manager service report, shift manager redirected), RLS per view (L1)

@@ -143,12 +143,13 @@ export function TimeChart({ lines, thresholds = [], markers = [], spanS, height 
 export interface StackKey { key: string; label: string; color: string }
 
 /** Counts per interval stacked by outcome; 2px surface gap between segments. */
-export function StackedBars({ rows, keys, spanS, height = 180 }: {
+export function StackedBars({ rows, keys, spanS, height = 180, format = fmtN, legend = true }: {
   rows: ({ t: number } & Record<string, number>)[]; keys: StackKey[]; spanS: number; height?: number;
+  format?: (v: number) => string; legend?: boolean;
 }) {
   const [ref, width] = useWidth();
   const [hover, setHover] = useState<number | null>(null);
-  const pad = { l: 44, r: 8, t: 8, b: 24 };
+  const pad = { l: 60, r: 8, t: 8, b: 24 };
   if (!rows.length) return <div className="viz-empty">No data in this range.</div>;
   const totals = rows.map((r) => keys.reduce((s, k) => s + (r[k.key] ?? 0), 0));
   const maxV = niceMax(Math.max(1, ...totals));
@@ -158,11 +159,11 @@ export function StackedBars({ rows, keys, spanS, height = 180 }: {
   const xt = rows.filter((_, i) => i % Math.max(1, Math.ceil(rows.length / 6)) === 0);
   return (
     <div className="viz" ref={ref}>
-      <Legend items={keys} />
+      {legend && <Legend items={keys} />}
       <svg width={width} height={height} role="img" aria-label={`Counts by ${keys.map((k) => k.label).join(", ")}`} onMouseLeave={() => setHover(null)}>
         {[0, 0.5, 1].map((f) => (
           <g key={f}><line x1={pad.l} x2={width - pad.r} y1={y(f * maxV)} y2={y(f * maxV)} className="viz-grid" />
-            <text x={pad.l - 6} y={y(f * maxV) + 4} textAnchor="end" className="viz-axis">{fmtN(f * maxV)}</text></g>
+            <text x={pad.l - 6} y={y(f * maxV) + 4} textAnchor="end" className="viz-axis">{format(f * maxV)}</text></g>
         ))}
         {rows.map((r, i) => {
           let acc = 0;
@@ -188,7 +189,7 @@ export function StackedBars({ rows, keys, spanS, height = 180 }: {
       {hover !== null && rows[hover] && (
         <Tooltip x={pad.l + slot * hover + slot / 2} y={pad.t} width={width}>
           <strong>{timeLabel(rows[hover]!.t, spanS)}</strong>
-          {keys.map((k) => <div key={k.key}><i style={{ background: k.color }} />{k.label}: {fmtN(rows[hover]![k.key] ?? 0)}</div>)}
+          {keys.map((k) => <div key={k.key}><i style={{ background: k.color }} />{k.label}: {format(rows[hover]![k.key] ?? 0)}</div>)}
         </Tooltip>
       )}
     </div>

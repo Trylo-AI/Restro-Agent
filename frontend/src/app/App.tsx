@@ -13,6 +13,7 @@ import { OpsOverview } from "../features/ops/Overview";
 import { OpsRuns, OpsRunTrace } from "../features/ops/Runs";
 import { OpsDependencies, OpsEfficiency, OpsEndpoints } from "../features/ops/Tables";
 import { OrdersScreen } from "../features/orders/OrdersScreen";
+import { AnalyticsScreen, ServiceReportScreen } from "../features/reports/ReportsScreen";
 import { QrSheet, SetupScreen } from "../features/setup/SetupScreen";
 import { SessionProvider, useSession } from "../lib/session";
 import { AlertProvider } from "./alerts";
@@ -50,6 +51,8 @@ function Gate() {
           <Route path="/calls" element={<CallsScreen />} />
           <Route path="/chats/:conversationId?" element={<ChatsScreen />} />
           <Route path="/menu" element={<MenuScreen />} />
+          <Route path="/service-report" element={<ServiceReportScreen />} />
+          <Route path="/analytics" element={<AnalyticsScreen />} />
           <Route path="/setup/qr-sheet" element={<QrSheet />} />
           <Route path="/setup/:tab?" element={<SetupScreen />} />
           <Route path="/platform/ops" element={<OpsLayout />}>

@@ -1,6 +1,6 @@
 // Shell: sidebar (≥ 768 px) or tab bar, header with the active café, banners, toasts, alerts gate.
 import { useQueryClient } from "@tanstack/react-query";
-import { Activity, BellRing, ClipboardList, MessageCircle, PhoneCall, Settings, UtensilsCrossed } from "lucide-react";
+import { Activity, BarChart3, BellRing, ClipboardList, Gauge, MessageCircle, PhoneCall, Settings, UtensilsCrossed } from "lucide-react";
 import { useEffect, useRef, type ReactNode } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 
@@ -19,7 +19,7 @@ const NAV = [
   { to: "/menu", label: "Menu", short: "Menu", icon: UtensilsCrossed, area: null },
 ];
 
-const TITLES: Record<string, string> = { "/orders": "Live orders", "/calls": "Calls and bills", "/chats": "Chats", "/menu": "Menu", "/setup": "Setup", "/platform": "Performance" };
+const TITLES: Record<string, string> = { "/orders": "Live orders", "/calls": "Calls and bills", "/chats": "Chats", "/menu": "Menu", "/setup": "Setup", "/service-report": "Service report", "/analytics": "Analytics", "/platform": "Performance" };
 
 function Banners({ offline, retry }: { offline: boolean; retry: () => void }) {
   const cafe = useCafe();
@@ -96,9 +96,15 @@ export function Shell() {
                 {n.area && <Badge {...badges[n.area]} />}
               </NavLink>
             ))}
+            {atLeast(role, "manager") && (
+              <>
+                <div className="nav-group">{atLeast(role, "owner") ? "Owner" : "Manager"}</div>
+                <NavLink to="/service-report" className={({ isActive }) => (isActive ? "active" : "")}><Gauge size={18} /> Service report</NavLink>
+              </>
+            )}
             {atLeast(role, "owner") && (
               <>
-                <div className="nav-group">Owner</div>
+                <NavLink to="/analytics" className={({ isActive }) => (isActive ? "active" : "")}><BarChart3 size={18} /> Analytics</NavLink>
                 <NavLink to="/setup/tables" className={({ isActive }) => (isActive ? "active" : "")}><Settings size={18} /> Setup</NavLink>
               </>
             )}
