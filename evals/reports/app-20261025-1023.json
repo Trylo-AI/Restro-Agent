@@ -1,0 +1,533 @@
+{
+ "summary": {
+  "at": "2026-10-25T10:23:05.623546+00:00",
+  "worker_llm_backend": "dashscope",
+  "cases": 5,
+  "passed": 5,
+  "accuracy": 1.0,
+  "by_category": {
+   "hinglish": "5/5"
+  },
+  "elapsed_s": 42,
+  "llm_calls": {
+   "qwen3.8-max-0902:ok": 5
+  },
+  "reply_ms": {
+   "p50": 15073,
+   "p95": 17854
+  },
+  "turn_ms": {
+   "p50": null,
+   "p95": null
+  },
+  "turn_db_statements": {
+   "p50": null,
+   "max": null
+  },
+  "webhook_db_statements": {
+   "p50": 12
+  }
+ },
+ "results": [
+  {
+   "id": "v2-hin-9",
+   "category": "hinglish",
+   "text": "ek butter chicken bowl aur do brownie",
+   "expect": {
+    "intent": [
+     "add_items",
+     "modify_cart"
+    ],
+    "cart": [
+     {
+      "dish": "Butter Chicken Bowl",
+      "qty": 1
+     },
+     {
+      "dish": "Chocolate Brownie",
+      "qty": 2
+     }
+    ]
+   },
+   "pass": true,
+   "fails": [],
+   "ack_ms": 2609,
+   "seen": {
+    "stored": true,
+    "cart": {
+     "Butter Chicken Bowl": {
+      "qty": 1,
+      "notes": []
+     },
+     "Chocolate Brownie": {
+      "qty": 2,
+      "notes": []
+     }
+    },
+    "mode": "bot",
+    "replies": [
+     {
+      "text": "Done! Butter Chicken Bowl aur 2 Chocolate Brownie add kar diye. Aur kuch chahiye?",
+      "buttons": []
+     },
+     {
+      "text": "Your order · Table L1\n1 × Butter Chicken Bowl ₹420\n2 × Chocolate Brownie ₹360\nTotal (incl. GST) ₹780\nReady in about 18 min",
+      "buttons": [
+       "Confirm",
+       "Edit",
+       "Cancel"
+      ]
+     }
+    ],
+    "requests": [],
+    "parsed": {
+     "reply": "Done! Butter Chicken Bowl aur 2 Chocolate Brownie add kar diye. Aur kuch chahiye?",
+     "intent": "add_items",
+     "clarify": null,
+     "cart_ops": [
+      {
+       "op": "add",
+       "qty": 1,
+       "note": null,
+       "item_ref": "m18"
+      },
+      {
+       "op": "add",
+       "qty": 2,
+       "note": null,
+       "item_ref": "m10"
+      }
+     ],
+     "needs_human": {
+      "flag": false,
+      "reason": null
+     },
+     "allergen_question": null
+    },
+    "llm": [
+     {
+      "model": "qwen3.8-max-0902",
+      "outcome": "ok",
+      "latency_ms": 3048
+     }
+    ],
+    "dead_lettered": false,
+    "reply_ms": 17854,
+    "runs": [
+     {
+      "name": "POST /webhooks/whatsapp",
+      "duration_ms": 2342.101,
+      "queue_wait_ms": null,
+      "dep_ms": {
+       "db": 2312.0,
+       "queue": 0.113
+      },
+      "dep_calls": {
+       "db": 12,
+       "queue": 2
+      },
+      "stage_ms": {
+       "webhook.store": 1417.831,
+       "webhook.signal": 0.178,
+       "webhook.verify": 0.074
+      },
+      "labels": {
+       "event": "messages"
+      },
+      "outcome": "SUCCEEDED"
+     }
+    ]
+   }
+  },
+  {
+   "id": "v2-hin-10",
+   "category": "hinglish",
+   "text": "ek granola bowl please, honey thoda kam",
+   "expect": {
+    "intent": [
+     "add_items",
+     "modify_cart"
+    ],
+    "cart": [
+     {
+      "dish": "Granola Bowl",
+      "qty": 1,
+      "note": "honey"
+     }
+    ]
+   },
+   "pass": true,
+   "fails": [],
+   "ack_ms": 2461,
+   "seen": {
+    "stored": true,
+    "cart": {
+     "Granola Bowl": {
+      "qty": 1,
+      "notes": [
+       "less honey"
+      ]
+     }
+    },
+    "mode": "bot",
+    "replies": [
+     {
+      "text": "Done! Ek Granola Bowl with less honey add kar diya. Aur kuch chahiye?",
+      "buttons": []
+     },
+     {
+      "text": "Your order · Table L2\n1 × Granola Bowl ₹260\n   ↳ less honey\nTotal (incl. GST) ₹260\nReady in about 4 min",
+      "buttons": [
+       "Confirm",
+       "Edit",
+       "Cancel"
+      ]
+     }
+    ],
+    "requests": [],
+    "parsed": {
+     "reply": "Done! Ek Granola Bowl with less honey add kar diya. Aur kuch chahiye?",
+     "intent": "add_items",
+     "clarify": null,
+     "cart_ops": [
+      {
+       "op": "add",
+       "qty": 1,
+       "note": "less honey",
+       "item_ref": "m1"
+      }
+     ],
+     "needs_human": {
+      "flag": false,
+      "reason": null
+     },
+     "allergen_question": null
+    },
+    "llm": [
+     {
+      "model": "qwen3.8-max-0902",
+      "outcome": "ok",
+      "latency_ms": 2321
+     }
+    ],
+    "dead_lettered": false,
+    "reply_ms": 13873,
+    "runs": [
+     {
+      "name": "POST /webhooks/whatsapp",
+      "duration_ms": 2192.5,
+      "queue_wait_ms": null,
+      "dep_ms": {
+       "db": 2187.0,
+       "queue": 0.157
+      },
+      "dep_calls": {
+       "db": 12,
+       "queue": 2
+      },
+      "stage_ms": {
+       "webhook.store": 1250.346,
+       "webhook.signal": 0.261,
+       "webhook.verify": 0.094
+      },
+      "labels": {
+       "event": "messages"
+      },
+      "outcome": "SUCCEEDED"
+     }
+    ]
+   }
+  },
+  {
+   "id": "v2-hin-11",
+   "category": "hinglish",
+   "text": "do cold brew de do",
+   "expect": {
+    "intent": [
+     "add_items",
+     "modify_cart"
+    ],
+    "cart": [
+     {
+      "dish": "Cold Brew",
+      "qty": 2
+     }
+    ]
+   },
+   "pass": true,
+   "fails": [],
+   "ack_ms": 2486,
+   "seen": {
+    "stored": true,
+    "cart": {
+     "Cold Brew": {
+      "qty": 2,
+      "notes": []
+     }
+    },
+    "mode": "bot",
+    "replies": [
+     {
+      "text": "Done! 2 Cold Brew add kar diye. Aur kuch chahiye?",
+      "buttons": []
+     },
+     {
+      "text": "Your order · Table L3\n2 × Cold Brew ₹420\nTotal (incl. GST) ₹420\nReady in about 2 min",
+      "buttons": [
+       "Confirm",
+       "Edit",
+       "Cancel"
+      ]
+     }
+    ],
+    "requests": [],
+    "parsed": {
+     "reply": "Done! 2 Cold Brew add kar diye. Aur kuch chahiye?",
+     "intent": "add_items",
+     "clarify": null,
+     "cart_ops": [
+      {
+       "op": "add",
+       "qty": 2,
+       "note": null,
+       "item_ref": "m5"
+      }
+     ],
+     "needs_human": {
+      "flag": false,
+      "reason": null
+     },
+     "allergen_question": null
+    },
+    "llm": [
+     {
+      "model": "qwen3.8-max-0902",
+      "outcome": "ok",
+      "latency_ms": 2267
+     }
+    ],
+    "dead_lettered": false,
+    "reply_ms": 15098,
+    "runs": [
+     {
+      "name": "POST /webhooks/whatsapp",
+      "duration_ms": 2458.557,
+      "queue_wait_ms": null,
+      "dep_ms": {
+       "db": 2478.05,
+       "queue": 0.06
+      },
+      "dep_calls": {
+       "db": 13,
+       "queue": 2
+      },
+      "stage_ms": {
+       "webhook.store": 862.098,
+       "webhook.signal": 0.095,
+       "webhook.verify": 0.058
+      },
+      "labels": {
+       "event": "messages"
+      },
+      "outcome": "SUCCEEDED"
+     }
+    ]
+   }
+  },
+  {
+   "id": "v2-hin-12",
+   "category": "hinglish",
+   "text": "ek masala omelette, pyaaz mat dalna",
+   "expect": {
+    "intent": [
+     "add_items",
+     "modify_cart"
+    ],
+    "cart": [
+     {
+      "dish": "Masala Omelette",
+      "qty": 1,
+      "note": "onion"
+     }
+    ]
+   },
+   "pass": true,
+   "fails": [],
+   "ack_ms": 2428,
+   "seen": {
+    "stored": true,
+    "cart": {
+     "Masala Omelette": {
+      "qty": 1,
+      "notes": [
+       "no onion"
+      ]
+     }
+    },
+    "mode": "bot",
+    "replies": [
+     {
+      "text": "Done! Ek masala omelette bina pyaaz ke. Aur kuch chahiye?",
+      "buttons": []
+     },
+     {
+      "text": "Your order · Table L4\n1 × Masala Omelette ₹180\n   ↳ no onion\nTotal (incl. GST) ₹180\nReady in about 8 min",
+      "buttons": [
+       "Confirm",
+       "Edit",
+       "Cancel"
+      ]
+     }
+    ],
+    "requests": [],
+    "parsed": {
+     "reply": "Done! Ek masala omelette bina pyaaz ke. Aur kuch chahiye?",
+     "intent": "add_items",
+     "clarify": null,
+     "cart_ops": [
+      {
+       "op": "add",
+       "qty": 1,
+       "note": "no onion",
+       "item_ref": "m2"
+      }
+     ],
+     "needs_human": {
+      "flag": false,
+      "reason": null
+     },
+     "allergen_question": null
+    },
+    "llm": [
+     {
+      "model": "qwen3.8-max-0902",
+      "outcome": "ok",
+      "latency_ms": 2291
+     }
+    ],
+    "dead_lettered": false,
+    "reply_ms": 15073,
+    "runs": [
+     {
+      "name": "POST /webhooks/whatsapp",
+      "duration_ms": 2425.126,
+      "queue_wait_ms": null,
+      "dep_ms": {
+       "db": 2409.038,
+       "queue": 0.05
+      },
+      "dep_calls": {
+       "db": 13,
+       "queue": 2
+      },
+      "stage_ms": {
+       "webhook.store": 821.117,
+       "webhook.signal": 0.082,
+       "webhook.verify": 0.071
+      },
+      "labels": {
+       "event": "messages"
+      },
+      "outcome": "SUCCEEDED"
+     }
+    ]
+   }
+  },
+  {
+   "id": "v2-hin-13",
+   "category": "hinglish",
+   "text": "upma ek plate",
+   "expect": {
+    "intent": [
+     "add_items",
+     "modify_cart"
+    ],
+    "cart": [
+     {
+      "dish": "Upma",
+      "qty": 1
+     }
+    ]
+   },
+   "pass": true,
+   "fails": [],
+   "ack_ms": 1761,
+   "seen": {
+    "stored": true,
+    "cart": {
+     "Upma": {
+      "qty": 1,
+      "notes": []
+     }
+    },
+    "mode": "bot",
+    "replies": [
+     {
+      "text": "Done! Ek plate Upma add kar diya. Aur kuch chahiye?",
+      "buttons": []
+     },
+     {
+      "text": "Your order · Table L5\n1 × Upma ₹140\nTotal (incl. GST) ₹140\nReady in about 8 min",
+      "buttons": [
+       "Confirm",
+       "Edit",
+       "Cancel"
+      ]
+     }
+    ],
+    "requests": [],
+    "parsed": {
+     "reply": "Done! Ek plate Upma add kar diya. Aur kuch chahiye?",
+     "intent": "add_items",
+     "clarify": null,
+     "cart_ops": [
+      {
+       "op": "add",
+       "qty": 1,
+       "note": null,
+       "item_ref": "m4"
+      }
+     ],
+     "needs_human": {
+      "flag": false,
+      "reason": null
+     },
+     "allergen_question": null
+    },
+    "llm": [
+     {
+      "model": "qwen3.8-max-0902",
+      "outcome": "ok",
+      "latency_ms": 2834
+     }
+    ],
+    "dead_lettered": false,
+    "reply_ms": 12518,
+    "runs": [
+     {
+      "name": "POST /webhooks/whatsapp",
+      "duration_ms": 1506.373,
+      "queue_wait_ms": null,
+      "dep_ms": {
+       "db": 1516.0,
+       "queue": 0.11
+      },
+      "dep_calls": {
+       "db": 12,
+       "queue": 2
+      },
+      "stage_ms": {
+       "webhook.store": 651.278,
+       "webhook.signal": 0.172,
+       "webhook.verify": 0.119
+      },
+      "labels": {
+       "event": "messages"
+      },
+      "outcome": "SUCCEEDED"
+     }
+    ]
+   }
+  }
+ ]
+}

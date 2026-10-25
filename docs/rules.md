@@ -117,6 +117,8 @@ Run on every PR. Integration runs against the local Supabase stack.
 - Each run records accuracy per category, p50 / p95 latency, input / cached / output tokens and cost per order, per model.
 - Runs only on prompt, model or routing changes; such PRs merge only with an eval run.
 
+- `evals/app_run.py` runs the same cases through the real system (webhook → worker → router → AI → cart) and scores what the app did; `evals/run.py` checks the AI layer alone. Results: [app-eval.md](app-eval.md).
+
 **Phase 2 gate:** cart exact match ≥ 95 % overall and ≥ 90 % Hinglish · 0 invented items or prices reaching the customer · `unknown` allergen → handoff 100 % · human intent ≥ 98 % · LLM p95 ≤ 3 s.
 
 ### Load tests
@@ -128,6 +130,7 @@ Run on every PR. Integration runs against the local Supabase stack.
 - The checks run on the DB: lost, unprocessed, duplicate replies and orders, dead letters, unsent replies, webhook errors, inbound-to-reply p95.
 - Run the worker with `LLM_BACKEND=stub_menu`, which reads dish names, confirms and waits like a real call. The harness refuses a worker on a real model unless `--real-llm` is passed.
 - Latency is gated only when the DB round trip is ≤ 20 ms (same region). From a laptop it is reported, not gated.
+- `loadtest/db_stats.py` snapshots `pg_stat_statements` and table counters before and after a run (database time without network). `loadtest/perf_api.py` times console reads and writes. Results: [perf-test.md](perf-test.md).
 
 **Phase 3 gate** at 100 concurrent conversations: zero lost or duplicate messages · inbound-to-reply p95 ≤ 5 s · no DB connection errors · a `worker` instance killed mid-run loses nothing (leases expire, work resumes) · cost per order measured.
 

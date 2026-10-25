@@ -5,7 +5,7 @@ from typing import Any, Protocol
 @dataclass
 class LlmResult:
     outcome: str                      # ok · invalid_output · timeout · rate_limited · error
-    provider: str                     # developer_api · vertex · stub
+    provider: str                     # developer_api · vertex · stub · dashscope (testing)
     model: str
     data: dict[str, Any] | None = None
     raw: str = ""

@@ -8,6 +8,9 @@ PRICES: dict[str, tuple[float, float, float]] = {
     "gemini-2.5-flash-lite": (0.10, 0.025, 0.40),
     "gemini-2.5-flash": (0.30, 0.075, 2.50),
     # gemini-3.5-flash / -lite: not in this table yet; DEFAULT (Flash rates) applies until verified.
+    # Alibaba Model Studio free-tier quota (LLM_BACKEND=dashscope, testing only): no charge while Stop-on-Exhaust is on.
+    **{m: (0.0, 0.0, 0.0) for m in ("qwen3.8-max-0902", "qwen3.8-flash", "qwen3.8-27b", "kimi-k3",
+                                     "deepseek-v4-flash-0731", "deepseek-v4.1-flash", "deepseek-v4.1-flash-1017")},
 }
 DEFAULT = (0.30, 0.075, 2.50)  # unknown model: price as Flash so costs are never under-reported
 

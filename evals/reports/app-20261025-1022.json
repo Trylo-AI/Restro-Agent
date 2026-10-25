@@ -1,0 +1,1501 @@
+{
+ "summary": {
+  "at": "2026-10-25T10:22:01.078590+00:00",
+  "worker_llm_backend": "dashscope",
+  "cases": 15,
+  "passed": 15,
+  "accuracy": 1.0,
+  "by_category": {
+   "hindi_script": "15/15"
+  },
+  "elapsed_s": 108,
+  "llm_calls": {
+   "qwen3.8-max-0902:ok": 15
+  },
+  "reply_ms": {
+   "p50": 18743,
+   "p95": 27533
+  },
+  "turn_ms": {
+   "p50": null,
+   "p95": null
+  },
+  "turn_db_statements": {
+   "p50": null,
+   "max": null
+  },
+  "webhook_db_statements": {
+   "p50": 13
+  }
+ },
+ "results": [
+  {
+   "id": "dv-1",
+   "category": "hindi_script",
+   "text": "दो कोल्ड कॉफी",
+   "expect": {
+    "intent": [
+     "add_items",
+     "modify_cart"
+    ],
+    "cart": [
+     {
+      "dish": "Cold Coffee",
+      "qty": 2
+     }
+    ]
+   },
+   "pass": true,
+   "fails": [],
+   "ack_ms": 1681,
+   "seen": {
+    "stored": true,
+    "cart": {
+     "Cold Coffee": {
+      "qty": 2,
+      "notes": []
+     }
+    },
+    "mode": "bot",
+    "replies": [
+     {
+      "text": "दो कोल्ड कॉफी ऐड कर दी! और कुछ चाहिए?",
+      "buttons": []
+     },
+     {
+      "text": "Your order · Table L1\n2 × Cold Coffee ₹380\nTotal (incl. GST) ₹380\nReady in about 4 min",
+      "buttons": [
+       "Confirm",
+       "Edit",
+       "Cancel"
+      ]
+     }
+    ],
+    "requests": [],
+    "parsed": {
+     "reply": "दो कोल्ड कॉफी ऐड कर दी! और कुछ चाहिए?",
+     "intent": "add_items",
+     "clarify": null,
+     "cart_ops": [
+      {
+       "op": "add",
+       "qty": 2,
+       "note": null,
+       "item_ref": "m7"
+      }
+     ],
+     "needs_human": {
+      "flag": false,
+      "reason": null
+     },
+     "allergen_question": null
+    },
+    "llm": [
+     {
+      "model": "qwen3.8-max-0902",
+      "outcome": "ok",
+      "latency_ms": 2533
+     }
+    ],
+    "dead_lettered": false,
+    "reply_ms": 17688,
+    "runs": [
+     {
+      "name": "POST /webhooks/whatsapp",
+      "duration_ms": 1678.538,
+      "queue_wait_ms": null,
+      "dep_ms": {
+       "db": 1682.146,
+       "queue": 0.113
+      },
+      "dep_calls": {
+       "db": 13,
+       "queue": 2
+      },
+      "stage_ms": {
+       "webhook.store": 769.791,
+       "webhook.signal": 0.175,
+       "webhook.verify": 0.074
+      },
+      "labels": {
+       "event": "messages"
+      },
+      "outcome": "SUCCEEDED"
+     }
+    ]
+   }
+  },
+  {
+   "id": "dv-2",
+   "category": "hindi_script",
+   "text": "एक मसाला चाय और एक पोहा",
+   "expect": {
+    "intent": [
+     "add_items",
+     "modify_cart"
+    ],
+    "cart": [
+     {
+      "dish": "Masala Chai",
+      "qty": 1
+     },
+     {
+      "dish": "Poha",
+      "qty": 1
+     }
+    ]
+   },
+   "pass": true,
+   "fails": [],
+   "ack_ms": 3474,
+   "seen": {
+    "stored": true,
+    "cart": {
+     "Masala Chai": {
+      "qty": 1,
+      "notes": []
+     },
+     "Poha": {
+      "qty": 1,
+      "notes": []
+     }
+    },
+    "mode": "bot",
+    "replies": [
+     {
+      "text": "बिल्कुल! एक मसाला चाय और एक पोहा ऐड कर दिया। और कुछ चाहिए?",
+      "buttons": []
+     },
+     {
+      "text": "Your order · Table L2\n1 × Masala Chai ₹90\n1 × Poha ₹140\nTotal (incl. GST) ₹230\nReady in about 8 min",
+      "buttons": [
+       "Confirm",
+       "Edit",
+       "Cancel"
+      ]
+     }
+    ],
+    "requests": [],
+    "parsed": {
+     "reply": "बिल्कुल! एक मसाला चाय और एक पोहा ऐड कर दिया। और कुछ चाहिए?",
+     "intent": "add_items",
+     "clarify": null,
+     "cart_ops": [
+      {
+       "op": "add",
+       "qty": 1,
+       "note": null,
+       "item_ref": "m24"
+      },
+      {
+       "op": "add",
+       "qty": 1,
+       "note": null,
+       "item_ref": "m3"
+      }
+     ],
+     "needs_human": {
+      "flag": false,
+      "reason": null
+     },
+     "allergen_question": null
+    },
+    "llm": [
+     {
+      "model": "qwen3.8-max-0902",
+      "outcome": "ok",
+      "latency_ms": 3034
+     }
+    ],
+    "dead_lettered": false,
+    "reply_ms": 24758,
+    "runs": [
+     {
+      "name": "POST /webhooks/whatsapp",
+      "duration_ms": 2274.816,
+      "queue_wait_ms": null,
+      "dep_ms": {
+       "db": 2292.401,
+       "queue": 0.116
+      },
+      "dep_calls": {
+       "db": 14,
+       "queue": 2
+      },
+      "stage_ms": {
+       "webhook.store": 956.199,
+       "webhook.signal": 0.19,
+       "webhook.verify": 0.06
+      },
+      "labels": {
+       "event": "messages"
+      },
+      "outcome": "SUCCEEDED"
+     }
+    ]
+   }
+  },
+  {
+   "id": "v2-dev-1",
+   "category": "hindi_script",
+   "text": "एक कैपुचीनो",
+   "expect": {
+    "intent": [
+     "add_items",
+     "modify_cart"
+    ],
+    "cart": [
+     {
+      "dish": "Cappuccino",
+      "qty": 1
+     }
+    ]
+   },
+   "pass": true,
+   "fails": [],
+   "ack_ms": 3017,
+   "seen": {
+    "stored": true,
+    "cart": {
+     "Cappuccino": {
+      "qty": 1,
+      "notes": []
+     }
+    },
+    "mode": "bot",
+    "replies": [
+     {
+      "text": "Done! एक Cappuccino add कर दिया। और कुछ चाहिए?",
+      "buttons": []
+     },
+     {
+      "text": "Your order · Table L3\n1 × Cappuccino ₹180\nTotal (incl. GST) ₹180\nReady in about 4 min",
+      "buttons": [
+       "Confirm",
+       "Edit",
+       "Cancel"
+      ]
+     }
+    ],
+    "requests": [],
+    "parsed": {
+     "reply": "Done! एक Cappuccino add कर दिया। और कुछ चाहिए?",
+     "intent": "add_items",
+     "clarify": null,
+     "cart_ops": [
+      {
+       "op": "add",
+       "qty": 1,
+       "note": null,
+       "item_ref": "m13"
+      }
+     ],
+     "needs_human": {
+      "flag": false,
+      "reason": null
+     },
+     "allergen_question": null
+    },
+    "llm": [
+     {
+      "model": "qwen3.8-max-0902",
+      "outcome": "ok",
+      "latency_ms": 2897
+     }
+    ],
+    "dead_lettered": false,
+    "reply_ms": 19068,
+    "runs": [
+     {
+      "name": "POST /webhooks/whatsapp",
+      "duration_ms": 2741.438,
+      "queue_wait_ms": null,
+      "dep_ms": {
+       "db": 2729.503,
+       "queue": 0.077
+      },
+      "dep_calls": {
+       "db": 13,
+       "queue": 2
+      },
+      "stage_ms": {
+       "webhook.store": 1261.358,
+       "webhook.signal": 0.119,
+       "webhook.verify": 0.084
+      },
+      "labels": {
+       "event": "messages"
+      },
+      "outcome": "SUCCEEDED"
+     }
+    ]
+   }
+  },
+  {
+   "id": "v2-dev-2",
+   "category": "hindi_script",
+   "text": "दो मसाला चाय",
+   "expect": {
+    "intent": [
+     "add_items",
+     "modify_cart"
+    ],
+    "cart": [
+     {
+      "dish": "Masala Chai",
+      "qty": 2
+     }
+    ]
+   },
+   "pass": true,
+   "fails": [],
+   "ack_ms": 2596,
+   "seen": {
+    "stored": true,
+    "cart": {
+     "Masala Chai": {
+      "qty": 2,
+      "notes": []
+     }
+    },
+    "mode": "bot",
+    "replies": [
+     {
+      "text": "दो मसाला चाय ऐड कर दी! और कुछ चाहिए?",
+      "buttons": []
+     },
+     {
+      "text": "Your order · Table L4\n2 × Masala Chai ₹180\nTotal (incl. GST) ₹180\nReady in about 5 min",
+      "buttons": [
+       "Confirm",
+       "Edit",
+       "Cancel"
+      ]
+     }
+    ],
+    "requests": [],
+    "parsed": {
+     "reply": "दो मसाला चाय ऐड कर दी! और कुछ चाहिए?",
+     "intent": "add_items",
+     "clarify": null,
+     "cart_ops": [
+      {
+       "op": "add",
+       "qty": 2,
+       "note": null,
+       "item_ref": "m24"
+      }
+     ],
+     "needs_human": {
+      "flag": false,
+      "reason": null
+     },
+     "allergen_question": null
+    },
+    "llm": [
+     {
+      "model": "qwen3.8-max-0902",
+      "outcome": "ok",
+      "latency_ms": 2757
+     }
+    ],
+    "dead_lettered": false,
+    "reply_ms": 27533,
+    "runs": [
+     {
+      "name": "POST /webhooks/whatsapp",
+      "duration_ms": 2561.615,
+      "queue_wait_ms": null,
+      "dep_ms": {
+       "db": 2551.896,
+       "queue": 0.083
+      },
+      "dep_calls": {
+       "db": 13,
+       "queue": 2
+      },
+      "stage_ms": {
+       "webhook.store": 1042.88,
+       "webhook.signal": 0.136,
+       "webhook.verify": 0.046
+      },
+      "labels": {
+       "event": "messages"
+      },
+      "outcome": "SUCCEEDED"
+     }
+    ]
+   }
+  },
+  {
+   "id": "v2-dev-3",
+   "category": "hindi_script",
+   "text": "एक पोहा और एक चाय",
+   "expect": {
+    "intent": [
+     "add_items",
+     "modify_cart"
+    ],
+    "cart": [
+     {
+      "dish": "Poha",
+      "qty": 1
+     },
+     {
+      "dish": "Masala Chai",
+      "qty": 1
+     }
+    ]
+   },
+   "pass": true,
+   "fails": [],
+   "ack_ms": 2995,
+   "seen": {
+    "stored": true,
+    "cart": {
+     "Poha": {
+      "qty": 1,
+      "notes": []
+     },
+     "Masala Chai": {
+      "qty": 1,
+      "notes": []
+     }
+    },
+    "mode": "bot",
+    "replies": [
+     {
+      "text": "बिल्कुल! एक पोहा और एक मसाला चाय ऐड कर दी। और कुछ चाहिए?",
+      "buttons": []
+     },
+     {
+      "text": "Your order · Table L5\n1 × Poha ₹140\n1 × Masala Chai ₹90\nTotal (incl. GST) ₹230\nReady in about 8 min",
+      "buttons": [
+       "Confirm",
+       "Edit",
+       "Cancel"
+      ]
+     }
+    ],
+    "requests": [],
+    "parsed": {
+     "reply": "बिल्कुल! एक पोहा और एक मसाला चाय ऐड कर दी। और कुछ चाहिए?",
+     "intent": "add_items",
+     "clarify": null,
+     "cart_ops": [
+      {
+       "op": "add",
+       "qty": 1,
+       "note": null,
+       "item_ref": "m3"
+      },
+      {
+       "op": "add",
+       "qty": 1,
+       "note": null,
+       "item_ref": "m24"
+      }
+     ],
+     "needs_human": {
+      "flag": false,
+      "reason": null
+     },
+     "allergen_question": null
+    },
+    "llm": [
+     {
+      "model": "qwen3.8-max-0902",
+      "outcome": "ok",
+      "latency_ms": 2648
+     }
+    ],
+    "dead_lettered": false,
+    "reply_ms": 21838,
+    "runs": [
+     {
+      "name": "POST /webhooks/whatsapp",
+      "duration_ms": 2746.095,
+      "queue_wait_ms": null,
+      "dep_ms": {
+       "db": 2734.0,
+       "queue": 0.099
+      },
+      "dep_calls": {
+       "db": 12,
+       "queue": 2
+      },
+      "stage_ms": {
+       "webhook.store": 743.769,
+       "webhook.signal": 0.148,
+       "webhook.verify": 0.091
+      },
+      "labels": {
+       "event": "messages"
+      },
+      "outcome": "SUCCEEDED"
+     }
+    ]
+   }
+  },
+  {
+   "id": "v2-dev-4",
+   "category": "hindi_script",
+   "text": "तीन कोल्ड कॉफी",
+   "expect": {
+    "intent": [
+     "add_items",
+     "modify_cart"
+    ],
+    "cart": [
+     {
+      "dish": "Cold Coffee",
+      "qty": 3
+     }
+    ]
+   },
+   "pass": true,
+   "fails": [],
+   "ack_ms": 2744,
+   "seen": {
+    "stored": true,
+    "cart": {
+     "Cold Coffee": {
+      "qty": 3,
+      "notes": []
+     }
+    },
+    "mode": "bot",
+    "replies": [
+     {
+      "text": "तीन कोल्ड कॉफी ऐड कर दी! और कुछ चाहिए?",
+      "buttons": []
+     },
+     {
+      "text": "Your order · Table L6\n3 × Cold Coffee ₹570\nTotal (incl. GST) ₹570\nReady in about 4 min",
+      "buttons": [
+       "Confirm",
+       "Edit",
+       "Cancel"
+      ]
+     }
+    ],
+    "requests": [],
+    "parsed": {
+     "reply": "तीन कोल्ड कॉफी ऐड कर दी! और कुछ चाहिए?",
+     "intent": "add_items",
+     "clarify": null,
+     "cart_ops": [
+      {
+       "op": "add",
+       "qty": 3,
+       "note": null,
+       "item_ref": "m7"
+      }
+     ],
+     "needs_human": {
+      "flag": false,
+      "reason": null
+     },
+     "allergen_question": null
+    },
+    "llm": [
+     {
+      "model": "qwen3.8-max-0902",
+      "outcome": "ok",
+      "latency_ms": 2338
+     }
+    ],
+    "dead_lettered": false,
+    "reply_ms": 23793,
+    "runs": [
+     {
+      "name": "POST /webhooks/whatsapp",
+      "duration_ms": 2741.095,
+      "queue_wait_ms": null,
+      "dep_ms": {
+       "db": 2720.676,
+       "queue": 0.068
+      },
+      "dep_calls": {
+       "db": 14,
+       "queue": 2
+      },
+      "stage_ms": {
+       "webhook.store": 1557.95,
+       "webhook.signal": 0.104,
+       "webhook.verify": 0.087
+      },
+      "labels": {
+       "event": "messages"
+      },
+      "outcome": "SUCCEEDED"
+     }
+    ]
+   }
+  },
+  {
+   "id": "v2-dev-5",
+   "category": "hindi_script",
+   "text": "एक हॉट चॉकलेट",
+   "expect": {
+    "intent": [
+     "add_items",
+     "modify_cart"
+    ],
+    "cart": [
+     {
+      "dish": "Hot Chocolate",
+      "qty": 1
+     }
+    ]
+   },
+   "pass": true,
+   "fails": [],
+   "ack_ms": 3589,
+   "seen": {
+    "stored": true,
+    "cart": {
+     "Hot Chocolate": {
+      "qty": 1,
+      "notes": []
+     }
+    },
+    "mode": "bot",
+    "replies": [
+     {
+      "text": "हॉट चॉकलेट ऐड कर दी! और कुछ चाहिए?",
+      "buttons": []
+     },
+     {
+      "text": "Your order · Table L7\n1 × Hot Chocolate ₹220\nTotal (incl. GST) ₹220\nReady in about 5 min",
+      "buttons": [
+       "Confirm",
+       "Edit",
+       "Cancel"
+      ]
+     }
+    ],
+    "requests": [],
+    "parsed": {
+     "reply": "हॉट चॉकलेट ऐड कर दी! और कुछ चाहिए?",
+     "intent": "add_items",
+     "clarify": null,
+     "cart_ops": [
+      {
+       "op": "add",
+       "qty": 1,
+       "note": null,
+       "item_ref": "m21"
+      }
+     ],
+     "needs_human": {
+      "flag": false,
+      "reason": null
+     },
+     "allergen_question": null
+    },
+    "llm": [
+     {
+      "model": "qwen3.8-max-0902",
+      "outcome": "ok",
+      "latency_ms": 2074
+     }
+    ],
+    "dead_lettered": false,
+    "reply_ms": 19619,
+    "runs": [
+     {
+      "name": "POST /webhooks/whatsapp",
+      "duration_ms": 3074.581,
+      "queue_wait_ms": null,
+      "dep_ms": {
+       "db": 3046.015,
+       "queue": 0.101
+      },
+      "dep_calls": {
+       "db": 14,
+       "queue": 2
+      },
+      "stage_ms": {
+       "webhook.store": 1755.713,
+       "webhook.signal": 0.157,
+       "webhook.verify": 0.031
+      },
+      "labels": {
+       "event": "messages"
+      },
+      "outcome": "SUCCEEDED"
+     }
+    ]
+   }
+  },
+  {
+   "id": "v2-dev-6",
+   "category": "hindi_script",
+   "text": "एक बॉम्बे सैंडविच",
+   "expect": {
+    "intent": [
+     "add_items",
+     "modify_cart"
+    ],
+    "cart": [
+     {
+      "dish": "Bombay Sandwich",
+      "qty": 1
+     }
+    ]
+   },
+   "pass": true,
+   "fails": [],
+   "ack_ms": 1910,
+   "seen": {
+    "stored": true,
+    "cart": {
+     "Bombay Sandwich": {
+      "qty": 1,
+      "notes": []
+     }
+    },
+    "mode": "bot",
+    "replies": [
+     {
+      "text": "बॉम्बे सैंडविच ऐड कर दिया! और कुछ चाहिए?",
+      "buttons": []
+     },
+     {
+      "text": "Your order · Table L8\n1 × Bombay Sandwich ₹180\nTotal (incl. GST) ₹180\nReady in about 7 min",
+      "buttons": [
+       "Confirm",
+       "Edit",
+       "Cancel"
+      ]
+     }
+    ],
+    "requests": [],
+    "parsed": {
+     "reply": "बॉम्बे सैंडविच ऐड कर दिया! और कुछ चाहिए?",
+     "intent": "add_items",
+     "clarify": null,
+     "cart_ops": [
+      {
+       "op": "add",
+       "qty": 1,
+       "note": null,
+       "item_ref": "m26"
+      }
+     ],
+     "needs_human": {
+      "flag": false,
+      "reason": null
+     },
+     "allergen_question": null
+    },
+    "llm": [
+     {
+      "model": "qwen3.8-max-0902",
+      "outcome": "ok",
+      "latency_ms": 2952
+     }
+    ],
+    "dead_lettered": false,
+    "reply_ms": 18743,
+    "runs": [
+     {
+      "name": "POST /webhooks/whatsapp",
+      "duration_ms": 1650.599,
+      "queue_wait_ms": null,
+      "dep_ms": {
+       "db": 1640.0,
+       "queue": 0.122
+      },
+      "dep_calls": {
+       "db": 12,
+       "queue": 2
+      },
+      "stage_ms": {
+       "webhook.store": 717.631,
+       "webhook.signal": 0.191,
+       "webhook.verify": 0.078
+      },
+      "labels": {
+       "event": "messages"
+      },
+      "outcome": "SUCCEEDED"
+     }
+    ]
+   }
+  },
+  {
+   "id": "v2-dev-7",
+   "category": "hindi_script",
+   "text": "दो ब्राउनी",
+   "expect": {
+    "intent": [
+     "add_items",
+     "modify_cart"
+    ],
+    "cart": [
+     {
+      "dish": "Chocolate Brownie",
+      "qty": 2
+     }
+    ]
+   },
+   "pass": true,
+   "fails": [],
+   "ack_ms": 1534,
+   "seen": {
+    "stored": true,
+    "cart": {
+     "Chocolate Brownie": {
+      "qty": 2,
+      "notes": []
+     }
+    },
+    "mode": "bot",
+    "replies": [
+     {
+      "text": "दो Chocolate Brownie ऐड कर दिए! और कुछ चाहिए?",
+      "buttons": []
+     },
+     {
+      "text": "Your order · Table L9\n2 × Chocolate Brownie ₹360\nTotal (incl. GST) ₹360\nReady in about 3 min",
+      "buttons": [
+       "Confirm",
+       "Edit",
+       "Cancel"
+      ]
+     }
+    ],
+    "requests": [],
+    "parsed": {
+     "reply": "दो Chocolate Brownie ऐड कर दिए! और कुछ चाहिए?",
+     "intent": "add_items",
+     "clarify": null,
+     "cart_ops": [
+      {
+       "op": "add",
+       "qty": 2,
+       "note": null,
+       "item_ref": "m10"
+      }
+     ],
+     "needs_human": {
+      "flag": false,
+      "reason": null
+     },
+     "allergen_question": null
+    },
+    "llm": [
+     {
+      "model": "qwen3.8-max-0902",
+      "outcome": "ok",
+      "latency_ms": 2229
+     }
+    ],
+    "dead_lettered": false,
+    "reply_ms": 18403,
+    "runs": [
+     {
+      "name": "POST /webhooks/whatsapp",
+      "duration_ms": 1530.679,
+      "queue_wait_ms": null,
+      "dep_ms": {
+       "db": 1532.0,
+       "queue": 0.089
+      },
+      "dep_calls": {
+       "db": 12,
+       "queue": 2
+      },
+      "stage_ms": {
+       "webhook.store": 725.561,
+       "webhook.signal": 0.137,
+       "webhook.verify": 0.052
+      },
+      "labels": {
+       "event": "messages"
+      },
+      "outcome": "SUCCEEDED"
+     }
+    ]
+   }
+  },
+  {
+   "id": "v2-dev-8",
+   "category": "hindi_script",
+   "text": "एक उपमा",
+   "expect": {
+    "intent": [
+     "add_items",
+     "modify_cart"
+    ],
+    "cart": [
+     {
+      "dish": "Upma",
+      "qty": 1
+     }
+    ]
+   },
+   "pass": true,
+   "fails": [],
+   "ack_ms": 1656,
+   "seen": {
+    "stored": true,
+    "cart": {
+     "Upma": {
+      "qty": 1,
+      "notes": []
+     }
+    },
+    "mode": "bot",
+    "replies": [
+     {
+      "text": "Done! Ek Upma add kar diya. Aur kuch chahiye?",
+      "buttons": []
+     },
+     {
+      "text": "Your order · Table L10\n1 × Upma ₹140\nTotal (incl. GST) ₹140\nReady in about 8 min",
+      "buttons": [
+       "Confirm",
+       "Edit",
+       "Cancel"
+      ]
+     }
+    ],
+    "requests": [],
+    "parsed": {
+     "reply": "Done! Ek Upma add kar diya. Aur kuch chahiye?",
+     "intent": "add_items",
+     "clarify": null,
+     "cart_ops": [
+      {
+       "op": "add",
+       "qty": 1,
+       "note": null,
+       "item_ref": "m4"
+      }
+     ],
+     "needs_human": {
+      "flag": false,
+      "reason": null
+     },
+     "allergen_question": null
+    },
+    "llm": [
+     {
+      "model": "qwen3.8-max-0902",
+      "outcome": "ok",
+      "latency_ms": 2452
+     }
+    ],
+    "dead_lettered": false,
+    "reply_ms": 15034,
+    "runs": [
+     {
+      "name": "POST /webhooks/whatsapp",
+      "duration_ms": 1653.011,
+      "queue_wait_ms": null,
+      "dep_ms": {
+       "db": 1656.0,
+       "queue": 0.074
+      },
+      "dep_calls": {
+       "db": 12,
+       "queue": 2
+      },
+      "stage_ms": {
+       "webhook.store": 708.029,
+       "webhook.signal": 0.114,
+       "webhook.verify": 0.05
+      },
+      "labels": {
+       "event": "messages"
+      },
+      "outcome": "SUCCEEDED"
+     }
+    ]
+   }
+  },
+  {
+   "id": "v2-dev-9",
+   "category": "hindi_script",
+   "text": "एक मसाला ऑमलेट",
+   "expect": {
+    "intent": [
+     "add_items",
+     "modify_cart"
+    ],
+    "cart": [
+     {
+      "dish": "Masala Omelette",
+      "qty": 1
+     }
+    ]
+   },
+   "pass": true,
+   "fails": [],
+   "ack_ms": 2069,
+   "seen": {
+    "stored": true,
+    "cart": {
+     "Masala Omelette": {
+      "qty": 1,
+      "notes": []
+     }
+    },
+    "mode": "bot",
+    "replies": [
+     {
+      "text": "मसाला ऑमलेट ऐड कर दिया! और कुछ चाहिए?",
+      "buttons": []
+     },
+     {
+      "text": "Your order · Table L11\n1 × Masala Omelette ₹180\nTotal (incl. GST) ₹180\nReady in about 8 min",
+      "buttons": [
+       "Confirm",
+       "Edit",
+       "Cancel"
+      ]
+     }
+    ],
+    "requests": [],
+    "parsed": {
+     "reply": "मसाला ऑमलेट ऐड कर दिया! और कुछ चाहिए?",
+     "intent": "add_items",
+     "clarify": null,
+     "cart_ops": [
+      {
+       "op": "add",
+       "qty": 1,
+       "note": null,
+       "item_ref": "m2"
+      }
+     ],
+     "needs_human": {
+      "flag": false,
+      "reason": null
+     },
+     "allergen_question": null
+    },
+    "llm": [
+     {
+      "model": "qwen3.8-max-0902",
+      "outcome": "ok",
+      "latency_ms": 2470
+     }
+    ],
+    "dead_lettered": false,
+    "reply_ms": 18999,
+    "runs": [
+     {
+      "name": "POST /webhooks/whatsapp",
+      "duration_ms": 1697.989,
+      "queue_wait_ms": null,
+      "dep_ms": {
+       "db": 1655.906,
+       "queue": 0.106
+      },
+      "dep_calls": {
+       "db": 14,
+       "queue": 2
+      },
+      "stage_ms": {
+       "webhook.store": 763.378,
+       "webhook.signal": 0.171,
+       "webhook.verify": 0.03
+      },
+      "labels": {
+       "event": "messages"
+      },
+      "outcome": "SUCCEEDED"
+     }
+    ]
+   }
+  },
+  {
+   "id": "v2-dev-10",
+   "category": "hindi_script",
+   "text": "एक फ़िल्टर कॉफ़ी",
+   "expect": {
+    "intent": [
+     "add_items",
+     "modify_cart"
+    ],
+    "cart": [
+     {
+      "dish": "Filter Coffee",
+      "qty": 1
+     }
+    ]
+   },
+   "pass": true,
+   "fails": [],
+   "ack_ms": 2642,
+   "seen": {
+    "stored": true,
+    "cart": {
+     "Filter Coffee": {
+      "qty": 1,
+      "notes": []
+     }
+    },
+    "mode": "bot",
+    "replies": [
+     {
+      "text": "एक फ़िल्टर कॉफ़ी ऐड कर दी! और कुछ चाहिए?",
+      "buttons": []
+     },
+     {
+      "text": "Your order · Table L12\n1 × Filter Coffee ₹110\nTotal (incl. GST) ₹110\nReady in about 4 min",
+      "buttons": [
+       "Confirm",
+       "Edit",
+       "Cancel"
+      ]
+     }
+    ],
+    "requests": [],
+    "parsed": {
+     "reply": "एक फ़िल्टर कॉफ़ी ऐड कर दी! और कुछ चाहिए?",
+     "intent": "add_items",
+     "clarify": null,
+     "cart_ops": [
+      {
+       "op": "add",
+       "qty": 1,
+       "note": null,
+       "item_ref": "m15"
+      }
+     ],
+     "needs_human": {
+      "flag": false,
+      "reason": null
+     },
+     "allergen_question": null
+    },
+    "llm": [
+     {
+      "model": "qwen3.8-max-0902",
+      "outcome": "ok",
+      "latency_ms": 2264
+     }
+    ],
+    "dead_lettered": false,
+    "reply_ms": 18679,
+    "runs": [
+     {
+      "name": "POST /webhooks/whatsapp",
+      "duration_ms": 2360.074,
+      "queue_wait_ms": null,
+      "dep_ms": {
+       "db": 2331.405,
+       "queue": 0.091
+      },
+      "dep_calls": {
+       "db": 14,
+       "queue": 2
+      },
+      "stage_ms": {
+       "webhook.store": 1469.189,
+       "webhook.signal": 0.147,
+       "webhook.verify": 0.09
+      },
+      "labels": {
+       "event": "messages"
+      },
+      "outcome": "SUCCEEDED"
+     }
+    ]
+   }
+  },
+  {
+   "id": "v2-dev-11",
+   "category": "hindi_script",
+   "text": "एक मैंगो स्मूदी",
+   "expect": {
+    "intent": [
+     "add_items",
+     "modify_cart"
+    ],
+    "cart": [
+     {
+      "dish": "Mango Smoothie",
+      "qty": 1
+     }
+    ]
+   },
+   "pass": true,
+   "fails": [],
+   "ack_ms": 1703,
+   "seen": {
+    "stored": true,
+    "cart": {
+     "Mango Smoothie": {
+      "qty": 1,
+      "notes": []
+     }
+    },
+    "mode": "bot",
+    "replies": [
+     {
+      "text": "Done! Mango Smoothie add kar diya. Aur kuch chahiye?",
+      "buttons": []
+     },
+     {
+      "text": "Your order · Table L13\n1 × Mango Smoothie ₹210\nTotal (incl. GST) ₹210\nReady in about 4 min",
+      "buttons": [
+       "Confirm",
+       "Edit",
+       "Cancel"
+      ]
+     }
+    ],
+    "requests": [],
+    "parsed": {
+     "reply": "Done! Mango Smoothie add kar diya. Aur kuch chahiye?",
+     "intent": "add_items",
+     "clarify": null,
+     "cart_ops": [
+      {
+       "op": "add",
+       "qty": 1,
+       "note": null,
+       "item_ref": "m23"
+      }
+     ],
+     "needs_human": {
+      "flag": false,
+      "reason": null
+     },
+     "allergen_question": null
+    },
+    "llm": [
+     {
+      "model": "qwen3.8-max-0902",
+      "outcome": "ok",
+      "latency_ms": 2217
+     }
+    ],
+    "dead_lettered": false,
+    "reply_ms": 16159,
+    "runs": [
+     {
+      "name": "POST /webhooks/whatsapp",
+      "duration_ms": 1699.254,
+      "queue_wait_ms": null,
+      "dep_ms": {
+       "db": 1688.0,
+       "queue": 0.135
+      },
+      "dep_calls": {
+       "db": 12,
+       "queue": 2
+      },
+      "stage_ms": {
+       "webhook.store": 789.107,
+       "webhook.signal": 0.214,
+       "webhook.verify": 0.087
+      },
+      "labels": {
+       "event": "messages"
+      },
+      "outcome": "SUCCEEDED"
+     }
+    ]
+   }
+  },
+  {
+   "id": "v2-dev-12",
+   "category": "hindi_script",
+   "text": "दो लेमन आइस्ड टी",
+   "expect": {
+    "intent": [
+     "add_items",
+     "modify_cart"
+    ],
+    "cart": [
+     {
+      "dish": "Lemon Iced Tea",
+      "qty": 2
+     }
+    ]
+   },
+   "pass": true,
+   "fails": [],
+   "ack_ms": 1748,
+   "seen": {
+    "stored": true,
+    "cart": {
+     "Lemon Iced Tea": {
+      "qty": 2,
+      "notes": []
+     }
+    },
+    "mode": "bot",
+    "replies": [
+     {
+      "text": "Done! 2 Lemon Iced Tea add kar diye. Aur kuch chahiye?",
+      "buttons": []
+     },
+     {
+      "text": "Your order · Table L14\n2 × Lemon Iced Tea ₹280\nTotal (incl. GST) ₹280\nReady in about 3 min",
+      "buttons": [
+       "Confirm",
+       "Edit",
+       "Cancel"
+      ]
+     }
+    ],
+    "requests": [],
+    "parsed": {
+     "reply": "Done! 2 Lemon Iced Tea add kar diye. Aur kuch chahiye?",
+     "intent": "add_items",
+     "clarify": null,
+     "cart_ops": [
+      {
+       "op": "add",
+       "qty": 2,
+       "note": null,
+       "item_ref": "m22"
+      }
+     ],
+     "needs_human": {
+      "flag": false,
+      "reason": null
+     },
+     "allergen_question": null
+    },
+    "llm": [
+     {
+      "model": "qwen3.8-max-0902",
+      "outcome": "ok",
+      "latency_ms": 2803
+     }
+    ],
+    "dead_lettered": false,
+    "reply_ms": 17863,
+    "runs": [
+     {
+      "name": "POST /webhooks/whatsapp",
+      "duration_ms": 1746.009,
+      "queue_wait_ms": null,
+      "dep_ms": {
+       "db": 1749.389,
+       "queue": 0.107
+      },
+      "dep_calls": {
+       "db": 13,
+       "queue": 2
+      },
+      "stage_ms": {
+       "webhook.store": 679.883,
+       "webhook.signal": 0.17,
+       "webhook.verify": 0.077
+      },
+      "labels": {
+       "event": "messages"
+      },
+      "outcome": "SUCCEEDED"
+     }
+    ]
+   }
+  },
+  {
+   "id": "v2-dev-13",
+   "category": "hindi_script",
+   "text": "एक पनीर टिक्का सैंडविच",
+   "expect": {
+    "intent": [
+     "add_items",
+     "modify_cart"
+    ],
+    "cart": [
+     {
+      "dish": "Paneer Tikka Sandwich",
+      "qty": 1
+     }
+    ]
+   },
+   "pass": true,
+   "fails": [],
+   "ack_ms": 1824,
+   "seen": {
+    "stored": true,
+    "cart": {
+     "Paneer Tikka Sandwich": {
+      "qty": 1,
+      "notes": []
+     }
+    },
+    "mode": "bot",
+    "replies": [
+     {
+      "text": "पनीर टिक्का सैंडविच ऐड कर दिया! और कुछ चाहिए?",
+      "buttons": []
+     },
+     {
+      "text": "Your order · Table L15\n1 × Paneer Tikka Sandwich ₹260\nTotal (incl. GST) ₹260\nReady in about 10 min",
+      "buttons": [
+       "Confirm",
+       "Edit",
+       "Cancel"
+      ]
+     }
+    ],
+    "requests": [],
+    "parsed": {
+     "reply": "पनीर टिक्का सैंडविच ऐड कर दिया! और कुछ चाहिए?",
+     "intent": "add_items",
+     "clarify": null,
+     "cart_ops": [
+      {
+       "op": "add",
+       "qty": 1,
+       "note": null,
+       "item_ref": "m29"
+      }
+     ],
+     "needs_human": {
+      "flag": false,
+      "reason": null
+     },
+     "allergen_question": null
+    },
+    "llm": [
+     {
+      "model": "qwen3.8-max-0902",
+      "outcome": "ok",
+      "latency_ms": 2116
+     }
+    ],
+    "dead_lettered": false,
+    "reply_ms": 15428,
+    "runs": [
+     {
+      "name": "POST /webhooks/whatsapp",
+      "duration_ms": 1812.843,
+      "queue_wait_ms": null,
+      "dep_ms": {
+       "db": 1797.0,
+       "queue": 0.096
+      },
+      "dep_calls": {
+       "db": 12,
+       "queue": 2
+      },
+      "stage_ms": {
+       "webhook.store": 738.562,
+       "webhook.signal": 0.149,
+       "webhook.verify": 0.08
+      },
+      "labels": {
+       "event": "messages"
+      },
+      "outcome": "SUCCEEDED"
+     }
+    ]
+   }
+  }
+ ]
+}

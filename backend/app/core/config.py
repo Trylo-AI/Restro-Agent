@@ -28,7 +28,9 @@ class Settings(BaseSettings):
     database_url_session: SecretStr | None = None
 
     # LLM
-    llm_backend: Literal["developer_api", "vertex", "stub", "stub_menu"] = "developer_api"
+    llm_backend: Literal["developer_api", "vertex", "stub", "stub_menu", "dashscope"] = "developer_api"
+    dashscope_api_key: SecretStr | None = None  # LLM_BACKEND=dashscope: Alibaba testing only, never prod
+    dashscope_chain: Annotated[list[str], NoDecode] = Field(default_factory=list)  # models after primary + fallback
     llm_stub_delay_ms: int = 900  # stub_menu only: roughly a Flash call
     gemini_api_key: SecretStr | None = None
     gcp_project: str | None = None
@@ -72,7 +74,7 @@ class Settings(BaseSettings):
     dev_traces: bool = False
     cors_origins: Annotated[list[str], NoDecode] = Field(default_factory=list)  # comma-separated in .env
 
-    @field_validator("cors_origins", mode="before")
+    @field_validator("cors_origins", "dashscope_chain", mode="before")
     @classmethod
     def _split_origins(cls, v: object) -> object:
         if isinstance(v, str):

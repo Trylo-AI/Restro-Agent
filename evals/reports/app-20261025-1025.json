@@ -1,0 +1,371 @@
+{
+ "summary": {
+  "at": "2026-10-25T10:25:05.916153+00:00",
+  "worker_llm_backend": "dashscope",
+  "cases": 3,
+  "passed": 3,
+  "accuracy": 1.0,
+  "by_category": {
+   "ambiguous": "3/3"
+  },
+  "elapsed_s": 32,
+  "llm_calls": {
+   "qwen3.8-max-0902:ok": 3
+  },
+  "reply_ms": {
+   "p50": 11963,
+   "p95": 12703
+  },
+  "turn_ms": {
+   "p50": 14237.7,
+   "p95": 14237.7
+  },
+  "turn_db_statements": {
+   "p50": 0,
+   "max": 39
+  },
+  "webhook_db_statements": {
+   "p50": 12
+  }
+ },
+ "results": [
+  {
+   "id": "v2-amb-14",
+   "category": "ambiguous",
+   "text": "green curry",
+   "expect": {
+    "intent": [
+     "add_items",
+     "modify_cart"
+    ],
+    "cart": [
+     {
+      "dish": "Thai Green Curry Bowl",
+      "qty": 1
+     }
+    ]
+   },
+   "pass": true,
+   "fails": [],
+   "ack_ms": 3997,
+   "seen": {
+    "stored": true,
+    "cart": {
+     "Thai Green Curry Bowl": {
+      "qty": 1,
+      "notes": []
+     }
+    },
+    "mode": "bot",
+    "replies": [
+     {
+      "text": "Added Thai Green Curry Bowl! Anything else?",
+      "buttons": []
+     },
+     {
+      "text": "Your order · Table L1\n1 × Thai Green Curry Bowl ₹380\nTotal (incl. GST) ₹380\nReady in about 18 min",
+      "buttons": [
+       "Confirm",
+       "Edit",
+       "Cancel"
+      ]
+     }
+    ],
+    "requests": [],
+    "parsed": {
+     "reply": "Added Thai Green Curry Bowl! Anything else?",
+     "intent": "add_items",
+     "clarify": null,
+     "cart_ops": [
+      {
+       "op": "add",
+       "qty": 1,
+       "note": null,
+       "item_ref": "m20"
+      }
+     ],
+     "needs_human": {
+      "flag": false,
+      "reason": null
+     },
+     "allergen_question": null
+    },
+    "llm": [
+     {
+      "model": "qwen3.8-max-0902",
+      "outcome": "ok",
+      "latency_ms": 2617
+     }
+    ],
+    "dead_lettered": false,
+    "reply_ms": 12703,
+    "runs": [
+     {
+      "name": "POST /webhooks/whatsapp",
+      "duration_ms": 3724.785,
+      "queue_wait_ms": null,
+      "dep_ms": {
+       "db": 3734.0,
+       "queue": 0.21
+      },
+      "dep_calls": {
+       "db": 12,
+       "queue": 2
+      },
+      "stage_ms": {
+       "webhook.store": 1898.233,
+       "webhook.signal": 0.342,
+       "webhook.verify": 0.094
+      },
+      "labels": {
+       "event": "messages"
+      },
+      "outcome": "SUCCEEDED"
+     },
+     {
+      "name": "turn",
+      "duration_ms": null,
+      "queue_wait_ms": null,
+      "dep_ms": {},
+      "dep_calls": {},
+      "stage_ms": {},
+      "labels": {
+       "turn_kind": "text"
+      },
+      "outcome": "RUNNING"
+     }
+    ]
+   }
+  },
+  {
+   "id": "v2-amb-15",
+   "category": "ambiguous",
+   "text": "smoothie mango wala",
+   "expect": {
+    "intent": [
+     "add_items",
+     "modify_cart"
+    ],
+    "cart": [
+     {
+      "dish": "Mango Smoothie",
+      "qty": 1
+     }
+    ]
+   },
+   "pass": true,
+   "fails": [],
+   "ack_ms": 3185,
+   "seen": {
+    "stored": true,
+    "cart": {
+     "Mango Smoothie": {
+      "qty": 1,
+      "notes": []
+     }
+    },
+    "mode": "bot",
+    "replies": [
+     {
+      "text": "Done! Mango Smoothie add kar diya. Aur kuch chahiye?",
+      "buttons": []
+     },
+     {
+      "text": "Your order · Table L2\n1 × Mango Smoothie ₹210\nTotal (incl. GST) ₹210\nReady in about 4 min",
+      "buttons": [
+       "Confirm",
+       "Edit",
+       "Cancel"
+      ]
+     }
+    ],
+    "requests": [],
+    "parsed": {
+     "reply": "Done! Mango Smoothie add kar diya. Aur kuch chahiye?",
+     "intent": "add_items",
+     "clarify": null,
+     "cart_ops": [
+      {
+       "op": "add",
+       "qty": 1,
+       "note": null,
+       "item_ref": "m23"
+      }
+     ],
+     "needs_human": {
+      "flag": false,
+      "reason": null
+     },
+     "allergen_question": null
+    },
+    "llm": [
+     {
+      "model": "qwen3.8-max-0902",
+      "outcome": "ok",
+      "latency_ms": 2121
+     }
+    ],
+    "dead_lettered": false,
+    "reply_ms": 11963,
+    "runs": [
+     {
+      "name": "POST /webhooks/whatsapp",
+      "duration_ms": 2778.81,
+      "queue_wait_ms": null,
+      "dep_ms": {
+       "db": 2771.92,
+       "queue": 0.136
+      },
+      "dep_calls": {
+       "db": 13,
+       "queue": 2
+      },
+      "stage_ms": {
+       "webhook.store": 1839.499,
+       "webhook.signal": 0.215,
+       "webhook.verify": 0.059
+      },
+      "labels": {
+       "event": "messages"
+      },
+      "outcome": "SUCCEEDED"
+     },
+     {
+      "name": "turn",
+      "duration_ms": 14237.654,
+      "queue_wait_ms": 1655.77,
+      "dep_ms": {
+       "db": 6468.0,
+       "llm": 2121.629,
+       "http_out": 3320.23
+      },
+      "dep_calls": {
+       "db": 39,
+       "llm": 1,
+       "http_out": 2
+      },
+      "stage_ms": {
+       "turn.load": 332.754,
+       "turn.send": 5132.726,
+       "turn.route": 5396.837,
+       "turn.commit": 1623.871,
+       "turn.finish": 164.255,
+       "turn.devhooks": 1586.806
+      },
+      "labels": {
+       "llm_model": "qwen3.8-max-0902",
+       "turn_kind": "text"
+      },
+      "outcome": "SUCCEEDED"
+     }
+    ]
+   }
+  },
+  {
+   "id": "v2-amb-16",
+   "category": "ambiguous",
+   "text": "omlet",
+   "expect": {
+    "intent": [
+     "add_items",
+     "modify_cart"
+    ],
+    "cart": [
+     {
+      "dish": "Masala Omelette",
+      "qty": 1
+     }
+    ]
+   },
+   "pass": true,
+   "fails": [],
+   "ack_ms": 2965,
+   "seen": {
+    "stored": true,
+    "cart": {
+     "Masala Omelette": {
+      "qty": 1,
+      "notes": []
+     }
+    },
+    "mode": "bot",
+    "replies": [
+     {
+      "text": "Added Masala Omelette! Anything else?",
+      "buttons": []
+     },
+     {
+      "text": "Your order · Table L3\n1 × Masala Omelette ₹180\nTotal (incl. GST) ₹180\nReady in about 8 min",
+      "buttons": [
+       "Confirm",
+       "Edit",
+       "Cancel"
+      ]
+     }
+    ],
+    "requests": [],
+    "parsed": {
+     "reply": "Added Masala Omelette! Anything else?",
+     "intent": "add_items",
+     "clarify": null,
+     "cart_ops": [
+      {
+       "op": "add",
+       "qty": 1,
+       "note": null,
+       "item_ref": "m2"
+      }
+     ],
+     "needs_human": {
+      "flag": false,
+      "reason": null
+     },
+     "allergen_question": null
+    },
+    "llm": [
+     {
+      "model": "qwen3.8-max-0902",
+      "outcome": "ok",
+      "latency_ms": 2492
+     }
+    ],
+    "dead_lettered": false,
+    "reply_ms": 11258,
+    "runs": [
+     {
+      "name": "POST /webhooks/whatsapp",
+      "duration_ms": 2697.216,
+      "queue_wait_ms": null,
+      "dep_ms": {
+       "db": 2687.0,
+       "queue": 0.247
+      },
+      "dep_calls": {
+       "db": 12,
+       "queue": 2
+      },
+      "stage_ms": {
+       "webhook.store": 1324.255,
+       "webhook.signal": 0.415,
+       "webhook.verify": 0.069
+      },
+      "labels": {
+       "event": "messages"
+      },
+      "outcome": "SUCCEEDED"
+     },
+     {
+      "name": "turn",
+      "duration_ms": null,
+      "queue_wait_ms": null,
+      "dep_ms": {},
+      "dep_calls": {},
+      "stage_ms": {},
+      "labels": {},
+      "outcome": "RUNNING"
+     }
+    ]
+   }
+  }
+ ]
+}

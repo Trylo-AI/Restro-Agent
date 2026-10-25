@@ -476,7 +476,7 @@ create table llm_calls (
   created_at      timestamptz not null default now(),
   updated_at      timestamptz not null default now(),
   cafe_id         uuid not null references cafes (id) on delete cascade,
-  provider        text not null check (provider in ('vertex', 'developer_api', 'stub')),
+  provider        text not null check (provider in ('vertex', 'developer_api', 'stub', 'dashscope')),  -- dashscope: testing only
   model           text not null,
   purpose         text not null check (purpose in ('turn', 'cancel_draft', 'profile_note')),
   conversation_id uuid references conversations (id) on delete set null,

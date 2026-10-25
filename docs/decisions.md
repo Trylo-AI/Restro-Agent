@@ -134,6 +134,14 @@ Staff (`shift_manager`+) add free-text comments to a customer's profile. One str
 - **Rejected:** AI proposes and staff confirm each change (one more tap per comment); auto-apply except allergies; manual profile forms.
 - **Cost:** an AI misread can add or remove an allergy without anyone confirming it. Mitigated by showing every change under its comment with Undo, chip × removal, the audit log, and keeping profile allergies a staff-only warning that never answers an allergen question.
 
+## 17. Alibaba models for testing
+
+`LLM_BACKEND=dashscope` runs the app's AI on Alibaba Cloud Model Studio (Singapore) using the team's free-tier quota, for evals, app evaluation and local or staging testing with synthetic data only. The adapter refuses `APP_ENV=prod`. `llm_calls.provider` gains `dashscope`, and those calls are priced at zero (free quota, Stop-on-Exhaust on). Production stays on Gemini on Vertex AI (decision 13). Decided by Aman, 25 Oct 2026.
+
+- **Why:** Phase 2 testing was blocked on model quota, and the free quota (1M tokens on each of 7 models) runs the full system with a real model at no cost.
+- **Rejected:** keeping the app Gemini-only and testing the model alone, which skips the router, guardrails and cart, the parts under test.
+- **Cost:** a second adapter in `integrations/llm`. Results describe our prompt and system on these models, not on Gemini, so the production model choice still needs a Vertex AI run. Never real customer data: the data terms and region differ.
+
 ## Smaller decisions
 
 | Topic | Decision |

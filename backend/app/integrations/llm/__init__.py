@@ -2,7 +2,8 @@
 
 `developer_api` (Gemini API key, synthetic data only) and `vertex` (GCP, global endpoint) share one adapter on
 the google-genai SDK; `stub` returns scripted outputs for tests and evals;
-`stub_menu` reads dish names and confirms, with a real-call delay, for load tests. Switch with LLM_BACKEND.
+`stub_menu` reads dish names and confirms, with a real-call delay, for load tests; `dashscope` is Alibaba Model
+Studio for testing with synthetic data (refused in prod). Switch with LLM_BACKEND.
 """
 
 from app.core.config import get_settings
@@ -20,6 +21,14 @@ def client() -> LlmClient:
             _client = StubLlm()
         elif backend == "stub_menu":
             _client = StubLlm(menu_words, latency_ms=get_settings().llm_stub_delay_ms, sleep=True)
+        elif backend == "dashscope":
+            s = get_settings()
+            if s.app_env == "prod" or not s.dashscope_api_key:
+                raise RuntimeError("LLM_BACKEND=dashscope is for testing (not prod) and needs DASHSCOPE_API_KEY")
+            from app.integrations.llm.dashscope import DashScopeClient
+
+            _client = DashScopeClient(api_key=s.dashscope_api_key.get_secret_value(), chain=s.dashscope_chain,
+                                      app_outcomes=True)
         else:
             from app.integrations.llm.gemini import GeminiClient
 
