@@ -68,7 +68,7 @@ async def make_due(k: Kitchen, campaign_id: str) -> None:
 
 async def send_queued(k: Kitchen) -> list[str]:
     out = []
-    for q, body, _ in [t for t in k.rec.tasks if t[0] == "campaign-send"]:
+    for _q, body, _ in [t for t in k.rec.tasks if t[0] == "campaign-send"]:
         out.append(await campaigns.send_one(body["cafe_id"], body["recipient_id"]))
     k.rec.tasks = [t for t in k.rec.tasks if t[0] != "campaign-send"]
     return out

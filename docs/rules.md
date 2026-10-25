@@ -123,6 +123,12 @@ Run on every PR. Integration runs against the local Supabase stack.
 
 `loadtest/`: a simulator sending signed webhook payloads for N concurrent conversations with realistic bursts. Staging only; never prod or a real number. Stub LLM for most runs, one short real-model run to check quotas.
 
+- `loadtest/seed.py` creates its own café (`phone_number_id` `100000000000077`), so a run never touches the seeded café or its console. Every run uses new synthetic numbers (`91999800` + 4 digits).
+- `loadtest/run.py --scenario smoke|steady|peak|burst|gate`. Each customer scans the QR, gives a name if asked, orders, says "that's all" and taps Confirm. Meta's behaviour is copied: 10 % of deliveries arrive twice, and a call without a 200 is delivered again with backoff.
+- The checks run on the DB: lost, unprocessed, duplicate replies and orders, dead letters, unsent replies, webhook errors, inbound-to-reply p95.
+- Run the worker with `LLM_BACKEND=stub_menu`, which reads dish names, confirms and waits like a real call. The harness refuses a worker on a real model unless `--real-llm` is passed.
+- Latency is gated only when the DB round trip is ≤ 20 ms (same region). From a laptop it is reported, not gated.
+
 **Phase 3 gate** at 100 concurrent conversations: zero lost or duplicate messages · inbound-to-reply p95 ≤ 5 s · no DB connection errors · a `worker` instance killed mid-run loses nothing (leases expire, work resumes) · cost per order measured.
 
 ### Dry run

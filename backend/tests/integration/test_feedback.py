@@ -79,7 +79,7 @@ async def test_five_stars_then_opt_in_yes(k: Kitchen) -> None:
     assert any("Rate 1–5" in t for t in await ask_now(k, order_id))
     reply = await k.say(wa, tap=f"rate:{order_id}:5")
     assert [s.text for s in reply][0] == "Thank you!"
-    assert any(f"optin:yes:feedback_flow" in s.ids for s in reply)
+    assert any("optin:yes:feedback_flow" in s.ids for s in reply)
     again = await k.say(wa, tap=f"rate:{order_id}:4")
     assert "already have your rating" in again[0].text
     done = await k.say(wa, tap="optin:yes:feedback_flow")

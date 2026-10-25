@@ -28,7 +28,8 @@ class Settings(BaseSettings):
     database_url_session: SecretStr | None = None
 
     # LLM
-    llm_backend: Literal["developer_api", "vertex", "stub"] = "developer_api"
+    llm_backend: Literal["developer_api", "vertex", "stub", "stub_menu"] = "developer_api"
+    llm_stub_delay_ms: int = 900  # stub_menu only: roughly a Flash call
     gemini_api_key: SecretStr | None = None
     gcp_project: str | None = None
     gcp_location: str = "global"
@@ -50,6 +51,9 @@ class Settings(BaseSettings):
     tasks_backend: Literal["local", "cloud_tasks"] = "local"
     worker_url: str = "http://localhost:8001"
     api_url: str = "http://localhost:8000"
+    gcp_tasks_location: str = "asia-south1"  # Cloud Tasks queues (Vertex AI uses gcp_location)
+    gcp_invoker_sa: str | None = None  # invoker-sa email: OIDC identity of tasks and pushes to worker
+    pubsub_topic: str = "wa-inbound"
     internal_auth: Literal["dev_token", "oidc"] = "dev_token"
     internal_dev_token: SecretStr | None = None
 
