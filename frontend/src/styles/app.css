@@ -365,3 +365,35 @@ label.field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; 
 .customers .table td, .setup .table td { padding: 8px; border-bottom: 1px solid var(--color-surface); }
 .customers .table .num, .setup .table .num { text-align: right; font-variant-numeric: tabular-nums; }
 .customers .link, .setup .link { background: none; border: 0; padding: 0; font: inherit; text-decoration: underline; cursor: pointer; }
+
+/* Campaigns (L9) */
+.campaigns, .wizard { display: flex; flex-direction: column; gap: var(--space-3); }
+.campaigns .table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.campaigns .table th { text-align: left; font-size: 11px; text-transform: uppercase; color: var(--color-muted); padding: 6px 8px; border-bottom: 1px solid var(--color-border); }
+.campaigns .table td { padding: 8px; border-bottom: 1px solid var(--color-surface); }
+.campaigns .table .num { text-align: right; }
+.campaigns tr.clickable { cursor: pointer; }
+.campaigns .link { background: none; border: 0; padding: 0; font: inherit; text-decoration: underline; cursor: pointer; }
+.funnel { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; max-width: 640px; }
+.funnel li { display: grid; grid-template-columns: 160px 1fr 110px; gap: var(--space-2); align-items: center; }
+.funnel .track { height: 14px; background: var(--color-surface); position: relative; }
+.funnel .fill { position: absolute; inset: 0 auto 0 0; background: #2a78d6; }
+.funnel .val { text-align: right; font-variant-numeric: tabular-nums; }
+.steps { list-style: none; display: flex; gap: var(--space-2); padding: 0; margin: 0; flex-wrap: wrap; }
+.steps li { padding: 6px 10px; border: 1px solid var(--color-border); font-weight: 700; font-size: 13px; color: var(--color-muted); }
+.steps li.on { background: var(--color-text); color: var(--color-bg); border-color: var(--color-text); }
+.steps li.done { color: var(--color-text); }
+.wizard-body { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: var(--space-4); align-items: start; }
+@media (max-width: 900px) { .wizard-body { grid-template-columns: 1fr; } }
+.wizard-form { background: var(--color-card); border: 1px solid var(--color-border); padding: var(--space-4); display: flex; flex-direction: column; gap: var(--space-3); }
+.choices { border: 0; padding: 0; margin: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.choices legend { font-weight: 800; margin-bottom: var(--space-2); }
+.choice { display: flex; gap: var(--space-2); align-items: center; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border); cursor: pointer; }
+.choice.on { border-color: var(--color-text); }
+.fields { display: flex; flex-direction: column; gap: var(--space-3); }
+.wizard-nav { gap: var(--space-2); }
+.wa-preview { background: #e5ddd5; padding: var(--space-4); min-height: 220px; }
+.wa-bubble { background: #fff; padding: 10px 12px; font-size: 14px; max-width: 280px; box-shadow: 0 1px 1px #0002; white-space: pre-wrap; }
+.wa-footer { color: var(--color-muted); font-size: 12px; margin-top: 6px; }
+.wa-buttons { display: flex; flex-direction: column; gap: 2px; max-width: 280px; margin-top: 2px; }
+.wa-buttons span { background: #fff; text-align: center; color: #1f7aec; padding: 8px; font-size: 14px; }

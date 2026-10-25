@@ -10,6 +10,7 @@ import uuid
 
 from app.core.logging import get_logger
 from app.db.repositories import cafes, conversations, customers, inbound, pending_work
+from app.db.repositories import campaigns as campaigns_repo
 from app.db.repositories import wa_messages as steps_repo
 from app.db.tx import tx
 from app.integrations import tasks
@@ -64,8 +65,11 @@ async def ingest_status(ev: StatusEvent) -> bool:
             return False
         tracing.tenant(cafe.id)
         cost, currency, version = pricing.estimate(ev.pricing_category, ev.billable)
-        return await steps_repo.apply_status(
+        applied = await steps_repo.apply_status(
             c, cafe.id, wamid=ev.wamid, step_id=_uuid_or_none(ev.callback_data), status=ev.status,
             error_code=ev.error_code, pricing_category=ev.pricing_category, billable=ev.billable,
             cost=cost, currency=currency, pricing_version=version,
         )
+        if ev.wamid:  # campaign recipients follow their message forward only (docs/backend.md#campaigns)
+            await campaigns_repo.apply_status(c, cafe.id, ev.wamid, ev.status, ev.error_code)
+        return applied

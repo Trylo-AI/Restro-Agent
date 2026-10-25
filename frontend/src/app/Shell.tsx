@@ -1,6 +1,6 @@
 // Shell: sidebar (≥ 768 px) or tab bar, header with the active café, banners, toasts, alerts gate.
 import { useQueryClient } from "@tanstack/react-query";
-import { Activity, BarChart3, BellRing, Users, ClipboardList, Gauge, MessageCircle, PhoneCall, Settings, UtensilsCrossed } from "lucide-react";
+import { Activity, BarChart3, BellRing, Megaphone, Users, ClipboardList, Gauge, MessageCircle, PhoneCall, Settings, UtensilsCrossed } from "lucide-react";
 import { useEffect, useRef, type ReactNode } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 
@@ -19,7 +19,7 @@ const NAV = [
   { to: "/menu", label: "Menu", short: "Menu", icon: UtensilsCrossed, area: null },
 ];
 
-const TITLES: Record<string, string> = { "/orders": "Live orders", "/calls": "Calls and bills", "/chats": "Chats", "/menu": "Menu", "/setup": "Setup", "/service-report": "Service report", "/analytics": "Analytics", "/customers": "Customers", "/platform": "Performance" };
+const TITLES: Record<string, string> = { "/orders": "Live orders", "/calls": "Calls and bills", "/chats": "Chats", "/menu": "Menu", "/setup": "Setup", "/service-report": "Service report", "/analytics": "Analytics", "/customers": "Customers", "/campaigns": "Campaigns", "/platform": "Performance" };
 
 function Banners({ offline, retry }: { offline: boolean; retry: () => void }) {
   const cafe = useCafe();
@@ -105,6 +105,7 @@ export function Shell() {
             {atLeast(role, "owner") && (
               <>
                 <NavLink to="/customers" className={({ isActive }) => (isActive ? "active" : "")}><Users size={18} /> Customers</NavLink>
+                <NavLink to="/campaigns" className={({ isActive }) => (isActive ? "active" : "")}><Megaphone size={18} /> Campaigns</NavLink>
                 <NavLink to="/analytics" className={({ isActive }) => (isActive ? "active" : "")}><BarChart3 size={18} /> Analytics</NavLink>
                 <NavLink to="/setup/tables" className={({ isActive }) => (isActive ? "active" : "")}><Settings size={18} /> Setup</NavLink>
               </>

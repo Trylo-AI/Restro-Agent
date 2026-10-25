@@ -21,6 +21,7 @@ import asyncpg
 from app.core.errors import WindowClosed
 from app.core.logging import get_logger
 from app.db.repositories import cafes, customers, memberships
+from app.db.repositories import consents as consents_repo
 from app.db.repositories import wa_messages as steps_repo
 from app.db.repositories.wa_messages import Step
 from app.db.tx import conn as db_conn
@@ -43,6 +44,7 @@ class Purpose:
     STAFF_REPLY = "staff_reply"    # outside the window → WindowClosed (Chats disables the composer)
     ALERT = "alert"                # `new_order_alert` template to a staff alert number (no customer)
     FEEDBACK = "feedback"          # rating ask; outside the window → `feedback_request` template
+    MARKETING = "marketing"        # campaign template; only with the customer's latest consent `opted_in`
 
 
 @dataclass(frozen=True)
@@ -75,6 +77,12 @@ async def prepare(conn: asyncpg.Connection, cafe_id: str, recipient: Recipient, 
         customer = await customers.get(conn, cafe_id, recipient.customer_id)
     if customer is None:
         raise ValueError("unknown customer for this café")
+    if purpose == Purpose.MARKETING:  # CLAUDE.md invariant 10: the sender itself enforces marketing consent
+        if not isinstance(message, Template):
+            raise ValueError("marketing goes out only as a template")
+        if await consents_repo.latest_status(conn, cafe_id, customer.id) != "opted_in":
+            log.info("marketing_blocked_no_consent", cafe_id=cafe_id, key=key)
+            return None
     chosen: Message = message
     if not isinstance(message, Template) and not in_window(customer.last_inbound_at):
         if purpose in (Purpose.ORDER_STATUS, Purpose.FEEDBACK) and fallback_template is not None:

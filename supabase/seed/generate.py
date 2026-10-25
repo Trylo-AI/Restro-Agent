@@ -362,6 +362,23 @@ async def apply_dev_sql(conn: asyncpg.Connection) -> None:
         print(f"applied {path.name}")
 
 
+async def seed_retention(conn: asyncpg.Connection, cafe_id: str) -> None:
+    """Phase 5 templates (synthetic approvals, dev only) and opt-ins for every other seeded customer."""
+    for name, category in (("feedback_request", "utility"), ("weekly_offer", "marketing"), ("winback", "marketing")):
+        await conn.execute(
+            """insert into templates (cafe_id, name, category, language, status, quality)
+               values ($1, $2, $3, 'en', 'approved', 'High')
+               on conflict (cafe_id, name, language) do update set status = 'approved'""", cafe_id, name, category)
+    for i, c in enumerate(CUSTOMERS):
+        if i % 2:
+            continue
+        await conn.execute(
+            """insert into consents (cafe_id, customer_id, type, status, wording_version, source)
+               select $1, cu.id, 'marketing', 'opted_in', 1, 'feedback_flow' from customers cu
+               where cu.cafe_id = $1 and cu.wa_id = $2
+                 and not exists (select 1 from consents s where s.customer_id = cu.id)""", cafe_id, c.wa_id)
+
+
 async def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--live", action="store_true", help="add open orders in every status")
@@ -394,6 +411,7 @@ async def main() -> None:
                        values ($1, $2, 'utility', 'en', 'approved', 'High')
                        on conflict (cafe_id, name, language) do update set status = 'approved'""", cafe_id, tname)
             await seed_customers(conn, cafe_id, tables, menu, users["shift@restro.test"])
+            await seed_retention(conn, cafe_id)
             if args.live:
                 await seed_live(conn, cafe_id, tables, menu)
 

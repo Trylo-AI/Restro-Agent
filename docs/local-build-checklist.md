@@ -12,7 +12,7 @@ Tracks [local-build.md](local-build.md). A step is Done when its tests pass and 
 | L6 Setup | Done | L6 commit |
 | L7 Service report and Analytics | Done | L7 commit |
 | L8 Customers | Done | L8 commit |
-| L9 Campaigns | To do | — |
+| L9 Campaigns | Done | L9 commit |
 | L10 Today and weekly report | To do | — |
 | L11 Eval set | To do | — |
 | L12 Load-test harness | To do | — |
@@ -87,3 +87,14 @@ Tracks [local-build.md](local-build.md). A step is Done when its tests pass and 
 - [x] Consent register (read-only latest row per customer) + `GET /consents/export` CSV of the full history, masked, audited `consent.export`
 - [x] Tests: 2 integration (every removed and kept item, idempotent, new customer after; export masked + audited), 2 e2e (list, chips, profile, dialog cancelled, CSV download has no full number; non-owners redirected)
 - [ ] Deviation: staff comments are erased in place ("(deleted)", no applied changes) instead of deleted, because `llm_calls` (append-only) references them
+
+## L9 · Campaigns
+
+- [x] API (owner): create / edit draft, audience preview (in segment, excluded, will receive, daily limit from the messaging tier — 250 until verified — days needed, cost "not tracked", quality, template status), schedule (approved marketing template, a recipient, a future time, number connected, a code prefix), cancel (`scheduled` and `sending`; queued recipients not sent); audit `campaign.schedule` / `campaign.cancel`
+- [x] Sender: `campaign_start` (every 60 s locally, 5 min in the cloud) snapshots recipients with unique codes (prefix + 3 unambiguous characters); `campaign-send` task per recipient, spaced, within the day's limit (counted from today's campaign sends), the rest `deferred`; `campaign_resume` re-queues them; `completed` when nothing is queued or deferred
+- [x] Each send re-checks campaign, recipient, consent and template; the send layer refuses marketing without the latest consent `opted_in` (new purpose `marketing`, template only: invariant 10)
+- [x] Status webhooks move recipients forward only; error 131049 → `held`
+- [x] Console: list (notice, status tags, sent, came back), read-only templates, report (funnel as % of sent with the Held tooltip, they spent, discount given, WhatsApp cost "not tracked"), Cancel / Stop sending; five-step wizard with a live WhatsApp preview ("Order now", "Reply STOP to opt out"), draft saved after Message, Review with every preview line and the blockers
+- [x] Seed: `feedback_request`, `weekly_offer`, `winback` (synthetic approvals, dev only) and opt-ins for half the seeded customers
+- [x] Tests: 3 integration (draft / preview / schedule rules; start → limit → deferred → resume → completed + forward-only statuses; opt-out after snapshot, cancel, the sender's own consent check), **e2e Phase 5 exit gate locally**: counter-QR opt-in → wizard → the code arrives on WhatsApp → redeemed on the bill → report shows Came back 1 → STOP
+- [ ] Not built: per-send quick-reply payloads on templates ("Stop offers" tap); STOP by text works. The preview wording approximates the approved templates (the real text lives with Meta)

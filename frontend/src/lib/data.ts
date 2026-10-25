@@ -491,3 +491,31 @@ export function useConsentRegister() {
     },
   });
 }
+
+// ── Campaigns (owner) ─────────────────────────────────────────────────────
+
+export interface CampaignRow {
+  id: string; name: string; segment: "all_opted_in" | "lapsed" | "regulars"; template_name: string; offer_text: string | null;
+  discount_percent: number | null; code_prefix: string | null; valid_until: string | null; scheduled_at: string | null;
+  status: "draft" | "scheduled" | "sending" | "completed" | "cancelled"; created_at: string;
+}
+export interface Funnel { campaign_id: string; sent: number; held: number; delivered: number; read: number; queued: number;
+  came_back: number; spent_paise: number; discount_paise: number; whatsapp_cost: number }
+export interface TemplateRow { name: string; category: string; status: "approved" | "pending" | "rejected"; quality: string | null }
+
+export function useCampaigns() {
+  const { cafeId } = useSession();
+  return useQuery({
+    queryKey: ["campaigns", cafeId],
+    enabled: !!cafeId,
+    refetchInterval: 60_000,
+    queryFn: async () => {
+      const [list, funnels, templates] = await Promise.all([
+        rows<CampaignRow[]>(supabase.from("campaigns").select("*").eq("cafe_id", cafeId!).order("created_at", { ascending: false })),
+        rows<Funnel[]>(supabase.from("v_campaign_funnel").select("*").eq("cafe_id", cafeId!)),
+        rows<TemplateRow[]>(supabase.from("templates").select("name, category, status, quality").eq("cafe_id", cafeId!).order("category").order("name")),
+      ]);
+      return { list, funnels: new Map(funnels.map((f) => [f.campaign_id, f])), templates };
+    },
+  });
+}

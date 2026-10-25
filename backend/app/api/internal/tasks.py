@@ -96,3 +96,19 @@ async def profile_note(request: Request, body: dict[str, Any] = Body(...)) -> di
             tracing.degraded("profile_note_failed")
         tracing.label(note_status=status)
     return {"status": status}
+
+
+@router.post("/tasks/campaign-send")
+async def campaign_send(request: Request, body: dict[str, Any] = Body(...)) -> dict[str, str]:
+    from app.domain import campaigns
+
+    cafe_id, recipient_id = str(body["cafe_id"]), str(body["recipient_id"])
+    async with _task_run(request, "task.campaign_send", cafe_id) as run:
+        try:
+            with tracing.span("task.handle", recipient_id=recipient_id):
+                status = await campaigns.send_one(cafe_id, recipient_id)
+        except Exception as exc:
+            _retry_outcome(run, exc)
+            raise
+        tracing.label(send_status=status)
+    return {"status": status}

@@ -45,3 +45,8 @@ async def set_paused(conn: asyncpg.Connection, cafe_id: str, paused: bool) -> Ca
         cafe_id, paused,
     )
     return Cafe(**dict(row)) if row else None
+
+
+async def health(conn: asyncpg.Connection, cafe_id: str) -> dict[str, object]:
+    """Number health signals (token, quality, messaging tier): docs/backend.md#number-health."""
+    return dict(await conn.fetchval("select health from cafes where id = $1", cafe_id) or {})

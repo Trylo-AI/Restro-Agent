@@ -103,3 +103,15 @@ export const privacy = {
   /** The consent register as CSV text (masked numbers). */
   exportConsents: () => call(api.GET("/consents/export", { params: cafeHeader(), parseAs: "text" })),
 };
+
+export type CampaignInput = components["schemas"]["CampaignInput"];
+
+export const campaigns = {
+  create: (body: CampaignInput) => call(api.POST("/campaigns", { params: cafeHeader(), body })),
+  update: (campaignId: string, body: CampaignInput) => call(api.PUT("/campaigns/{id}", { params: id(campaignId), body })),
+  preview: (segment: CampaignInput["segment"], templateName: string) =>
+    call(api.POST("/campaigns/audience-preview", { params: cafeHeader(), body: { segment, template_name: templateName } })),
+  schedule: (campaignId: string, at: string) =>
+    call(api.POST("/campaigns/{id}/schedule", { params: id(campaignId), body: { scheduled_at: at } })),
+  cancel: (campaignId: string) => call(api.POST("/campaigns/{id}/cancel", { params: id(campaignId) })),
+};
