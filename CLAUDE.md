@@ -71,6 +71,7 @@ Inputs, read-only: `Restro_Build_Plan.md` (build plan v1.0), `Restro Console v2-
 | [ordering-slice-checklist.md](docs/ordering-slice-checklist.md) | Progress tracker for the ordering slice |
 | [local-build.md](docs/local-build.md) | Current build: the rest of the MVP that runs locally (L1–L14) |
 | [local-build-checklist.md](docs/local-build-checklist.md) | Progress tracker for the local build |
+| [eval-alibaba.md](docs/eval-alibaba.md) | AI accuracy test of 7 Alibaba free-tier models on the 215 eval cases: results, every failure and why, next steps |
 | [OPS_PLAN.md](docs/OPS_PLAN.md) | Performance dashboard: what is traced, the `/api/ops` read API, the `/platform/ops` pages; decisions and departures |
 
 ## Roles
