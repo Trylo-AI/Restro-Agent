@@ -7,7 +7,7 @@ Tracks [local-build.md](local-build.md). A step is Done when its tests pass and 
 | L1 Contracts | Done | L1–L2 commit |
 | L2 Menu editing | Done | L1–L2 commit |
 | L3 Feedback and opt-in | Done | L3 commit |
-| L4 Staff names and notifications | To do | — |
+| L4 Staff names and notifications | Done | L4 commit |
 | L5 Bill read and redemption | To do | — |
 | L6 Setup | To do | — |
 | L7 Service report and Analytics | To do | — |
@@ -45,3 +45,11 @@ Tracks [local-build.md](local-build.md). A step is Done when its tests pass and 
 - [x] Calls: a low-rating card shows the stars and the customer's words
 - [x] Tests: 6 integration (5★ + Yes, typed 2★ with text + low_rating, 3★ text + No + re-ask after 30 days, an order instead of text, STOP blocks the ask but the counter QR still asks), typed-rating parser
 - [ ] Not in a browser test: the 15-minute minimum delay; covered by the pipeline tests
+
+## L4 · Staff names and notifications
+
+- [x] Names from `v_staff_names` everywhere the console showed "a teammate": "Acknowledged by Ravi", comment authors, "Meera is replying" (closes the S13 gap)
+- [x] Bell in the header for every role: this device's sound (turn on), browser notification permission (allow), WhatsApp backup state (café alert number set or not), sound tests per severity
+- [x] `manager`+: in-app notifications (Realtime), unread count on the bell, "#1048 · T7 cancelled by Ravi · Other" with the staff's own text; opening the panel calls `ack-all`
+- [x] e2e (two consoles): shift manager acknowledges a call → the manager sees "Acknowledged by Ravi"; shift manager cancels with Other → the manager's bell shows it unread, the panel shows the text, then it's read; a shift manager's bell has no notification list
+- [ ] Deviation: tapping a notification doesn't "open the order": a cancelled order has no screen yet (it's off Live orders)

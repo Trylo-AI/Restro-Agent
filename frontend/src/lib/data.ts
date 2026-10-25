@@ -40,10 +40,27 @@ async function cards(ids: string[]): Promise<Map<string, CustomerCard>> {
   return new Map(data.map((c) => [c.customer_id, c]));
 }
 
+/** Teammates' display names (`v_staff_names`: every member of the café sees them; memberships RLS shows own row only). */
 async function staffNames(cafeId: string): Promise<Map<string, string>> {
   const data = await rows<{ user_id: string; display_name: string | null }[]>(
-    supabase.from("memberships").select("user_id, display_name").eq("cafe_id", cafeId));
-  return new Map(data.map((m) => [m.user_id, m.display_name ?? "Staff"]));
+    supabase.from("v_staff_names").select("user_id, display_name").eq("cafe_id", cafeId));
+  return new Map(data.map((m) => [m.user_id, m.display_name ?? "a teammate"]));
+}
+
+export interface AppNotification {
+  id: string; kind: "order_cancelled"; subject_id: string; read_at: string | null; created_at: string;
+  payload: { order_number?: number; table?: string | null; reason_code?: string; reason_text?: string | null; actor_name?: string | null };
+}
+
+/** The caller's own in-app notifications (manager+), newest first. */
+export function useNotifications(enabled: boolean) {
+  const { cafeId, userId } = useSession();
+  return useLive<AppNotification[]>({
+    key: ["notifications", cafeId, userId], enabled: enabled && !!cafeId, cafeId, tables: ["notifications"],
+    filter: userId ? `user_id=eq.${userId}` : undefined,
+    fetcher: () => rows(supabase.from("notifications").select("id, kind, subject_id, read_at, created_at, payload")
+      .eq("cafe_id", cafeId!).order("created_at", { ascending: false }).limit(50)),
+  });
 }
 
 export function useCafe() {

@@ -73,3 +73,8 @@ export const customers = {
 };
 
 export { newIdempotencyKey };
+
+export const notifications = {
+  ack: (notificationId: string) => call(api.POST("/notifications/{id}/ack", { params: id(notificationId) })),
+  ackAll: () => call(api.POST("/notifications/ack-all", { params: cafeHeader() })),
+};

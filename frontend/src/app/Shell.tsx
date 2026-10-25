@@ -9,6 +9,7 @@ import { useConnection } from "../lib/connection";
 import { useCafe, useLiveOrders } from "../lib/data";
 import { atLeast, useSession } from "../lib/session";
 import { AlertsGate, useAlerts } from "./alerts";
+import { Bell } from "./Bell";
 import { useToasts } from "./toasts";
 
 const NAV = [
@@ -113,6 +114,7 @@ export function Shell() {
             <h1>{title}</h1>
             <span className="cafe">{cafeName}</span>
             <span className="spacer" />
+            <Bell />
             <button className="btn small ghost hide-desktop" onClick={end}>Sign out</button>
           </header>
           <Banners offline={offline} retry={retry} />
