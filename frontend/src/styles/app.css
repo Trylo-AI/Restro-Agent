@@ -352,3 +352,16 @@ label.field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; 
   .content { padding: 0; }
   .sheet-grid { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* Customers (L8) */
+.customers { display: flex; flex-direction: column; gap: var(--space-3); }
+.customers-table tr.clickable { cursor: pointer; }
+.customers-table tr.clickable:hover td { background: var(--color-surface); }
+.facts { display: grid; grid-template-columns: max-content 1fr; gap: 4px var(--space-4); margin: var(--space-3) 0; }
+.facts dt { color: var(--color-muted); }
+.facts dd { margin: 0; }
+.customers .table, .setup .table, .report .table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.customers .table th, .setup .table th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--color-muted); padding: 6px 8px; border-bottom: 1px solid var(--color-border); }
+.customers .table td, .setup .table td { padding: 8px; border-bottom: 1px solid var(--color-surface); }
+.customers .table .num, .setup .table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.customers .link, .setup .link { background: none; border: 0; padding: 0; font: inherit; text-decoration: underline; cursor: pointer; }

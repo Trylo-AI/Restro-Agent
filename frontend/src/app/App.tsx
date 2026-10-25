@@ -4,6 +4,7 @@ import { BrowserRouter, Navigate, Route, Routes, useOutletContext } from "react-
 import { CallsScreen } from "../features/calls/CallsScreen";
 import { ChatsScreen } from "../features/chats/ChatsScreen";
 import { MenuScreen } from "../features/menu/MenuScreen";
+import { CustomersScreen } from "../features/customers/CustomersScreen";
 import { OpsFailures } from "../features/ops/Failures";
 import { OpsInsights, OpsLogs } from "../features/ops/Insights";
 import { OpsLatency } from "../features/ops/Latency";
@@ -53,6 +54,7 @@ function Gate() {
           <Route path="/menu" element={<MenuScreen />} />
           <Route path="/service-report" element={<ServiceReportScreen />} />
           <Route path="/analytics" element={<AnalyticsScreen />} />
+          <Route path="/customers/:customerId?" element={<CustomersScreen />} />
           <Route path="/setup/qr-sheet" element={<QrSheet />} />
           <Route path="/setup/:tab?" element={<SetupScreen />} />
           <Route path="/platform/ops" element={<OpsLayout />}>

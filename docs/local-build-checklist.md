@@ -11,7 +11,7 @@ Tracks [local-build.md](local-build.md). A step is Done when its tests pass and 
 | L5 Bill read and redemption | Done | L5 commit |
 | L6 Setup | Done | L6 commit |
 | L7 Service report and Analytics | Done | L7 commit |
-| L8 Customers | To do | — |
+| L8 Customers | Done | L8 commit |
 | L9 Campaigns | To do | — |
 | L10 Today and weekly report | To do | — |
 | L11 Eval set | To do | — |
@@ -78,3 +78,12 @@ Tracks [local-build.md](local-build.md). A step is Done when its tests pass and 
 - [x] Nav: Service report for `manager`+, Analytics for owner; others are sent back to Live orders
 - [x] Returning = a customer of the period first seen before it started (documented in `lib/reports.ts`)
 - [x] Tests: summaries on fixed rows (2), e2e (owner analytics + period switch, manager service report, shift manager redirected), RLS per view (L1)
+
+## L8 · Customers
+
+- [x] `/customers` (owner): search by name, segment chips All · Regular · New · Lapsed, whole-café counts, 50 per page server-side, masked numbers; profile (visits, spend without cancelled orders, first / last visit, favourites, offers consent, average rating, campaigns received / redeemed)
+- [x] `POST /customers/{id}/delete` (owner): one transaction per data-protection rules; a `data_deletion_requests` row; audit `customer.delete`; the same number later is a new customer with no consent
+- [x] Delete dialog says exactly what goes and what stays, "can't be undone", Keep data has the focus
+- [x] Consent register (read-only latest row per customer) + `GET /consents/export` CSV of the full history, masked, audited `consent.export`
+- [x] Tests: 2 integration (every removed and kept item, idempotent, new customer after; export masked + audited), 2 e2e (list, chips, profile, dialog cancelled, CSV download has no full number; non-owners redirected)
+- [ ] Deviation: staff comments are erased in place ("(deleted)", no applied changes) instead of deleted, because `llm_calls` (append-only) references them

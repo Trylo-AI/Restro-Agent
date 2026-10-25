@@ -97,3 +97,9 @@ export const notifications = {
   ack: (notificationId: string) => call(api.POST("/notifications/{id}/ack", { params: id(notificationId) })),
   ackAll: () => call(api.POST("/notifications/ack-all", { params: cafeHeader() })),
 };
+
+export const privacy = {
+  deleteCustomer: (customerId: string) => call(api.POST("/customers/{id}/delete", { params: id(customerId) })),
+  /** The consent register as CSV text (masked numbers). */
+  exportConsents: () => call(api.GET("/consents/export", { params: cafeHeader(), parseAs: "text" })),
+};

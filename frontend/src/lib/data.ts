@@ -1,5 +1,7 @@
 // Read hooks (Supabase + RLS + Realtime). Screens never create their own client; they use these.
 // Never select customers.wa_id: masked numbers come from v_customer_card.
+import { useQuery } from "@tanstack/react-query";
+
 import { useLive, rows } from "./live";
 import { useSession } from "./session";
 import { api, cafeHeader, call } from "./api/client";
@@ -416,6 +418,76 @@ export function useOpenSessions() {
       const data = await rows<{ id: string; opened_at: string; tables: { label: string } | null }[]>(supabase.from("table_sessions")
         .select("id, opened_at, tables(label)").eq("cafe_id", cafeId!).is("closed_at", null).order("opened_at"));
       return data.map((s) => ({ id: s.id, opened_at: s.opened_at, label: s.tables?.label ?? "—" }));
+    },
+  });
+}
+
+// ── Customers (owner): v_customer_profile, consents ───────────────────────
+
+export interface CustomerProfileRow {
+  customer_id: string; name: string | null; masked_phone: string; visits: number; spend_paise: number;
+  first_seen_at: string; last_visit_at: string | null; top_items: string[] | null; avg_rating: number | null; rating_count: number;
+  consent_status: "opted_in" | "opted_out" | "not_asked"; consent_at: string | null; consent_source: string | null;
+  campaigns_received: number; campaigns_redeemed: number; segment: "regular" | "new" | "lapsed" | null;
+}
+
+export const PAGE = 50;
+
+/** Server-side search, segment filter and paging (50 a page), plus whole-café counts per segment. */
+export function useCustomerList(search: string, segment: string | null, page: number) {
+  const { cafeId } = useSession();
+  return useQuery({
+    queryKey: ["customers", cafeId, search, segment, page],
+    enabled: !!cafeId,
+    queryFn: async () => {
+      let q = supabase.from("v_customer_profile").select("*", { count: "exact" }).eq("cafe_id", cafeId!)
+        .gt("visits", 0).order("last_visit_at", { ascending: false, nullsFirst: false }).range(page * PAGE, page * PAGE + PAGE - 1);
+      if (search.trim()) q = q.ilike("name", `%${search.trim().replace(/[%_]/g, "")}%`);
+      if (segment) q = q.eq("segment", segment);
+      const { data, error, count } = await q;
+      if (error) throw new Error(error.message);
+      const counts = await Promise.all([null, "regular", "new", "lapsed"].map(async (seg) => {
+        let c = supabase.from("v_customer_profile").select("customer_id", { count: "exact", head: true }).eq("cafe_id", cafeId!).gt("visits", 0);
+        if (seg) c = c.eq("segment", seg);
+        const r = await c;
+        return r.count ?? 0;
+      }));
+      return { rows: (data ?? []) as CustomerProfileRow[], total: count ?? 0, counts: { all: counts[0]!, regular: counts[1]!, new: counts[2]!, lapsed: counts[3]! } };
+    },
+  });
+}
+
+export function useCustomerProfileRow(customerId: string | null) {
+  const { cafeId } = useSession();
+  return useQuery({
+    queryKey: ["customer-row", cafeId, customerId],
+    enabled: !!cafeId && !!customerId,
+    queryFn: async () => (await rows<CustomerProfileRow[]>(supabase.from("v_customer_profile").select("*").eq("customer_id", customerId!)))[0] ?? null,
+  });
+}
+
+export interface ConsentRow { customer_id: string; status: string; wording_version: number | null; source: string; created_at: string; masked_phone: string; name: string | null }
+
+/** Latest consent row per customer (read-only register). */
+export function useConsentRegister() {
+  const { cafeId } = useSession();
+  return useQuery({
+    queryKey: ["consents", cafeId],
+    enabled: !!cafeId,
+    queryFn: async () => {
+      const list = await rows<{ customer_id: string; status: string; wording_version: number | null; source: string; created_at: string }[]>(
+        supabase.from("consents").select("customer_id, status, wording_version, source, created_at").eq("cafe_id", cafeId!)
+          .order("created_at", { ascending: false }).limit(2000));
+      const latest = new Map<string, (typeof list)[number]>();
+      for (const r of list) if (!latest.has(r.customer_id)) latest.set(r.customer_id, r);
+      const ids = [...latest.keys()];
+      const people = new Map<string, { masked_phone: string; name: string | null }>();
+      for (let i = 0; i < ids.length; i += 200) {
+        const chunk = await rows<{ customer_id: string; masked_phone: string; name: string | null }[]>(
+          supabase.from("v_customer_profile").select("customer_id, masked_phone, name").in("customer_id", ids.slice(i, i + 200)));
+        for (const c of chunk) people.set(c.customer_id, c);
+      }
+      return [...latest.values()].map((r) => ({ ...r, masked_phone: people.get(r.customer_id)?.masked_phone ?? "••••", name: people.get(r.customer_id)?.name ?? null }));
     },
   });
 }

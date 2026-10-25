@@ -1,11 +1,11 @@
 from datetime import datetime
 from typing import Any, Literal
 
-from fastapi import Depends
+from fastapi import Depends, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.api.staff import router
-from app.core.auth import Principal, shift_manager
+from app.core.auth import Principal, owner, shift_manager
 from app.db.repositories.preferences import Note
 from app.domain import customers
 
@@ -47,3 +47,18 @@ async def undo_note(note_id: str, p: Principal = Depends(shift_manager)) -> dict
 async def remove_preference(customer_id: str, body: RemoveBody, p: Principal = Depends(shift_manager)) -> list[dict[str, str]]:
     remaining = await customers.remove_preference(p, customer_id, body.kind, body.value)
     return [{"kind": k, "value": v} for k, v in remaining]
+
+
+@router.post("/customers/{customer_id}/delete")
+async def delete_customer(customer_id: str, p: Principal = Depends(owner)) -> dict[str, str]:
+    from app.domain.customers import privacy
+
+    return await privacy.delete_customer_data(p, customer_id)
+
+
+@router.get("/consents/export")
+async def consent_export(p: Principal = Depends(owner)) -> Response:
+    from app.domain.customers import privacy
+
+    return Response(await privacy.consent_csv(p), media_type="text/csv",
+                    headers={"Content-Disposition": 'attachment; filename="consent-register.csv"'})
