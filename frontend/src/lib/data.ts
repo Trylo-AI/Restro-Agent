@@ -227,8 +227,23 @@ export function useMenu() {
   return useLive<MenuItem[]>({
     key: ["menu", cafeId], enabled: !!cafeId, cafeId, tables: ["menu_items"],
     fetcher: () => rows<MenuItem[]>(supabase.from("menu_items")
-      .select("id, name, category, price_paise, prep_minutes, veg, spice, available, version, updated_at")
+      .select("id, name, description, category, price_paise, prep_minutes, veg, spice, available, version, updated_at")
       .eq("cafe_id", cafeId!).order("category").order("name")),
+  });
+}
+
+export type AllergenState = "contains" | "free_from" | "unknown";
+
+/** Allergen states of one dish; no row = unknown. */
+export function useItemAllergens(itemId: string | null) {
+  const { cafeId } = useSession();
+  return useLive<Record<string, AllergenState>>({
+    key: ["menu-allergens", cafeId, itemId], enabled: !!cafeId && !!itemId, cafeId, tables: [],
+    fetcher: async () => {
+      const list = await rows<{ allergen: string; state: AllergenState }[]>(supabase.from("menu_item_allergens")
+        .select("allergen, state").eq("cafe_id", cafeId!).eq("item_id", itemId!));
+      return Object.fromEntries(list.map((a) => [a.allergen, a.state]));
+    },
   });
 }
 

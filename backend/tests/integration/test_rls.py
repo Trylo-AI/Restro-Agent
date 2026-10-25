@@ -112,3 +112,35 @@ def test_anon_sees_nothing() -> None:
 def test_client_writes_are_refused(method: str, path: str, body: dict[str, object] | None) -> None:
     r = rest(method, path, token("owner@restro.test"), json=body)
     assert r.status_code in (401, 403, 404, 405), f"{method} {path} -> {r.status_code} {r.text[:200]}"
+
+
+def test_staff_names_visible_to_every_member_of_their_cafe_only() -> None:
+    names = rest("GET", "v_staff_names?select=cafe_id,display_name,role", token("shift@restro.test")).json()
+    mine = cafe_ids(token("shift@restro.test"))
+    assert {"shift_manager", "manager", "owner"} <= {n["role"] for n in names}  # teammates, not just my row
+    assert {n["cafe_id"] for n in names} <= mine
+    anon = rest("GET", "v_staff_names?select=user_id", None)
+    assert anon.status_code != 200 or anon.json() == []
+
+
+@pytest.mark.parametrize(("view", "min_role"), [
+    ("v_daily_revenue", "owner"), ("v_top_items", "owner"), ("v_customer_segments", "owner"),
+    ("v_customer_profile", "owner"), ("v_campaign_funnel", "owner"),
+    ("v_prep_times", "manager"), ("v_service_report", "manager"), ("v_feedback_summary", "manager"),
+])
+def test_analytics_views_follow_their_role(view: str, min_role: str) -> None:
+    below = "shift@restro.test" if min_role == "manager" else "manager@restro.test"
+    r = rest("GET", f"{view}?select=cafe_id&limit=5", token(below))
+    assert r.status_code == 200 and r.json() == [], f"{view} visible to {below}"
+    r = rest("GET", f"{view}?select=cafe_id&limit=1000", token("owner@restro.test"))
+    assert r.status_code == 200, r.text
+    assert {row["cafe_id"] for row in r.json()} <= cafe_ids(token("owner@restro.test"))
+
+
+def test_owner_sees_masked_profiles_and_revenue() -> None:
+    jwt = token("owner@restro.test")
+    profiles = rest("GET", "v_customer_profile?select=masked_phone,visits,spend_paise,consent_status", jwt).json()
+    assert profiles and all("••" in p["masked_phone"] for p in profiles)
+    assert {p["consent_status"] for p in profiles} <= {"opted_in", "opted_out", "not_asked"}
+    revenue = rest("GET", "v_daily_revenue?select=revenue_paise,orders,customers", jwt).json()
+    assert revenue and all(r["revenue_paise"] > 0 and r["orders"] >= r["customers"] for r in revenue)

@@ -61,3 +61,26 @@ test("menu: two taps mark sold out, back in one tap; shift_manager sees no price
   await page.getByRole("switch", { name: `${name} sold out — tap to bring back` }).click();
   await expect(page.getByRole("switch", { name: `${name} available` })).toBeVisible();
 });
+
+test("menu: a manager edits a dish (bottom sheet at 375 px) and the change sticks", async ({ page }) => {
+  await signIn(page, "manager@restro.test");
+  await page.getByRole("link", { name: /Menu/ }).first().click();
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.getByRole("button", { name: "Not now" }).click(); // phones get the alerts gate first
+  const edit = page.getByRole("button", { name: /^Edit / }).first();
+  const dish = (await edit.getAttribute("aria-label"))!.replace(/^Edit /, "");
+  const prep = page.getByLabel("Prep time (min)");
+  await edit.click();
+  const before = await prep.inputValue();
+  const after = before === "9" ? "8" : "9";
+  await prep.fill(after);
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByText(`${dish} saved · the agent uses it from the next message`)).toBeVisible();
+  await page.getByRole("button", { name: `Edit ${dish}` }).click();
+  await expect(prep).toHaveValue(after);
+  await prep.fill(before); // put it back
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByText(`${dish} saved · the agent uses it from the next message`)).toBeVisible();
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(0);
+});

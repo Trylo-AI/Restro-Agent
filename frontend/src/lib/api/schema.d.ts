@@ -833,6 +833,804 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/bills/{table_session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Bill sheet for a table session, totals computed by code (shift_manager+) */
+        get: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-Cafe-Id": components["parameters"]["CafeId"];
+                };
+                path: {
+                    table_session_id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The bill */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Bill"];
+                    };
+                };
+                404: components["responses"]["Error"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/bills/{table_session_id}/apply-code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Redeem a campaign code on this bill (shift_manager+). Audit `offer.redeem`
+         * @description One code per bill, one redemption per code. Applying the code already on this session is a 200 no-op.
+         *     422 `invalid_code` "This isn't a valid code, or it has expired."; 409 `code_already_used` "This code was
+         *     already used today on #1041."
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-Cafe-Id": components["parameters"]["CafeId"];
+                };
+                path: {
+                    table_session_id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        code: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Bill with the discount */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Bill"];
+                    };
+                };
+                409: components["responses"]["Error"];
+                422: components["responses"]["Error"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/menu": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** New menu item (manager+). Audit `menu.update` */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-Cafe-Id": components["parameters"]["CafeId"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["MenuItemInput"];
+                };
+            };
+            responses: {
+                /** @description Created item */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MenuItemFull"];
+                    };
+                };
+                400: components["responses"]["Error"];
+                409: components["responses"]["Error"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/menu/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Edit a menu item with optimistic locking (manager+). Audit `menu.update`
+         * @description 409 `version_conflict` "Someone else changed this item"; a duplicate name is 409 too.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-Cafe-Id": components["parameters"]["CafeId"];
+                };
+                path: {
+                    id: components["parameters"]["Id"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["MenuItemInput"] & {
+                        version: number;
+                    };
+                };
+            };
+            responses: {
+                /** @description Updated item */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MenuItemFull"];
+                    };
+                };
+                404: components["responses"]["Error"];
+                409: components["responses"]["Error"];
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/menu/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * CSV import, all or nothing (owner). Audit `menu.import`
+         * @description Columns: name, category, price (rupees), prep_minutes, veg (yes/no) required; description, spice,
+         *     contains, free_from (allergen ids separated by `;`), available optional. Rows match by name
+         *     (case-insensitive): update matches, insert new, leave missing items alone; unlisted allergens stay
+         *     `unknown`. Any invalid row rejects the file: 400 with `details.rows`.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-Cafe-Id": components["parameters"]["CafeId"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            /** @description The CSV file's text, UTF-8, at most 1 MB and 500 rows */
+            requestBody: {
+                content: {
+                    "text/csv": string;
+                };
+            };
+            responses: {
+                /** @description Counts */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            created: number;
+                            updated: number;
+                        };
+                    };
+                };
+                /** @description Rejected file; `error.details.rows` = [{row, column, message}] */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/cafes/{id}/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Opening hours, cutoff, tone, feedback delay, alert number in one save (owner). Audit `settings.update` */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: components["parameters"]["Id"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CafeSettings"];
+                };
+            };
+            responses: {
+                /** @description Settings after the change */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CafeSettings"];
+                    };
+                };
+                400: components["responses"]["Error"];
+                403: components["responses"]["Error"];
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tables": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** New table; `qr_text` is "Hi, I'm at Table <label>" (owner). Audit `table.update` */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-Cafe-Id": components["parameters"]["CafeId"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TableInput"];
+                };
+            };
+            responses: {
+                /** @description Created table */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Table"];
+                    };
+                };
+                409: components["responses"]["Error"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tables/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Edit a table (owner). Audit `table.update` */
+        put: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-Cafe-Id": components["parameters"]["CafeId"];
+                };
+                path: {
+                    id: components["parameters"]["Id"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TableInput"];
+                };
+            };
+            responses: {
+                /** @description Updated table */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Table"];
+                    };
+                };
+                404: components["responses"]["Error"];
+                409: components["responses"]["Error"];
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/team/invite": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Invite by email with a role; sends the Supabase Auth invite (owner). Audit `team.invite` */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-Cafe-Id": components["parameters"]["CafeId"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** Format: email */
+                        email: string;
+                        /** @enum {string} */
+                        role: "shift_manager" | "manager" | "owner";
+                        display_name?: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description The membership */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Membership"];
+                    };
+                };
+                409: components["responses"]["Error"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/team/{membership_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change role or deactivate; effective on the next request (owner). Audit `team.update`
+         * @description Owner rows can't be deactivated; the last active owner can't be demoted (400).
+         */
+        patch: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-Cafe-Id": components["parameters"]["CafeId"];
+                };
+                path: {
+                    membership_id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        role?: "shift_manager" | "manager" | "owner";
+                        active?: boolean;
+                    };
+                };
+            };
+            responses: {
+                /** @description The membership */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Membership"];
+                    };
+                };
+                400: components["responses"]["Error"];
+                404: components["responses"]["Error"];
+            };
+        };
+        trace?: never;
+    };
+    "/customers/{id}/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Delete a customer's data (owner). Audit `customer.delete`
+         * @description See docs/architecture.md#data-protection. Orders keep their totals with the customer link removed.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-Cafe-Id": components["parameters"]["CafeId"];
+                };
+                path: {
+                    id: components["parameters"]["Id"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Deletion request after processing */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            id: string;
+                            /** @enum {string} */
+                            status: "pending" | "completed" | "failed";
+                        };
+                    };
+                };
+                404: components["responses"]["Error"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/consents/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** CSV of the full consent history with masked numbers (owner). Audit `consent.export` */
+        get: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-Cafe-Id": components["parameters"]["CafeId"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description CSV */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/csv": string;
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/campaigns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a draft (owner) */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-Cafe-Id": components["parameters"]["CafeId"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CampaignInput"];
+                };
+            };
+            responses: {
+                /** @description The draft */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Campaign"];
+                    };
+                };
+                400: components["responses"]["Error"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/campaigns/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Edit a draft (owner) */
+        put: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-Cafe-Id": components["parameters"]["CafeId"];
+                };
+                path: {
+                    id: components["parameters"]["Id"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CampaignInput"];
+                };
+            };
+            responses: {
+                /** @description The draft */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Campaign"];
+                    };
+                };
+                422: components["responses"]["Error"];
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/campaigns/audience-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Who would receive it, the daily limit and days needed (owner) */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-Cafe-Id": components["parameters"]["CafeId"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        segment: "all_opted_in" | "lapsed" | "regulars";
+                        template_name: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Preview */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AudiencePreview"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/campaigns/{id}/schedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * draft → scheduled (owner). Audit `campaign.schedule`
+         * @description 422 when no approved marketing template, no recipients, a past time or a disconnected number.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-Cafe-Id": components["parameters"]["CafeId"];
+                };
+                path: {
+                    id: components["parameters"]["Id"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** Format: date-time */
+                        scheduled_at: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description The campaign */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Campaign"];
+                    };
+                };
+                422: components["responses"]["Error"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/campaigns/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** scheduled or sending → cancelled; queued recipients are not sent (owner). Audit `campaign.cancel` */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-Cafe-Id": components["parameters"]["CafeId"];
+                };
+                path: {
+                    id: components["parameters"]["Id"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The campaign */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Campaign"];
+                    };
+                };
+                422: components["responses"]["Error"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/webhooks/whatsapp": {
         parameters: {
             query?: never;
@@ -1007,7 +1805,14 @@ export interface components {
                 id?: string;
                 number?: number;
                 total_paise?: number;
+                items?: {
+                    name_snapshot?: string;
+                    qty?: number;
+                    line_paise?: number;
+                }[];
             }[];
+            subtotal_paise?: number;
+            code?: string | null;
             /** @default 0 */
             discount_paise: number;
             /** @description Total (incl. GST) */
@@ -1055,6 +1860,95 @@ export interface components {
             undone_at?: string | null;
             /** Format: date-time */
             created_at: string;
+        };
+        /** @enum {string} */
+        Allergen: "gluten" | "milk" | "eggs" | "peanuts" | "tree_nuts" | "soy" | "sesame" | "fish" | "shellfish" | "mustard" | "sulphites";
+        MenuItemInput: {
+            name: string;
+            description?: string | null;
+            category: string;
+            price_paise: number;
+            prep_minutes: number;
+            veg: boolean;
+            /** @default 0 */
+            spice: number;
+            /** @default true */
+            available: boolean;
+            /** @description States not listed stay `unknown` */
+            allergens?: {
+                allergen: components["schemas"]["Allergen"];
+                /** @enum {string} */
+                state: "contains" | "free_from" | "unknown";
+            }[];
+        };
+        MenuItemFull: components["schemas"]["MenuItemInput"] & {
+            /** Format: uuid */
+            id: string;
+            version: number;
+        };
+        CafeSettings: {
+            /** @description {"mon": [["08:00","23:00"]], ...}; empty = always open */
+            opening_hours?: Record<string, never>;
+            cutoff_minutes?: number;
+            /** @enum {string} */
+            tone?: "warm" | "crisp" | "playful";
+            /** @enum {integer} */
+            feedback_delay_minutes?: 15 | 30 | 60;
+            /** @description Café alert number (new_order_alert) */
+            alert_phone?: string | null;
+        };
+        TableInput: {
+            label: string;
+            area?: string | null;
+            seats?: number | null;
+        };
+        Table: components["schemas"]["TableInput"] & {
+            /** Format: uuid */
+            id: string;
+            qr_text: string;
+        };
+        Membership: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            user_id: string;
+            /** @enum {string} */
+            role: "shift_manager" | "manager" | "owner";
+            active: boolean;
+            display_name?: string | null;
+        };
+        CampaignInput: {
+            name: string;
+            /** @enum {string} */
+            segment: "all_opted_in" | "lapsed" | "regulars";
+            template_name: string;
+            offer_text?: string | null;
+            /** @description % of the bill subtotal */
+            discount_percent?: number | null;
+            code_prefix?: string | null;
+            /** Format: date-time */
+            valid_until?: string | null;
+        };
+        Campaign: components["schemas"]["CampaignInput"] & {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            status: "draft" | "scheduled" | "sending" | "completed" | "cancelled";
+            /** Format: date-time */
+            scheduled_at?: string | null;
+        };
+        AudiencePreview: {
+            in_segment: number;
+            /** @description In the segment but not opted in */
+            excluded: number;
+            will_receive: number;
+            /** @description From the number's messaging tier */
+            daily_limit: number;
+            days_needed: number;
+            /** @description null until prices are tracked */
+            estimated_cost?: number | null;
+            quality?: string | null;
+            template_status?: string;
         };
     };
     responses: {

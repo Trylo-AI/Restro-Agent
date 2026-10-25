@@ -1,5 +1,6 @@
-// Menu: sold out in two taps (docs/console.md#menu). Editing, new items and import are manager+ screens outside this slice.
+// Menu: sold out in two taps; managers edit and add items; the owner imports a CSV (docs/console.md#menu).
 import { useQueryClient } from "@tanstack/react-query";
+import { Pencil, Plus, Upload } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { useOffline } from "../../app/App";
@@ -10,6 +11,7 @@ import { inr } from "../../lib/format";
 import { menu } from "../../lib/mutations";
 import { atLeast, useSession } from "../../lib/session";
 import type { MenuItem } from "../../lib/types";
+import { ImportDialog, ItemDialog } from "./MenuEditor";
 
 export const ARM_MS = 5_000;
 
@@ -20,6 +22,9 @@ export function MenuScreen() {
   const qc = useQueryClient();
   const { role, cafeId } = useSession();
   const manager = atLeast(role, "manager");
+  const owner = atLeast(role, "owner");
+  const [editing, setEditing] = useState<MenuItem | "new" | null>(null);
+  const [importing, setImporting] = useState(false);
   const [category, setCategory] = useState("All");
   const [armed, setArmed] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -57,7 +62,11 @@ export function MenuScreen() {
 
   return (
     <div className="orders">
-      <div className="summary">{soldOut ? `${soldOut} item${soldOut > 1 ? "s" : ""} sold out today` : "Everything is available"}</div>
+      <div className="toolbar row">
+        <div className="summary grow">{soldOut ? `${soldOut} item${soldOut > 1 ? "s" : ""} sold out today` : "Everything is available"}</div>
+        {owner && <button className="btn small" disabled={offline} onClick={() => setImporting(true)}><Upload size={15} /> Import CSV</button>}
+        {manager && <button className="btn small primary" disabled={offline} onClick={() => setEditing("new")}><Plus size={15} /> New item</button>}
+      </div>
       <div className="filters row" role="group" aria-label="Category">
         {categories.map((c) => (
           <button key={c} className={`chip-btn${category === c ? " on" : ""}`} aria-pressed={category === c} onClick={() => setCategory(c)}>{c}</button>
@@ -82,11 +91,14 @@ export function MenuScreen() {
                   className={`avail${m.available ? " on" : ""}${isArmed ? " armed" : ""}`} onClick={() => tap(m)}>
                   {m.available ? (isArmed ? "Tap again to mark sold out" : "Available") : "Sold out"}
                 </button>
+                {manager && <button className="btn small ghost" aria-label={`Edit ${m.name}`} disabled={offline} onClick={() => setEditing(m)}><Pencil size={15} /></button>}
               </li>
             );
           })}
         </ul>
       ) : <Empty>No items in this category.</Empty>)}
+      {editing && <ItemDialog item={editing === "new" ? null : editing} categories={categories.filter((c) => c !== "All")} onClose={() => setEditing(null)} />}
+      {importing && <ImportDialog onClose={() => setImporting(false)} />}
     </div>
   );
 }

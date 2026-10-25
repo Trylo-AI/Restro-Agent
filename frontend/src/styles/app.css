@@ -301,3 +301,15 @@ label.field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; 
   .bubble { max-width: 90%; }
   .avail { min-width: 112px; }
 }
+
+/* Menu editor (L2) */
+.item-form { display: flex; flex-direction: column; gap: var(--space-3); }
+.item-form .row.two { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
+@media (max-width: 767px) { .item-form .row.two { grid-template-columns: 1fr; } }
+.allergen-grid { border: 1px solid var(--color-border); padding: var(--space-3); display: flex; flex-direction: column; gap: 6px; margin: 0; }
+.allergen-grid legend { font-weight: 800; padding: 0 4px; }
+.allergen-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); flex-wrap: wrap; }
+.segmented.small button { min-height: 30px; font-size: 12px; padding: 0 var(--space-2); }
+.sheet-actions { justify-content: flex-end; gap: var(--space-2); position: sticky; bottom: 0; background: var(--color-card); padding: var(--space-2) 0; }
+.ok-text { color: var(--color-green); font-weight: 700; }
+.toolbar { gap: var(--space-2); align-items: center; }

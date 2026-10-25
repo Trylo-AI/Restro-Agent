@@ -97,6 +97,7 @@ export interface Escalation {
 export interface MenuItem {
   id: string;
   name: string;
+  description?: string | null;
   category: string;
   price_paise: number;
   prep_minutes: number;

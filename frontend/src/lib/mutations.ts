@@ -44,9 +44,19 @@ export const bills = {
     call(api.POST("/bills/{table_session_id}/deliver", { params: { ...cafeHeader(), path: { table_session_id: tableSessionId } } })),
 };
 
+export type MenuItemInput = components["schemas"]["MenuItemInput"];
+
 export const menu = {
   setAvailable: (itemId: string, available: boolean) =>
     call(api.POST("/menu/{id}/availability", { params: id(itemId), body: { available } })),
+  create: (item: MenuItemInput) => call(api.POST("/menu", { params: cafeHeader(), body: item })),
+  update: (itemId: string, item: MenuItemInput, version: number) =>
+    call(api.PUT("/menu/{id}", { params: id(itemId), body: { ...item, version } })),
+  /** The CSV's text as the body (text/csv). */
+  importCsv: (csv: string) =>
+    call(api.POST("/menu/import", {
+      params: cafeHeader(), body: csv, bodySerializer: (b: string) => b, headers: { "Content-Type": "text/csv" },
+    })),
 };
 
 export const cafes = {

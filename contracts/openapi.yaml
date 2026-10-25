@@ -28,6 +28,7 @@ tags:
   - name: cafes
   - name: customers
   - name: notifications
+  - name: campaigns
   - name: telemetry
   - name: webhooks
 
@@ -405,6 +406,364 @@ paths:
       responses:
         "204": { description: Recorded }
 
+  /bills/{table_session_id}:
+    get:
+      tags: [requests]
+      summary: Bill sheet for a table session, totals computed by code (shift_manager+)
+      parameters:
+        - { name: table_session_id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { $ref: "#/components/parameters/CafeId" }
+      responses:
+        "200":
+          description: The bill
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Bill" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /bills/{table_session_id}/apply-code:
+    post:
+      tags: [requests]
+      summary: Redeem a campaign code on this bill (shift_manager+). Audit `offer.redeem`
+      description: |
+        One code per bill, one redemption per code. Applying the code already on this session is a 200 no-op.
+        422 `invalid_code` "This isn't a valid code, or it has expired."; 409 `code_already_used` "This code was
+        already used today on #1041."
+      parameters:
+        - { name: table_session_id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { $ref: "#/components/parameters/CafeId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [code]
+              properties:
+                code: { type: string, minLength: 3, maxLength: 20 }
+      responses:
+        "200":
+          description: Bill with the discount
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Bill" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /menu:
+    post:
+      tags: [menu]
+      summary: New menu item (manager+). Audit `menu.update`
+      parameters: [{ $ref: "#/components/parameters/CafeId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MenuItemInput" }
+      responses:
+        "200":
+          description: Created item
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MenuItemFull" }
+        "400": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /menu/{id}:
+    put:
+      tags: [menu]
+      summary: Edit a menu item with optimistic locking (manager+). Audit `menu.update`
+      description: 409 `version_conflict` "Someone else changed this item"; a name already on the menu is 400.
+      parameters: [{ $ref: "#/components/parameters/Id" }, { $ref: "#/components/parameters/CafeId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - { $ref: "#/components/schemas/MenuItemInput" }
+                - type: object
+                  required: [version]
+                  properties:
+                    version: { type: integer }
+      responses:
+        "200":
+          description: Updated item
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MenuItemFull" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /menu/import:
+    post:
+      tags: [menu]
+      summary: CSV import, all or nothing (owner). Audit `menu.import`
+      description: |
+        Columns: name, category, price (rupees), prep_minutes, veg (yes/no) required; description, spice,
+        contains, free_from (allergen ids separated by `;`), available optional. Rows match by name
+        (case-insensitive): update matches, insert new, leave missing items alone; unlisted allergens stay
+        `unknown`. Any invalid row rejects the file: 400 with `details.rows`.
+      parameters: [{ $ref: "#/components/parameters/CafeId" }]
+      requestBody:
+        required: true
+        description: The CSV file's text, UTF-8, at most 1 MB and 500 rows
+        content:
+          text/csv:
+            schema: { type: string }
+      responses:
+        "200":
+          description: Counts
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [created, updated]
+                properties:
+                  created: { type: integer }
+                  updated: { type: integer }
+        "400":
+          description: Rejected file; `error.details.rows` = [{row, column, message}]
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /cafes/{id}/settings:
+    put:
+      tags: [cafes]
+      summary: Opening hours, cutoff, tone, feedback delay, alert number in one save (owner). Audit `settings.update`
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CafeSettings" }
+      responses:
+        "200":
+          description: Settings after the change
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CafeSettings" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+
+  /tables:
+    post:
+      tags: [cafes]
+      summary: New table; `qr_text` is "Hi, I'm at Table <label>" (owner). Audit `table.update`
+      parameters: [{ $ref: "#/components/parameters/CafeId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TableInput" }
+      responses:
+        "200":
+          description: Created table
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Table" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /tables/{id}:
+    put:
+      tags: [cafes]
+      summary: Edit a table (owner). Audit `table.update`
+      parameters: [{ $ref: "#/components/parameters/Id" }, { $ref: "#/components/parameters/CafeId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TableInput" }
+      responses:
+        "200":
+          description: Updated table
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Table" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /team/invite:
+    post:
+      tags: [cafes]
+      summary: Invite by email with a role; sends the Supabase Auth invite (owner). Audit `team.invite`
+      parameters: [{ $ref: "#/components/parameters/CafeId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [email, role]
+              properties:
+                email: { type: string, format: email, maxLength: 200 }
+                role: { type: string, enum: [shift_manager, manager, owner] }
+                display_name: { type: [string, "null"], maxLength: 40 }
+      responses:
+        "200":
+          description: The membership
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Membership" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /team/{membership_id}:
+    patch:
+      tags: [cafes]
+      summary: Change role or deactivate; effective on the next request (owner). Audit `team.update`
+      description: Owner rows can't be deactivated; the last active owner can't be demoted (400).
+      parameters:
+        - { name: membership_id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { $ref: "#/components/parameters/CafeId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                role: { type: string, enum: [shift_manager, manager, owner] }
+                active: { type: boolean }
+      responses:
+        "200":
+          description: The membership
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Membership" }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /customers/{id}/delete:
+    post:
+      tags: [customers]
+      summary: Delete a customer's data (owner). Audit `customer.delete`
+      description: See docs/architecture.md#data-protection. Orders keep their totals with the customer link removed.
+      parameters: [{ $ref: "#/components/parameters/Id" }, { $ref: "#/components/parameters/CafeId" }]
+      responses:
+        "200":
+          description: Deletion request after processing
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, status]
+                properties:
+                  id: { type: string, format: uuid }
+                  status: { type: string, enum: [pending, completed, failed] }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /consents/export:
+    get:
+      tags: [customers]
+      summary: CSV of the full consent history with masked numbers (owner). Audit `consent.export`
+      parameters: [{ $ref: "#/components/parameters/CafeId" }]
+      responses:
+        "200":
+          description: CSV
+          content:
+            text/csv:
+              schema: { type: string }
+
+  /campaigns:
+    post:
+      tags: [campaigns]
+      summary: Create a draft (owner)
+      parameters: [{ $ref: "#/components/parameters/CafeId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CampaignInput" }
+      responses:
+        "200":
+          description: The draft
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Campaign" }
+        "400": { $ref: "#/components/responses/Error" }
+
+  /campaigns/{id}:
+    put:
+      tags: [campaigns]
+      summary: Edit a draft (owner)
+      parameters: [{ $ref: "#/components/parameters/Id" }, { $ref: "#/components/parameters/CafeId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CampaignInput" }
+      responses:
+        "200":
+          description: The draft
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Campaign" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /campaigns/audience-preview:
+    post:
+      tags: [campaigns]
+      summary: Who would receive it, the daily limit and days needed (owner)
+      parameters: [{ $ref: "#/components/parameters/CafeId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [segment, template_name]
+              properties:
+                segment: { type: string, enum: [all_opted_in, lapsed, regulars] }
+                template_name: { type: string }
+      responses:
+        "200":
+          description: Preview
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AudiencePreview" }
+
+  /campaigns/{id}/schedule:
+    post:
+      tags: [campaigns]
+      summary: draft → scheduled (owner). Audit `campaign.schedule`
+      description: 422 when no approved marketing template, no recipients, a past time or a disconnected number.
+      parameters: [{ $ref: "#/components/parameters/Id" }, { $ref: "#/components/parameters/CafeId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [scheduled_at]
+              properties:
+                scheduled_at: { type: string, format: date-time }
+      responses:
+        "200":
+          description: The campaign
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Campaign" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /campaigns/{id}/cancel:
+    post:
+      tags: [campaigns]
+      summary: scheduled or sending → cancelled; queued recipients are not sent (owner). Audit `campaign.cancel`
+      parameters: [{ $ref: "#/components/parameters/Id" }, { $ref: "#/components/parameters/CafeId" }]
+      responses:
+        "200":
+          description: The campaign
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Campaign" }
+        "422": { $ref: "#/components/responses/Error" }
+
   /webhooks/whatsapp:
     get:
       tags: [webhooks]
@@ -564,6 +923,16 @@ components:
               id: { type: string, format: uuid }
               number: { type: integer }
               total_paise: { type: integer }
+              items:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    name_snapshot: { type: string }
+                    qty: { type: integer }
+                    line_paise: { type: integer }
+        subtotal_paise: { type: integer }
+        code: { type: [string, "null"] }
         discount_paise: { type: integer, default: 0 }
         total_paise: { type: integer, description: "Total (incl. GST)" }
 
@@ -610,3 +979,115 @@ components:
         ai_summary: { type: [string, "null"] }
         undone_at: { type: [string, "null"], format: date-time }
         created_at: { type: string, format: date-time }
+
+    Allergen:
+      type: string
+      enum: [gluten, milk, eggs, peanuts, tree_nuts, soy, sesame, fish, shellfish, mustard, sulphites]
+
+    MenuItemInput:
+      type: object
+      additionalProperties: false
+      required: [name, category, price_paise, prep_minutes, veg]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 60 }
+        description: { type: [string, "null"], maxLength: 200 }
+        category: { type: string, minLength: 1, maxLength: 40 }
+        price_paise: { type: integer, minimum: 1 }
+        prep_minutes: { type: integer, minimum: 1, maximum: 120 }
+        veg: { type: boolean }
+        spice: { type: integer, minimum: 0, maximum: 3, default: 0 }
+        available: { type: boolean, default: true }
+        allergens:
+          type: array
+          description: States not listed stay `unknown`
+          items:
+            type: object
+            required: [allergen, state]
+            properties:
+              allergen: { $ref: "#/components/schemas/Allergen" }
+              state: { type: string, enum: [contains, free_from, unknown] }
+
+    MenuItemFull:
+      allOf:
+        - { $ref: "#/components/schemas/MenuItemInput" }
+        - type: object
+          required: [id, version]
+          properties:
+            id: { type: string, format: uuid }
+            version: { type: integer }
+
+    CafeSettings:
+      type: object
+      additionalProperties: false
+      properties:
+        opening_hours:
+          type: object
+          description: '{"mon": [["08:00","23:00"]], ...}; empty = always open'
+        cutoff_minutes: { type: integer, minimum: 0, maximum: 180 }
+        tone: { type: string, enum: [warm, crisp, playful] }
+        feedback_delay_minutes: { type: integer, enum: [15, 30, 60] }
+        alert_phone: { type: [string, "null"], pattern: '^\+?[0-9]{10,15}$', description: Café alert number (new_order_alert) }
+
+    TableInput:
+      type: object
+      additionalProperties: false
+      required: [label]
+      properties:
+        label: { type: string, minLength: 1, maxLength: 20 }
+        area: { type: [string, "null"], maxLength: 40 }
+        seats: { type: [integer, "null"], minimum: 1, maximum: 50 }
+
+    Table:
+      allOf:
+        - { $ref: "#/components/schemas/TableInput" }
+        - type: object
+          required: [id, qr_text]
+          properties:
+            id: { type: string, format: uuid }
+            qr_text: { type: string }
+
+    Membership:
+      type: object
+      required: [id, user_id, role, active]
+      properties:
+        id: { type: string, format: uuid }
+        user_id: { type: string, format: uuid }
+        role: { type: string, enum: [shift_manager, manager, owner] }
+        active: { type: boolean }
+        display_name: { type: [string, "null"] }
+
+    CampaignInput:
+      type: object
+      additionalProperties: false
+      required: [name, segment, template_name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 80 }
+        segment: { type: string, enum: [all_opted_in, lapsed, regulars] }
+        template_name: { type: string }
+        offer_text: { type: [string, "null"], maxLength: 120 }
+        discount_percent: { type: [integer, "null"], minimum: 1, maximum: 90, description: "% of the bill subtotal" }
+        code_prefix: { type: [string, "null"], pattern: '^[A-Z0-9]{2,10}$' }
+        valid_until: { type: [string, "null"], format: date-time }
+
+    Campaign:
+      allOf:
+        - { $ref: "#/components/schemas/CampaignInput" }
+        - type: object
+          required: [id, status]
+          properties:
+            id: { type: string, format: uuid }
+            status: { type: string, enum: [draft, scheduled, sending, completed, cancelled] }
+            scheduled_at: { type: [string, "null"], format: date-time }
+
+    AudiencePreview:
+      type: object
+      required: [in_segment, excluded, will_receive, daily_limit, days_needed]
+      properties:
+        in_segment: { type: integer }
+        excluded: { type: integer, description: In the segment but not opted in }
+        will_receive: { type: integer }
+        daily_limit: { type: integer, description: From the number's messaging tier }
+        days_needed: { type: integer }
+        estimated_cost: { type: [number, "null"], description: "null until prices are tracked" }
+        quality: { type: [string, "null"] }
+        template_status: { type: string }

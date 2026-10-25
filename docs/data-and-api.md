@@ -74,7 +74,7 @@ Contract: `contracts/schema.sql`. Implemented by `supabase/migrations/`.
 | Table | Key columns | Keys and checks |
 |---|---|---|
 | `templates` | `cafe_id`, `name`, `category`, `language`, `status`, `quality` | unique (`cafe_id`, `name`, `language`) |
-| `campaigns` | `cafe_id`, `name`, `segment`, `template_name`, `offer_text`, `code_prefix`, `valid_until`, `scheduled_at`, `status` | `segment` `all_opted_in` / `lapsed` / `regulars` |
+| `campaigns` | `cafe_id`, `name`, `segment`, `template_name`, `offer_text`, `discount_percent` (1–90, % of the bill subtotal), `code_prefix`, `valid_until`, `scheduled_at`, `status` | `segment` `all_opted_in` / `lapsed` / `regulars` |
 | `campaign_recipients` | `cafe_id`, `campaign_id`, `customer_id`, `code`, `status`, `wamid` | unique `code`; unique (`campaign_id`, `customer_id`) |
 | `redemptions` | `cafe_id`, `campaign_recipient_id`, `code`, `order_id`, `table_session_id`, `discount_paise`, `redeemed_by`, `redeemed_at` | unique `campaign_recipient_id`; append-only |
 | `llm_calls` | `cafe_id`, `provider`, `model`, `purpose` (`turn` / `cancel_draft` / `profile_note`), `conversation_id`, `message_id`, `order_id`, `note_id`, `input_tokens`, `cached_tokens`, `output_tokens`, `cost`, `currency`, `pricing_version`, `latency_ms`, `outcome` | append-only; `provider` `vertex` / `developer_api` / `stub` (tests); `message_id` = the `inbound_messages` row that started the turn; `order_id` set for calls about an order (edit, cancellation draft); `outcome` `ok` / `invalid_output` / `timeout` / `rate_limited` / `error` |
@@ -111,7 +111,7 @@ Contract: `contracts/schema.sql`. Implemented by `supabase/migrations/`.
 
 | Readable by | Tables / views |
 |---|---|
-| Every member | `cafes`, `tables`, `menu_items`, `menu_item_allergens`, `customers`, `customer_preferences`, `customer_notes`, `feedback`, `conversations`, `inbound_messages`, `wa_messages`, `table_sessions`, `orders`, `order_items`, `requests` (not `low_rating`), `escalations`, `redemptions`, `v_customer_card` |
+| Every member | `v_staff_names` (display names of the café's staff), `cafes`, `tables`, `menu_items`, `menu_item_allergens`, `customers`, `customer_preferences`, `customer_notes`, `feedback`, `conversations`, `inbound_messages`, `wa_messages`, `table_sessions`, `orders`, `order_items`, `requests` (not `low_rating`), `escalations`, `redemptions`, `v_customer_card` |
 | Own rows | `memberships` (owner sees every row of the café); `platform_admins`; `notifications` (`user_id` = caller, `manager`+) |
 | `manager`+ | `low_rating` requests, `v_service_report`, `v_prep_times`, `v_feedback_summary` |
 | `owner` | `consents`, `templates`, `campaigns`, `campaign_recipients`, `v_daily_revenue`, `v_top_items`, `v_customer_segments`, `v_customer_profile`, `v_campaign_funnel` |
@@ -199,6 +199,7 @@ Body: `error.code` (stable snake_case), `error.message` (safe to show), `error.d
 | `POST /orders/manual` | `{table_id, items, allergy_note?}` + `Idempotency-Key` | `shift_manager`+ | Manual order priced by code | `order.manual` |
 | `POST /requests/{id}/ack` | — | `shift_manager`+ (`low_rating`: `manager`+), support | `acknowledged` | `request.ack` |
 | `POST /requests/{id}/resolve` | — | same | `resolved`; help → chat back to bot | `request.resolve` |
+| `GET /bills/{table_session_id}` | — | `shift_manager`+, support | Bill sheet: orders, lines, subtotal, code, discount, total, computed by code | — |
 | `POST /bills/{table_session_id}/apply-code` | `{code}` | `shift_manager`+, support | Redeem; returns bill totals | `offer.redeem` |
 | `POST /bills/{table_session_id}/deliver` | — | `shift_manager`+, support | Resolve bill request, close session | `bill.deliver` |
 | `POST /conversations/{id}/takeover` | — | `shift_manager`+, support | `mode = human`, assigned to caller | `chat.takeover` |
@@ -209,7 +210,7 @@ Body: `error.code` (stable snake_case), `error.message` (safe to show), `error.d
 | `POST /notifications/{id}/ack` · `POST /notifications/ack-all` | — | `manager`+ (own rows) | Set `read_at` | `notification.ack` |
 | `POST /telemetry/console` | `{events: [{kind, at}]}` (`realtime_disconnect`, `realtime_reconnect`, `offline_banner`) | `shift_manager`+ | Recorded as metrics; no content | — |
 | `POST /menu` · `PUT /menu/{id}` | Item + `allergens: [{allergen, state}]` (+ `version` on PUT) | `manager`+, support | Create / edit; past orders keep snapshots | `menu.update` |
-| `POST /menu/import` | CSV (multipart) | `owner`, support | All-or-nothing import; returns row errors | `menu.import` |
+| `POST /menu/import` | CSV body (`text/csv`, ≤ 1 MB, ≤ 500 rows) | `owner`, support | All-or-nothing import; returns row errors | `menu.import` |
 | `POST /cafes/{id}/pause-ordering` | `{paused}` | `manager`+, support | Pause / resume WhatsApp ordering | `ordering.pause` / `ordering.resume` |
 | `POST /customers/{id}/notes` | `{text}` (≤ 500) | `shift_manager`+, support | Store the comment; the worker applies the AI's profile changes | `customer.note` (+ `customer.profile_update` when applied) |
 | `POST /customer-notes/{id}/undo` | — | `shift_manager`+, support | Reverse that comment's applied changes; 409 if changed again since | `customer.profile_undo` |
