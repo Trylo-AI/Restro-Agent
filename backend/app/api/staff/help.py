@@ -81,6 +81,25 @@ async def open_table_chat(body: OpenBody, p: Principal = Depends(shift_manager))
     return _conversation(await service.open_for_table(p, body.table_session_id))
 
 
+@router.get("/bills/{table_session_id}")
+async def bill(table_session_id: str, p: Principal = Depends(shift_manager)) -> dict[str, Any]:
+    from app.domain import bills
+
+    return await bills.bill(p, table_session_id)
+
+
+class CodeBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    code: str = Field(min_length=3, max_length=20)
+
+
+@router.post("/bills/{table_session_id}/apply-code")
+async def apply_code(table_session_id: str, body: CodeBody, p: Principal = Depends(shift_manager)) -> dict[str, Any]:
+    from app.domain import bills
+
+    return await bills.apply_code(p, table_session_id, body.code)
+
+
 @router.post("/bills/{table_session_id}/deliver")
 async def deliver(table_session_id: str, p: Principal = Depends(shift_manager)) -> dict[str, Any]:
     return await service.deliver_bill(p, table_session_id)

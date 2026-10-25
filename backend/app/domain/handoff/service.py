@@ -135,18 +135,16 @@ async def open_for_table(p: Principal, table_session_id: str) -> conversations.C
 # ── bill ──────────────────────────────────────────────────────────────────
 
 async def deliver_bill(p: Principal, table_session_id: str) -> dict[str, Any]:
+    from app.domain import bills  # the one place a bill is computed (orders, code, discount, total)
+
     async with tx() as c:
-        if not await tables_repo.session_exists(c, p.cafe_id, table_session_id):
-            raise NotFound()
-        orders = await tables_repo.bill_orders(c, p.cafe_id, table_session_id)
+        bill = await bills.compute(c, p.cafe_id, table_session_id)
         resolved = await requests_repo.resolve_bill_for_session(c, p.cafe_id, table_session_id)
         closed = await tables_repo.close_session(c, p.cafe_id, table_session_id)
         if closed or resolved:
-            await audit.write(c, p.cafe_id, _actor(p), "bill.deliver", {"table_session_id": table_session_id})
-    total = sum(t for _, _, t in orders)
-    return {"table_session_id": table_session_id, "closed_at": datetime.now(UTC).isoformat(),
-            "orders": [{"id": i, "number": n, "total_paise": t} for i, n, t in orders],
-            "discount_paise": 0, "total_paise": total}
+            await audit.write(c, p.cafe_id, _actor(p), "bill.deliver",
+                              {"table_session_id": table_session_id, "total_paise": bill["total_paise"]})
+    return {**bill, "closed_at": bill["closed_at"] or datetime.now(UTC).isoformat()}
 
 
 # ── notifications ─────────────────────────────────────────────────────────

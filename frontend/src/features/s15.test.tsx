@@ -27,7 +27,7 @@ vi.mock("../lib/mutations", async (orig) => ({
   ...(await orig<typeof import("../lib/mutations")>()),
   menu: { setAvailable: vi.fn().mockResolvedValue({}) },
   requests: { ack: vi.fn().mockResolvedValue({}), resolve: vi.fn().mockResolvedValue({}) },
-  bills: { deliver: vi.fn().mockResolvedValue({ total_paise: 69000 }) },
+  bills: { deliver: vi.fn().mockResolvedValue({ total_paise: 69000 }), applyCode: vi.fn().mockResolvedValue({ discount_paise: 13800 }) },
   conversations: { open: vi.fn(), takeover: vi.fn().mockResolvedValue({}), reply: vi.fn().mockResolvedValue({}), handback: vi.fn() },
 }));
 
@@ -116,21 +116,38 @@ describe("calls and bills", () => {
     expect(screen.queryByRole("button", { name: "Low rating" })).not.toBeInTheDocument();
   });
 
-  test("bill sheet lists the session's orders, the total incl. GST, and Bill delivered", async () => {
+  test("bill sheet shows the API's lines and total, applies a code, Bill delivered", async () => {
     vi.mocked(data.useOpenRequests).mockReturnValue(live([req({ kind: "bill", words: null })]));
-    vi.mocked(data.useBill).mockReturnValue(live([
-      { id: "o1", number: 1041, total_paise: 51000, items: [{ name_snapshot: "Cold Coffee", qty: 1 }] },
-      { id: "o2", number: 1043, total_paise: 18000, items: [{ name_snapshot: "Masala Chai", qty: 2 }] },
-    ]));
+    vi.mocked(data.useBill).mockReturnValue(live({
+      table_session_id: "ts-1", closed_at: null, subtotal_paise: 69000, code: null, discount_paise: 0, total_paise: 69000,
+      orders: [
+        { id: "o1", number: 1041, total_paise: 51000, items: [{ name_snapshot: "Cold Coffee", qty: 1, line_paise: 51000 }] },
+        { id: "o2", number: 1043, total_paise: 18000, items: [{ name_snapshot: "Masala Chai", qty: 2, line_paise: 18000 }] },
+      ],
+    }));
     wrap(<CallsScreen />);
     fireEvent.click(screen.getByRole("button", { name: /Open bill/ }));
     const sheet = screen.getByRole("dialog", { name: "Bill · T4" });
     expect(within(sheet).getByText("Total (incl. GST)")).toBeInTheDocument();
     expect(within(sheet).getByText("₹ 690")).toBeInTheDocument();
-    expect(within(sheet).queryByRole("textbox")).not.toBeInTheDocument(); // no code field in this slice
+    fireEvent.change(within(sheet).getByLabelText("Offer code"), { target: { value: "back20-7kq" } });
+    await act(async () => fireEvent.click(within(sheet).getByRole("button", { name: "Apply" })));
+    expect(bills.applyCode).toHaveBeenCalledWith("ts-1", "BACK20-7KQ");
     await act(async () => fireEvent.click(within(sheet).getByRole("button", { name: "Bill delivered" })));
     expect(bills.deliver).toHaveBeenCalledWith("ts-1");
     expect(await screen.findByText("Bill delivered · T4 closed · ₹ 690")).toBeInTheDocument();
+  });
+
+  test("an invalid code shows the API's message and changes nothing", async () => {
+    vi.mocked(data.useOpenRequests).mockReturnValue(live([req({ kind: "bill", words: null })]));
+    vi.mocked(data.useBill).mockReturnValue(live({ table_session_id: "ts-1", closed_at: null, subtotal_paise: 18000, code: null,
+      discount_paise: 0, total_paise: 18000, orders: [{ id: "o2", number: 1043, total_paise: 18000, items: [] }] }));
+    vi.mocked(bills.applyCode).mockRejectedValueOnce(new Error("This isn't a valid code, or it has expired."));
+    wrap(<CallsScreen />);
+    fireEvent.click(screen.getByRole("button", { name: /Open bill/ }));
+    fireEvent.change(screen.getByLabelText("Offer code"), { target: { value: "NOPE" } });
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Apply" })));
+    expect(screen.getByText("This isn't a valid code, or it has expired.")).toBeInTheDocument();
   });
 });
 

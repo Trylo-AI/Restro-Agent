@@ -2,6 +2,8 @@
 // Never select customers.wa_id: masked numbers come from v_customer_card.
 import { useLive, rows } from "./live";
 import { useSession } from "./session";
+import { api, cafeHeader, call } from "./api/client";
+import type { components } from "./api/schema";
 import { supabase } from "./supabase";
 import type {
   Cafe, Conversation, CustomerCard, CustomerNote, Escalation, MenuItem, Order, OrderItem, Preference, Request,
@@ -369,25 +371,17 @@ export function useThread(conversationId: string | null) {
   });
 }
 
-export interface BillOrder { id: string; number: number; total_paise: number; items: { name_snapshot: string; qty: number }[] }
+export type Bill = components["schemas"]["Bill"];
 
-/** Every non-cancelled order of a table session (docs/backend.md#bill-sheet). */
+/** The bill as the backend computes it (orders, lines, subtotal, code, discount, total). Money only from the API. */
 export function useBill(tableSessionId: string | null) {
   const { cafeId } = useSession();
-  return useLive<BillOrder[]>({
+  return useLive<Bill>({
     key: ["bill", cafeId, tableSessionId], enabled: !!tableSessionId, cafeId, tables: ["orders"],
-    fetcher: async () => {
-      const data = await rows<(Omit<BillOrder, "items"> & { order_items: BillOrder["items"] })[]>(supabase.from("orders")
-        .select("id, number, total_paise, order_items(name_snapshot, qty)").eq("table_session_id", tableSessionId!)
-        .neq("status", "CANCELLED").order("created_at"));
-      return data.map(({ order_items, ...o }) => ({ ...o, items: order_items ?? [] }));
-    },
+    fetcher: () => call(api.GET("/bills/{table_session_id}", {
+      params: { ...cafeHeader(), path: { table_session_id: tableSessionId! } },
+    })),
   });
-}
-
-/** Sum of order totals that code already priced (integer paise; no discounts or tax maths here). */
-export function billTotal(orders: BillOrder[]): number {
-  return orders.reduce((s, o) => s + o.total_paise, 0);
 }
 
 /** Open table sessions, for "Message a table". */

@@ -42,6 +42,10 @@ export const requests = {
 export const bills = {
   deliver: (tableSessionId: string) =>
     call(api.POST("/bills/{table_session_id}/deliver", { params: { ...cafeHeader(), path: { table_session_id: tableSessionId } } })),
+  applyCode: (tableSessionId: string, code: string) =>
+    call(api.POST("/bills/{table_session_id}/apply-code", {
+      params: { ...cafeHeader(), path: { table_session_id: tableSessionId } }, body: { code },
+    })),
 };
 
 export type MenuItemInput = components["schemas"]["MenuItemInput"];

@@ -254,7 +254,7 @@ Built with S10 and S11 and committed together (they share the handoff wiring).
 - [x] 403 / 409 / network handling
 - [x] Tests: `urgency.test.ts` (every table row + ringing rules), `format.test.ts`, login screen
 - [x] **Exit:** shift manager lands on Live orders; Offline banner 5–6.5 s after the api drops (e2e, ping every 1.5 s + 5 s grace)
-- [ ] Gap for Aman: RLS lets a `shift_manager` read only their own `memberships` row, so "Acknowledged by Ravi" and comment authors show "A teammate" unless the reader is the owner. Proposed fix: a `v_staff_names` view (`cafe_id`, `user_id`, `display_name`) for members. That needs a contract change, so it hasn't been made
+- [x] ~~Gap for Aman: RLS lets a `shift_manager` read only their own `memberships` row, so "Acknowledged by Ravi" and comment authors show "A teammate" unless the reader is the owner. Proposed fix: a `v_staff_names` view (`cafe_id`, `user_id`, `display_name`) for members. That needs a contract change, so it hasn't been made~~ Resolved in local build L1 / L4 (`v_staff_names`)
 
 ## S14 · Live orders
 
@@ -281,7 +281,7 @@ Built with S10 and S11 and committed together (they share the handoff wiring).
 - [x] Tests: `features/s15.test.tsx` (menu two taps, expiry and role; calls buttons per kind, low ratings hidden, bill sheet + deliver; chats quick replies, Send, Take over, closed window, teammate replying; message rendering)
 - [x] E2E: `e2e/service.spec.ts` call waiter → Calls → Acknowledge → Chats reply reaches the customer → hand back → bot answers again; menu two taps on the real stack
 - [x] **Exit:** each screen's "Done when" list passes, minus the Later parts
-- [ ] Assumption for Aman: the contract has no bill read endpoint, so the sheet sums the session's order totals, which code already priced (integer paise, no discount or tax maths; one helper `billTotal`). "Bill delivered" shows the API's total. A `GET /bills/{table_session_id}` would remove this; it needs a contract change
+- [x] ~~Assumption for Aman: the contract has no bill read endpoint, so the sheet sums the session's order totals, which code already priced (integer paise, no discount or tax maths; one helper `billTotal`). "Bill delivered" shows the API's total. A `GET /bills/{table_session_id}` would remove this; it needs a contract change~~ Resolved in local build L5
 
 ## S16 · End to end
 

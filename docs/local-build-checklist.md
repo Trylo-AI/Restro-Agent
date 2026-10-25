@@ -8,7 +8,7 @@ Tracks [local-build.md](local-build.md). A step is Done when its tests pass and 
 | L2 Menu editing | Done | L1–L2 commit |
 | L3 Feedback and opt-in | Done | L3 commit |
 | L4 Staff names and notifications | Done | L4 commit |
-| L5 Bill read and redemption | To do | — |
+| L5 Bill read and redemption | Done | L5 commit |
 | L6 Setup | To do | — |
 | L7 Service report and Analytics | To do | — |
 | L8 Customers | To do | — |
@@ -53,3 +53,10 @@ Tracks [local-build.md](local-build.md). A step is Done when its tests pass and 
 - [x] `manager`+: in-app notifications (Realtime), unread count on the bell, "#1048 · T7 cancelled by Ravi · Other" with the staff's own text; opening the panel calls `ack-all`
 - [x] e2e (two consoles): shift manager acknowledges a call → the manager sees "Acknowledged by Ravi"; shift manager cancels with Other → the manager's bell shows it unread, the panel shows the text, then it's read; a shift manager's bell has no notification list
 - [ ] Deviation: tapping a notification doesn't "open the order": a cancelled order has no screen yet (it's off Live orders)
+
+## L5 · Bill read and redemption
+
+- [x] `GET /bills/{table_session_id}`: orders with lines, subtotal, code, discount, total, all computed in one backend function (also used by Bill delivered, which now returns the discounted total)
+- [x] `POST /bills/{id}/apply-code`: this café's sent / delivered / read / held codes only, not expired, campaign not cancelled; discount = `discount_percent` of the subtotal, rounded down to the paisa; one code per bill, one redemption per code; same code again on the same bill = no-op; links the session's latest order (`source = campaign`); audit `offer.redeem`. Errors: "This isn't a valid code, or it has expired." · "This code was already used today on #1041."
+- [x] Console bill sheet reads the API (the client-side `billTotal` sum is gone) and has the code field with the discount line
+- [x] Tests: 2 integration (lines, discount math, no-op, delivery total, attribution, audit; used / expired / unsent / another café's code / second code), console (2)
