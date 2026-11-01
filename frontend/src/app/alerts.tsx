@@ -68,19 +68,22 @@ export function AlertProvider({ children }: { children: ReactNode }) {
     }
   }, [tracked, now, loaded]);
 
+  const badges = {
+    orders: badge(tracked.filter((t) => t.area === "orders").map((t) => t.urgency)),
+    calls: badge(tracked.filter((t) => t.area === "calls").map((t) => t.urgency)),
+    chats: badge(tracked.filter((t) => t.area === "chats").map((t) => t.urgency)),
+  };
+  // The clock ticks every second, but the shell only needs a new value when a badge or the sound state changes.
+  const badgeKey = JSON.stringify(badges);
   const value = useMemo<AlertState>(() => ({
-    badges: {
-      orders: badge(tracked.filter((t) => t.area === "orders").map((t) => t.urgency)),
-      calls: badge(tracked.filter((t) => t.area === "calls").map((t) => t.urgency)),
-      chats: badge(tracked.filter((t) => t.area === "chats").map((t) => t.urgency)),
-    },
+    badges,
     soundOn,
     async enableSound() {
       const ok = await unlock();
       await notifyPermission();
       setSoundOn(ok);
     },
-  }), [tracked, soundOn]);
+  }), [badgeKey, soundOn]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

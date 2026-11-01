@@ -116,6 +116,7 @@ label.field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; 
 .muted { color: var(--color-muted); }
 .mono { font-family: var(--font-mono); }
 .row { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.row.center { justify-content: center; }
 .grow { flex: 1; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 

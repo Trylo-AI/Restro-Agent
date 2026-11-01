@@ -153,7 +153,9 @@ export function useOpenRequests() {
 export function useChats() {
   const { cafeId } = useSession();
   return useLive<ChatRow[]>({
-    key: ["chats", cafeId], enabled: !!cafeId, cafeId, tables: ["conversations", "inbound_messages", "wa_messages"],
+    // Only new messages move the list; wa_messages status updates (sent → delivered → read) don't change a row.
+    key: ["chats", cafeId], enabled: !!cafeId, cafeId,
+    tables: ["conversations", { table: "inbound_messages", event: "INSERT" }, { table: "wa_messages", event: "INSERT" }],
     fetcher: async () => {
       const since = new Date(Date.now() - 24 * 3600_000).toISOString();
       type Row = Conversation & { table_sessions: { tables: { label: string } | null } | null };

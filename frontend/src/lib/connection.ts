@@ -7,22 +7,25 @@ import { report } from "./telemetry";
 
 const PING_MS = 1_500; // banner shows 5–6.5 s after the api or Realtime drops
 const GRACE_MS = 5_000;
+const TIMEOUT_MS = 4_000; // a hung ping counts as down instead of piling up behind the next ones
 
 export function useConnection(): { offline: boolean; retry: () => void; cameBackAt: number | null } {
   const [offline, setOffline] = useState(false);
   const [cameBackAt, setCameBackAt] = useState<number | null>(null);
   const downSince = useRef<number | null>(null);
   const wasOffline = useRef(false);
+  const inFlight = useRef(false);
 
   const check = async () => {
+    if (inFlight.current) return;
+    inFlight.current = true;
     let ok = navigator.onLine;
-    if (ok) {
-      try {
-        const r = await fetch(`${API_URL}/healthz`, { cache: "no-store" });
-        ok = r.ok;
-      } catch {
-        ok = false;
-      }
+    try {
+      if (ok) ok = (await fetch(`${API_URL}/healthz`, { cache: "no-store", signal: AbortSignal.timeout(TIMEOUT_MS) })).ok;
+    } catch {
+      ok = false;
+    } finally {
+      inFlight.current = false;
     }
     const realtimeOk = supabase.realtime.isConnected() || supabase.getChannels().length === 0;
     ok = ok && realtimeOk;

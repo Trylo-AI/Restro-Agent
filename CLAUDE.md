@@ -72,7 +72,7 @@ Inputs, read-only: `Restro_Build_Plan.md` (build plan v1.0), `Restro Console v2-
 | [local-build.md](docs/local-build.md) | Current build: the rest of the MVP that runs locally (L1–L14) |
 | [local-build-checklist.md](docs/local-build-checklist.md) | Progress tracker for the local build |
 | [app-eval.md](docs/app-eval.md) | App evaluation: the 215 cases through the real system, what passed and failed and why, reliability through outages, the AI layer on 7 models |
-| [perf-test.md](docs/perf-test.md) | Performance test: where time goes per webhook, turn and console request; DB reads and writes measured in Postgres; findings |
+| [perf-test.md](docs/perf-test.md) | Performance test: where time goes per webhook, turn and console request; DB reads and writes measured in Postgres; the console in the browser; findings |
 | [OPS_PLAN.md](docs/OPS_PLAN.md) | Performance dashboard: what is traced, the `/api/ops` read API, the `/platform/ops` pages; decisions and departures |
 
 ## Roles

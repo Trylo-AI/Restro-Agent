@@ -1,7 +1,7 @@
 // Shell: sidebar (≥ 768 px) or tab bar, header with the active café, banners, toasts, alerts gate.
 import { useQueryClient } from "@tanstack/react-query";
 import { Activity, BarChart3, BellRing, House, Megaphone, Users, ClipboardList, Gauge, MessageCircle, PhoneCall, Settings, UtensilsCrossed } from "lucide-react";
-import { useEffect, useRef, type ReactNode } from "react";
+import { Suspense, useEffect, useMemo, useRef, type ReactNode } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 
 import { Badge } from "../components/ui";
@@ -10,6 +10,7 @@ import { useCafe, useLiveOrders } from "../lib/data";
 import { atLeast, useSession } from "../lib/session";
 import { AlertsGate, useAlerts } from "./alerts";
 import { Bell } from "./Bell";
+import { ErrorBoundary } from "./ErrorBoundary";
 import { useToasts } from "./toasts";
 
 const NAV = [
@@ -73,6 +74,7 @@ export function Shell() {
   };
 
   const title = TITLES[`/${location.pathname.split("/")[1]}`] ?? "";
+  const outlet = useMemo(() => ({ offline }), [offline]); // a new object would re-render every useOffline() screen
 
   return (
     <AlertsGate>
@@ -134,7 +136,11 @@ export function Shell() {
           </header>
           <Banners offline={offline} retry={retry} />
           <div className="content">
-            <Outlet context={{ offline }} />
+            <ErrorBoundary scope="screen" key={location.pathname}>
+              <Suspense fallback={<div className="empty">Loading…</div>}>
+                <Outlet context={outlet} />
+              </Suspense>
+            </ErrorBoundary>
           </div>
         </div>
         <nav className="tabbar">

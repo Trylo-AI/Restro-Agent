@@ -30,14 +30,18 @@ export function secondsSince(iso: string | null | undefined, now: number): numbe
   return Math.max(0, Math.floor((now - Date.parse(iso)) / 1000));
 }
 
+// One formatter each: toLocale*String builds a new Intl formatter per call, which dominated the 1 s re-render of live cards.
+const CLOCK = new Intl.DateTimeFormat("en-IN", { hour: "2-digit", minute: "2-digit" });
+const DAY_MONTH = new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short" });
+
 export function clock(iso: string | null | undefined): string {
   if (!iso) return "";
-  return new Date(iso).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+  return CLOCK.format(new Date(iso));
 }
 
 /** "12 Oct" whatever the browser's locale. */
 export function dayMonth(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+  return DAY_MONTH.format(new Date(iso));
 }
 
 export function relative(iso: string | null | undefined, now: number): string {

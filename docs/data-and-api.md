@@ -244,7 +244,7 @@ Body: `error.code` (stable snake_case), `error.message` (safe to show), `error.d
 
 ## Realtime
 
-The console joins one channel per table, filtered `cafe_id = <active café>`, with the user's JWT; RLS applies to every event. Only these tables are in the `supabase_realtime` publication.
+The console joins one channel per live query (shared by every screen and hook reading that query), with one subscription per table it watches, filtered `cafe_id = <active café>`, with the user's JWT; RLS applies to every event. Only these tables are in the `supabase_realtime` publication.
 
 | Table | Events | Drives |
 |---|---|---|
@@ -263,5 +263,7 @@ The console joins one channel per table, filtered `cafe_id = <active café>`, wi
 - Apply an UPDATE only if its `version` (orders) or `updated_at` is newer than shown; for orders a same-`version` update with a newer `updated_at` also applies (timer flags don't bump `version`).
 - Subscribe first, buffer, do the initial read, then apply the buffer. No gap.
 - Never trust that every event arrived: refetch active orders and open requests on reconnect, tab visible again and café switch, and every 30 s while connected, so a missed event never hides an order.
+- An event refetches its query at once; further events within 1 s become one more refetch at the end of that second, so a burst (a reply plus its sent, delivered and read updates) costs two reads, not one per event, and the last event is never dropped.
+- The Chats list watches only INSERT on `inbound_messages` and `wa_messages` (delivery ticks don't change a row); an open thread watches every change.
 - A table joins the publication only with an RLS read policy and an entry in `contracts/events.md`.
 - The console is never the only alert path: escalation timers send `new_order_alert` whatever the browser state.

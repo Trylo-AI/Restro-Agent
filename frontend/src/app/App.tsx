@@ -1,22 +1,12 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Route, Routes, useOutletContext } from "react-router-dom";
 
+import { lazy, type ComponentType } from "react";
+
 import { CallsScreen } from "../features/calls/CallsScreen";
 import { ChatsScreen } from "../features/chats/ChatsScreen";
 import { MenuScreen } from "../features/menu/MenuScreen";
-import { CampaignsScreen } from "../features/campaigns/CampaignsScreen";
-import { CustomersScreen } from "../features/customers/CustomersScreen";
-import { OpsFailures } from "../features/ops/Failures";
-import { OpsInsights, OpsLogs } from "../features/ops/Insights";
-import { OpsLatency } from "../features/ops/Latency";
-import { OpsLive } from "../features/ops/Live";
-import { OpsLayout } from "../features/ops/OpsLayout";
-import { OpsOverview } from "../features/ops/Overview";
-import { OpsRuns, OpsRunTrace } from "../features/ops/Runs";
-import { OpsDependencies, OpsEfficiency, OpsEndpoints } from "../features/ops/Tables";
 import { OrdersScreen } from "../features/orders/OrdersScreen";
-import { AnalyticsScreen, ServiceReportScreen } from "../features/reports/ReportsScreen";
-import { QrSheet, SetupScreen } from "../features/setup/SetupScreen";
 import { TodayScreen } from "../features/today/TodayScreen";
 import { SessionProvider, useSession } from "../lib/session";
 import { AlertProvider } from "./alerts";
@@ -25,6 +15,33 @@ import { Shell } from "./Shell";
 import { ToastProvider } from "./toasts";
 import "../styles/app.css";
 import "../styles/ops.css";
+
+// Service screens and Today (the owner's landing page) load with the app; owner and platform screens load on first
+// visit, so a staff phone downloads less before Live orders shows. The shell's Suspense covers the wait.
+function screen<M, K extends keyof M>(load: () => Promise<M>, name: K) {
+  return lazy(() => load().then((m) => ({ default: m[name] as ComponentType })));
+}
+const ops = () => import("../features/ops");
+const reports = () => import("../features/reports/ReportsScreen");
+const setup = () => import("../features/setup/SetupScreen");
+const CampaignsScreen = screen(() => import("../features/campaigns/CampaignsScreen"), "CampaignsScreen");
+const CustomersScreen = screen(() => import("../features/customers/CustomersScreen"), "CustomersScreen");
+const AnalyticsScreen = screen(reports, "AnalyticsScreen");
+const ServiceReportScreen = screen(reports, "ServiceReportScreen");
+const QrSheet = screen(setup, "QrSheet");
+const SetupScreen = screen(setup, "SetupScreen");
+const OpsLayout = screen(ops, "OpsLayout");
+const OpsOverview = screen(ops, "OpsOverview");
+const OpsLive = screen(ops, "OpsLive");
+const OpsRuns = screen(ops, "OpsRuns");
+const OpsRunTrace = screen(ops, "OpsRunTrace");
+const OpsFailures = screen(ops, "OpsFailures");
+const OpsLatency = screen(ops, "OpsLatency");
+const OpsEndpoints = screen(ops, "OpsEndpoints");
+const OpsDependencies = screen(ops, "OpsDependencies");
+const OpsEfficiency = screen(ops, "OpsEfficiency");
+const OpsInsights = screen(ops, "OpsInsights");
+const OpsLogs = screen(ops, "OpsLogs");
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 2 } } });
 
@@ -39,8 +56,20 @@ function Home() {
 }
 
 function Gate() {
-  const { ready, session, cafeId } = useSession();
+  const { ready, loadError, retry, session, cafeId } = useSession();
   if (!ready) return <div className="gate"><div className="muted">Loading…</div></div>;
+  if (!session && !loadError) return <Login />;
+  if (!cafeId && loadError) {
+    return (
+      <div className="gate">
+        <div className="gate-card" role="alert">
+          <h1>Can't reach Restro</h1>
+          <p className="muted">Check the internet connection. Retrying every few seconds.</p>
+          <button className="btn primary big" onClick={retry}>Retry now</button>
+        </div>
+      </div>
+    );
+  }
   if (!session) return <Login />;
   if (!cafeId) {
     return (

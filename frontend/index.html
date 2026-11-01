@@ -3,16 +3,35 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>
+      // A page cached from before a deploy asks for script files that no longer exist, and the console would stay
+      // blank. Load the current version once (at most once a minute, so an outage can't loop). See app/ErrorBoundary.
+      addEventListener("error", function (e) {
+        var t = e.target;
+        if (!t || t.tagName !== "SCRIPT" || !t.src || t.src.indexOf("/assets/") < 0) return;
+        try {
+          if (Date.now() - Number(sessionStorage.getItem("restro.chunkReloadAt") || 0) < 60000) return;
+          sessionStorage.setItem("restro.chunkReloadAt", String(Date.now()));
+        } catch (_) {
+          return;
+        }
+        location.reload();
+      }, true);
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- Not render-blocking: the console paints with the fallback font while the web font loads. -->
     <link
       href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap"
       rel="stylesheet"
+      media="print"
+      onload="this.media='all'"
     />
     <title>Restro Console</title>
   </head>
   <body>
     <div id="root"></div>
+    <noscript>Restro Console needs JavaScript.</noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

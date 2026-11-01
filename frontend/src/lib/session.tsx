@@ -7,9 +7,12 @@ import { supabase } from "./supabase";
 import type { Membership, Role } from "./types";
 
 const LAST_CAFE = "restro.lastCafe";
+const RETRY_MS = 5_000;
 
 interface SessionState {
   ready: boolean;
+  /** The last memberships read failed (network); the previous café context is kept and it retries by itself. */
+  loadError: boolean;
   session: Session | null;
   memberships: Membership[];
   cafeId: string | null;
@@ -20,6 +23,7 @@ interface SessionState {
   signIn(email: string, password: string): Promise<string | null>;
   signOut(): Promise<void>;
   switchCafe(cafeId: string): void;
+  retry(): void;
 }
 
 const Ctx = createContext<SessionState | null>(null);
@@ -54,19 +58,24 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [memberships, setMemberships] = useState<Membership[]>([]);
   const [cafeId, setCafeId] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState(false);
 
   const loadMemberships = useCallback(async (s: Session | null) => {
     if (!s) {
+      setLoadError(false);
       setMemberships([]);
       setCafeId(null);
       setActiveCafe(null);
       return;
     }
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("memberships")
       .select("cafe_id, role, display_name, active, cafes(id, name, status, settings)")
       .eq("user_id", s.user.id)
       .eq("active", true);
+    // A failed read (laptop waking, network still down) is not "no access": keep the café that was open.
+    setLoadError(!!error);
+    if (error) return;
     const rows = (data ?? []) as unknown as Membership[];
     setMemberships(rows);
     const last = safeGet(LAST_CAFE);
@@ -76,11 +85,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data }) => {
-      setSession(data.session);
-      await loadMemberships(data.session);
-      setReady(true);
-    });
+    supabase.auth.getSession()
+      .then(async ({ data }) => {
+        setSession(data.session);
+        await loadMemberships(data.session);
+      })
+      .catch(() => setLoadError(true))
+      .finally(() => setReady(true));
     const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
       setSession(s);
       if (event === "SIGNED_IN" || event === "SIGNED_OUT") void loadMemberships(s);
@@ -88,10 +99,21 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     return () => sub.subscription.unsubscribe();
   }, [loadMemberships]);
 
+  const retry = useCallback(() => {
+    void supabase.auth.getSession().then(({ data }) => loadMemberships(data.session)).catch(() => setLoadError(true));
+  }, [loadMemberships]);
+
+  useEffect(() => {
+    if (!loadError) return;
+    const id = window.setInterval(retry, RETRY_MS);
+    return () => window.clearInterval(id);
+  }, [loadError, retry]);
+
   const value = useMemo<SessionState>(() => {
     const m = memberships.find((x) => x.cafe_id === cafeId) ?? null;
     return {
       ready,
+      loadError,
       session,
       memberships,
       cafeId,
@@ -111,8 +133,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         setCafeId(id);
         setActiveCafe(id);
       },
+      retry,
     };
-  }, [ready, session, memberships, cafeId]);
+  }, [ready, loadError, session, memberships, cafeId, retry]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

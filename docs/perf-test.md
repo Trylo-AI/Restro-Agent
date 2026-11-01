@@ -2,7 +2,8 @@
 
 Measured on 25 Oct 2026 with:
 - the [app evaluation](app-eval.md): 215 cases and 464 customer messages through the real system, 8 customers at a time;
-- a console API benchmark.
+- a console API benchmark;
+- the console in the browser (1 Nov 2026, [below](#console-in-the-browser)).
 
 The aim is to know where a request's time goes: our code, database reads and writes, the AI call, or sending. That shows what the Phase 3 gate on staging (p95 ≤ 5 s at 100 customers) depends on.
 
@@ -104,6 +105,36 @@ From `loadtest/perf_api.py` on the seeded café: 16 sequential calls and a burst
 
   Both are one café's own writes queuing as designed. Real use doesn't send 10 at once.
 
+## Console in the browser
+
+Measured on 1 Nov 2026 with `loadtest/console_probe.cjs` (headless Chromium, owner, seeded café with 38 live orders: 31 New, 6 Accepted, 1 Ready). Phases: 40 s idle on Live orders, 40 s on Live orders while 6 simulated customers send a message every 1.5 s, 20 s idle on Chats, then a walk through every screen. Production builds (`vite preview`), before and after the fixes below.
+
+**Reported problems:** the console felt slow, and sometimes went white until reloaded.
+
+| Phase (production build) | Before | After |
+|---|---|---|
+| Live orders idle: JavaScript per second | 29.7 ms | 19.3 ms |
+| Live orders under chat traffic: requests per minute | 245 | 156 |
+| Chats idle (after traffic): requests per minute | 435 | 204 |
+| Live orders opened: settled / requests | 1,332 ms / 17 | 430 ms / 6 |
+| Chats opened: settled / requests | 1,479 ms / 10 | 297 ms / 4 |
+| Initial JavaScript download | 659 kB (187 kB gzip) | 540 kB (156 kB gzip) |
+| Sign-in to first screen, median of 5 | 1.78 s | 1.65 s |
+
+On the dev server (`npm run dev`, React development build, which is what local testing uses) Live orders idled at 191 ms of JavaScript per second with 7.4 s of long tasks per 40 s; after the fixes, 72 ms and 2.3 s.
+
+**Causes and fixes:**
+
+1. **Live orders re-rendered every card every second, and each render was costly.** `clock()` built a new `Intl` formatter per call (`toLocaleTimeString`) for each escalation line, so 31 cards × 2 escalations each second dominated the profile. Fix: one cached formatter (`lib/format.ts`).
+2. **Every Realtime event refetched its whole query, once per subscribing hook.** Each `useLive` call opened its own channel (orders was subscribed 3 times), and the Chats list refetched four queries (up to 2,000 message rows) on every message and every sent, delivered and read update. Fix: one shared channel per query; first event refetches at once, the rest of a 1 s burst becomes one trailing refetch; the Chats list watches only new messages ([realtime](data-and-api.md#realtime), [decision](decisions.md#smaller-decisions)).
+3. **App-wide re-renders.** The alerts context and the outlet context were new objects every second, and the toast API was a new object on every render (four times a second during an Undo), so the shell and the open screen re-rendered with them. Fix: stable context values; the Undo countdown ticks in its own component.
+4. **White screen: no error boundary.** Any render error unmounted the whole app. Fix: a screen boundary inside the shell and a root boundary with Reload ([console](console.md#errors-and-loading)).
+5. **"No access to any café" after waking a laptop.** A failed memberships read (re-run on tab focus) was treated as no memberships. Fix: keep the café, retry every 5 s.
+6. **White screen after a deploy (production).** `index.html` was cacheable for an hour, so an old page asked for script files the deploy had removed. Fix: `no-cache` on HTML and routes in `firebase.json`, plus a one-time reload when a script fails to load. **[verify]** the headers with `curl -I` after the next deploy.
+7. **Health ping without a timeout** could pile up requests while `api` hung. Fix: 4 s timeout, one ping at a time.
+
+**Still true:** each card renders once a second because New orders show a seconds timer; with the formatter fixed, the whole idle screen with 31 cards costs 19 ms of JavaScript a second in production. `/healthz` every 1.5 s (40 a minute per open console) is the cost of the 5 s offline banner.
+
 ## Findings
 
 Ordered by impact on the pilot.
@@ -135,6 +166,9 @@ backend/.venv/Scripts/python.exe evals/app_run.py --concurrency 8        # or lo
 backend/.venv/Scripts/python.exe loadtest/db_stats.py snapshot after
 backend/.venv/Scripts/python.exe loadtest/db_stats.py diff before after --json loadtest/results/db.json
 backend/.venv/Scripts/python.exe loadtest/perf_api.py --n 16 --burst 10   # console API; reversible writes only
+node loadtest/console_probe.cjs dev                                         # console in the browser, dev server :5173
+cd frontend && npx vite build && npx vite preview --port 4173               # then, from the repo root:
+CORS_SHIM=1 BASE=http://localhost:4173 node loadtest/console_probe.cjs prod # production build
 ```
 
 Reports from this run are in `loadtest/results/`:

@@ -159,6 +159,7 @@ Staff (`shift_manager`+) add free-text comments to a customer's profile. One str
 | Cancellation message | AI-written (intent + café tone) under guardrails with a fixed fallback; one extra LLM call per staff cancel. Managers and owner get an in-app `notifications` row, no WhatsApp |
 | Cost metering | `llm_calls` and `wa_messages` carry `cost`, `currency` and `pricing_version` (`wa_messages` also `cost_basis` estimated / actual); `v_daily_costs` and `v_unit_costs` aggregate in Postgres |
 | Realtime recovery | Console refetches active orders and open requests on reconnect and every 30 s |
+| Realtime refetch coalescing | One channel per live query, shared by every hook; the first event refetches at once, later events within 1 s become one trailing refetch. Keeps a new order ≤ 2 s and cut the Chats screen from ~500 to ~130–200 requests a minute. Rejected: patching rows from event payloads (gaps, RLS-shaped payloads, joins) and a pure debounce (delays the first order) ([perf-test](perf-test.md#console-in-the-browser), 1 Nov 2026) |
 | Production access | The two founders and people they explicitly authorise |
 | Feedback delay | Café setting 15 / 30 / 60 min after `SERVED` |
 | Realtime on phones | WhatsApp backup alert + escalation chain |

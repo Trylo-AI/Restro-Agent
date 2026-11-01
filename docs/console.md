@@ -27,6 +27,7 @@ Only `lib/` talks to Supabase or `api`. Features use `lib/` hooks; they never cr
 
 - Email + password or magic link. Customers never sign in. Demo builds add a "sign in as" role picker.
 - After sign-in: `platform_admins` row → Cafés. Otherwise active memberships: none → "No access to any café"; one → that café; several → last used.
+- A memberships read that fails (network, laptop waking) is not "no access": the open café stays and the read retries every 5 s. With no café loaded yet the console shows "Can't reach Restro" + Retry now, retrying by itself.
 - The active café sets `X-Cafe-Id` on every call and the `cafe_id` filter on every channel. A person with several cafés gets a switcher (sidebar on desktop, More sheet on phones). Switching ends any pending undo, drops channels, refetches, re-reads the role and toasts "Switched to <café>".
 
 ### Navigation
@@ -57,6 +58,13 @@ Stacked under the header in this order.
 - While offline, write buttons are disabled except Add manual order.
 - Back online: refetch every live list, toast "Back online · N orders arrived while offline", replay first-seen alerts; urgency is recomputed from server timestamps.
 - **Realtime recovery.** Even while connected, active orders and open requests are refetched every 30 s and on tab visible, so a missed Realtime event never hides an order. Disconnects and reconnects are reported to `POST /telemetry/console`.
+- The offline check pings `api` `/healthz` every 1.5 s with a 4 s timeout, one ping at a time; a hung ping counts as down.
+
+### Errors and loading
+
+- A render error never blanks the console. A screen that fails shows "This screen hit a problem" with Try again and Reload inside the shell; nav, banners and alerts keep working, and moving to another screen resets it. An error outside a screen shows a full-page Reload card.
+- Service screens (Live orders, Calls and bills, Chats, Menu) and Today load with the app. Owner and platform screens (Customers, Campaigns, Analytics, Service report, Setup, Performance) load on first visit behind "Loading…".
+- After a deploy, a page that asks for a script file that no longer exists reloads once (at most once a minute), so it picks up the new version instead of staying blank. Hosting serves the HTML and routes `no-cache` and hashed `/assets/` as immutable.
 
 ### Undo toast
 

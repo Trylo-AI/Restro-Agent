@@ -1,5 +1,5 @@
 // Toasts and the 5-second Undo toast (docs/console.md#undo-toast). One undo at a time; a new one replaces it.
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 interface Toast {
   id: number;
@@ -23,9 +23,18 @@ export const useToasts = (): ToastApi => {
 
 let nextId = 1;
 
+/** Seconds left on an Undo toast; ticks on its own so the provider (and every screen) doesn't re-render. */
+function Countdown({ until }: { until: number }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 250);
+    return () => window.clearInterval(id);
+  }, []);
+  return <span className="count">{Math.max(0, Math.ceil((until - now) / 1000))} s</span>;
+}
+
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const [now, setNow] = useState(Date.now());
   const timers = useRef(new Map<number, number>());
 
   const remove = useCallback((id: number) => {
@@ -34,7 +43,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     timers.current.delete(id);
   }, []);
 
-  const api: ToastApi = {
+  // Stable: every screen uses toasts, so a new object per render would re-render them all with each toast.
+  const api = useMemo<ToastApi>(() => ({
     show(text, error) {
       const id = nextId++;
       setToasts((t) => [...t.filter((x) => !x.error || error), { id, text, error }].slice(-3));
@@ -48,13 +58,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     clearUndo() {
       setToasts((t) => t.filter((x) => !x.undo));
     },
-  };
-
-  useEffect(() => {
-    if (!toasts.some((t) => t.undo)) return;
-    const id = window.setInterval(() => setNow(Date.now()), 250);
-    return () => window.clearInterval(id);
-  }, [toasts]);
+  }), [remove]);
 
   return (
     <Ctx.Provider value={api}>
@@ -63,7 +67,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         {toasts.map((t) => (
           <div key={t.id} className={`toast${t.error ? " error" : ""}`}>
             <span>{t.text}</span>
-            {t.undo && <span className="count">{Math.max(0, Math.ceil((t.undo.until - now) / 1000))} s</span>}
+            {t.undo && <Countdown until={t.undo.until} />}
             {t.undo && (
               <button onClick={async () => { remove(t.id); await t.undo!.run(); }}>Undo</button>
             )}
