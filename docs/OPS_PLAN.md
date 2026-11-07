@@ -169,6 +169,9 @@ As built, `names.py` is the source of truth. `turn.claim`, `turn.debounce` and `
 | `publish_failed_sweep` | `api/internal/pubsub.py:24`, `ingress.py:40` | Signal failed; `stuck_inbound_check` will re-signal | no |
 | `profile_note_failed` | profile-note task | Comment unread, profile unchanged | no |
 | `ack_failed` | `api/internal/tasks.py:34` | Read receipt / typing not shown | **yes** |
+| `recommend_fallback` | `ai_agent/calls.py` (`fail_reason` of a `recommend` call), `conversation/recommend.py` (kill switch `handoff`, no valid model pick) | AI picks unavailable or invalid; code-ranked picks were sent (no handoff) | no |
+| `recommend_capped` | `conversation/recommend.py` | Per-visit `recommend` call cap (6) reached; code-ranked picks sent | **yes** |
+| `recommend_pick_dropped` | `ai_agent/recommend.py` `validate`, `conversation/recommend.py` `from_turn` and `_scrub` | A model pick was outside ALLOWED, unknown or filtered out, or its `why` had an amount or claim or named a dish that is not shown; dropped or replaced by code | **yes** |
 
 ### Run fields
 

@@ -16,7 +16,7 @@ This is the only `CLAUDE.md`. All design lives in `docs/`.
 | Frontend | Restro Console: React + Vite + TypeScript SPA on Firebase Hosting |
 | Data | Supabase: Postgres + RLS, Auth (console users only), Realtime, Storage |
 | Async | Pub/Sub (wake-up signal) + Postgres work queue (`pending_work`) + Cloud Tasks (`wa-ack`, `timers`, `campaign-send`) + Cloud Scheduler |
-| LLM | Gemini Flash-Lite / Flash on Vertex AI, global endpoint (no data-residency guarantee; accepted for the MVP). One structured call per free-text turn |
+| LLM | Gemini Flash-Lite / Flash on Vertex AI, global endpoint (no data-residency guarantee; accepted for the MVP). One structured call per free-text turn or Recommend tap (at most one per turn) |
 | Messaging | Meta WhatsApp Cloud API, direct |
 | Secrets | GCP Secret Manager |
 | Infra / CI | `gcloud` scripts (no Terraform); GitHub Actions → GCP via Workload Identity Federation (no keys) |
@@ -74,6 +74,8 @@ Inputs, read-only: `Restro_Build_Plan.md` (build plan v1.0), `Restro Console v2-
 | [app-eval.md](docs/app-eval.md) | App evaluation: the 215 cases through the real system, what passed and failed and why, reliability through outages, the AI layer on 7 models |
 | [perf-test.md](docs/perf-test.md) | Performance test: where time goes per webhook, turn and console request; DB reads and writes measured in Postgres; the console in the browser; findings |
 | [OPS_PLAN.md](docs/OPS_PLAN.md) | Performance dashboard: what is traced, the `/api/ops` read API, the `/platform/ops` pages; decisions and departures |
+| [retention-audit-recommend.md](docs/retention-audit-recommend.md) | Current build: counter redemption and campaign insights, staff audit log, AI dish recommendations; decisions, migration, contracts, parallel tracks |
+| [retention-audit-recommend-checklist.md](docs/retention-audit-recommend-checklist.md) | Progress tracker for retention, audit and recommendations |
 
 ## Roles
 

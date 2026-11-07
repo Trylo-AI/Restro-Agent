@@ -39,7 +39,7 @@ Contract: `contracts/schema.sql`. Implemented by `supabase/migrations/`.
 | `consents` | `cafe_id`, `customer_id`, `type` (`marketing`), `status`, `wording_version`, `source` | `status` `opted_in` / `opted_out`; append-only; current = newest row |
 | `data_deletion_requests` | `cafe_id`, `customer_id`, `wa_id`, `source` (`owner` / `meta_callback`), `status`, `completed_at` | — |
 | `conversations` | `cafe_id`, `customer_id`, `mode`, `assigned_to`, `table_session_id`, `state`, `lease_owner`, `lease_expires_at` | unique (`cafe_id`, `customer_id`); `mode` `bot` / `human` |
-| `inbound_messages` | `cafe_id`, `conversation_id`, `wamid`, `type`, `payload`, `received_at`, `processed_at` | unique `wamid`; index on unprocessed per conversation |
+| `inbound_messages` | `cafe_id`, `conversation_id`, `wamid`, `type`, `payload`, `received_at`, `processed_at` | unique `wamid`; index on unprocessed per conversation; index (`conversation_id`, `received_at`) |
 | `pending_work` | `cafe_id`, `conversation_id`, `kind`, `status`, `attempts`, `next_attempt_at`, `last_error`, `dead_lettered_at` | `kind` `turn`; `status` `pending` / `running` / `done` / `dead_lettered` / `resolved`; one `pending` row per (`conversation_id`, `kind`); index (`status`, `next_attempt_at`) |
 | `wa_messages` | `cafe_id`, `customer_id`, `wamid`, `idempotency_key`, `direction`, `type`, `template_name`, `payload`, `status`, `attempted_at`, `error_code`, `pricing_category`, `billable`, `cost`, `currency`, `pricing_version`, `cost_basis`, status timestamps | `id` uuid primary key; `wamid` unique and nullable (an `ambiguous` send has none yet); unique `idempotency_key`; status forward-only |
 
@@ -75,10 +75,10 @@ Contract: `contracts/schema.sql`. Implemented by `supabase/migrations/`.
 |---|---|---|
 | `templates` | `cafe_id`, `name`, `category`, `language`, `status`, `quality` | unique (`cafe_id`, `name`, `language`) |
 | `campaigns` | `cafe_id`, `name`, `segment`, `template_name`, `offer_text`, `discount_percent` (1–90, % of the bill subtotal), `code_prefix`, `valid_until`, `scheduled_at`, `status` | `segment` `all_opted_in` / `lapsed` / `regulars` |
-| `campaign_recipients` | `cafe_id`, `campaign_id`, `customer_id`, `code`, `status`, `wamid` | unique `code`; unique (`campaign_id`, `customer_id`) |
-| `redemptions` | `cafe_id`, `campaign_recipient_id`, `code`, `order_id`, `table_session_id`, `discount_paise`, `redeemed_by`, `redeemed_at` | unique `campaign_recipient_id`; append-only |
-| `llm_calls` | `cafe_id`, `provider`, `model`, `purpose` (`turn` / `cancel_draft` / `profile_note`), `conversation_id`, `message_id`, `order_id`, `note_id`, `input_tokens`, `cached_tokens`, `output_tokens`, `cost`, `currency`, `pricing_version`, `latency_ms`, `outcome` | append-only; `provider` `vertex` / `developer_api` / `stub` (tests) / `dashscope` (Alibaba, local and staging testing only); `message_id` = the `inbound_messages` row that started the turn; `order_id` set for calls about an order (edit, cancellation draft); `outcome` `ok` / `invalid_output` / `timeout` / `rate_limited` / `error` |
-| `audit_log` | `actor_id`, `actor_role`, `support`, `cafe_id`, `action`, `change`, `at` | append-only; no secrets or full numbers in `change` |
+| `campaign_recipients` | `cafe_id`, `campaign_id`, `customer_id`, `code`, `status`, `wamid` | unique `code`; unique (`campaign_id`, `customer_id`); index `customer_id` |
+| `redemptions` | `cafe_id`, `campaign_recipient_id`, `code`, `order_id`, `table_session_id`, `discount_paise`, `redeemed_by`, `redeemed_at`, `channel` (`table_bill` / `counter`), `bill_paise`, `idempotency_key` | unique `campaign_recipient_id` (one redemption per code across both channels); unique (`cafe_id`, `idempotency_key`); `table_bill` needs `table_session_id`; `counter` has no session or order and needs `bill_paise`; `discount_paise` ≤ `bill_paise`; append-only ([counter redemption](retention-audit-recommend.md#feature-1-campaigns)) |
+| `llm_calls` | `cafe_id`, `provider`, `model`, `purpose` (`turn` / `cancel_draft` / `profile_note` / `recommend`), `conversation_id`, `message_id`, `order_id`, `note_id`, `input_tokens`, `cached_tokens`, `output_tokens`, `cost`, `currency`, `pricing_version`, `latency_ms`, `outcome` | append-only; `provider` `vertex` / `developer_api` / `stub` (tests) / `dashscope` (Alibaba, local and staging testing only); `message_id` = the `inbound_messages` row that started the turn; `order_id` set for calls about an order (edit, cancellation draft); `outcome` `ok` / `invalid_output` / `timeout` / `rate_limited` / `error` |
+| `audit_log` | `actor_id`, `actor_role`, `support`, `cafe_id`, `action`, `change`, `at`, `severity` (`critical` / `warning` / `info`), `order_id`, `customer_id`, `conversation_id`, `actor_name` | append-only; no secrets, full numbers or message text in `change`; `severity` from `domain/audit/catalog.py` at write time (nullable until migration `20261101000002`); `order_id` / `customer_id` / `conversation_id` copied from `change` for filters, no FK; `actor_name` = display name at write time; keyset index (`cafe_id`, `at`, `id`) plus partial indexes per subject and on non-`info` rows |
 | `webhook_events` | `received_at`, `signature_valid`, `payload`, `processed_at` | Deleted after 30 days |
 
 **Ops tables** (performance dashboard, [OPS_PLAN](OPS_PLAN.md)). Not tenant data: written only by `app/ops/tracing`, read only by `/api/ops`; RLS on with no policies and no client grants. Ids, timings and redacted error classes only, never message text, prompts, phones or SQL values.
@@ -93,6 +93,7 @@ Contract: `contracts/schema.sql`. Implemented by `supabase/migrations/`.
 **Schema rules**
 
 - Append-only tables (`consents`, `order_events`, `redemptions`, `llm_calls`, `audit_log`): the backend role has no UPDATE or DELETE grant.
+- One documented exception: a one-time backfill of the derived audit columns (`severity`, `order_id`, `customer_id`, `conversation_id`, `actor_name`) by `audit_log_backfill_derived()`, with the append-only trigger off for that statement only (decision 19). Facts (`actor_*`, `action`, `change`, `at`) are never touched. The function runs in migrations `20261101000001` and `20261101000002`, then is dropped; no client can execute it.
 - Never key a customer on `wa_id` alone. Never weaken the unique `wamid`, `idempotency_key` or `code`.
 - Migrations are timestamped and forward-only; an applied migration is never edited. Each new tenant table enables RLS and its read policy in the same migration. Expand then contract: the migration must work with the running backend.
 - CI applies every migration to an empty DB. A schema change updates `contracts/schema.sql` in the same PR.
@@ -111,14 +112,14 @@ Contract: `contracts/schema.sql`. Implemented by `supabase/migrations/`.
 
 | Readable by | Tables / views |
 |---|---|
-| Every member | `v_staff_names` (display names of the café's staff), `cafes`, `tables`, `menu_items`, `menu_item_allergens`, `customers`, `customer_preferences`, `customer_notes`, `feedback`, `conversations`, `inbound_messages`, `wa_messages`, `table_sessions`, `orders`, `order_items`, `requests` (not `low_rating`), `escalations`, `redemptions`, `v_customer_card` |
+| Every member | `v_staff_names` (display names of the café's staff), `v_redemptions` (every redemption with campaign, first name, masked number and staff name; a definer view filtered by membership, like `v_staff_names`), `cafes`, `tables`, `menu_items`, `menu_item_allergens`, `customers`, `customer_preferences`, `customer_notes`, `feedback`, `conversations`, `inbound_messages`, `wa_messages`, `table_sessions`, `orders`, `order_items`, `requests` (not `low_rating`), `escalations`, `redemptions`, `v_customer_card` |
 | Own rows | `memberships` (owner sees every row of the café); `platform_admins`; `notifications` (`user_id` = caller, `manager`+) |
 | `manager`+ | `low_rating` requests, `v_service_report`, `v_prep_times`, `v_feedback_summary` |
-| `owner` | `consents`, `templates`, `campaigns`, `campaign_recipients`, `v_daily_revenue`, `v_top_items`, `v_customer_segments`, `v_customer_profile`, `v_campaign_funnel` |
-| `platform_admins` | `llm_calls`, `audit_log`, `webhook_events`, `pending_work`, `v_unit_costs`, `v_daily_costs`, `v_conversation_metrics` |
+| `owner` | `consents`, `templates`, `campaigns`, `campaign_recipients`, `v_daily_revenue`, `v_top_items`, `v_customer_segments`, `v_customer_profile`, `v_campaign_funnel`, `v_campaign_recipients`, `v_campaign_insights` (both `security_invoker`, owner through `campaign_recipients` / `campaigns` RLS) |
+| `platform_admins` | `llm_calls`, `audit_log` (the owner reads it only through `/audit/*`, decision 19), `webhook_events`, `pending_work`, `v_unit_costs`, `v_daily_costs`, `v_conversation_metrics` |
 | Backend only | `order_events`, `data_deletion_requests`, `cafe_counters` |
 
-`v_customer_profile` exposes the masked number, never `wa_id`. RLS is tested in CI with cross-café and role cases.
+`v_customer_profile`, `v_campaign_recipients` and `v_redemptions` expose the masked number, never `wa_id`. RLS is tested in CI with cross-café and role cases.
 
 ## Analytics views
 
@@ -135,11 +136,15 @@ Contract: `contracts/schema.sql`. Implemented by `supabase/migrations/`.
 | `v_service_report` | Median prep, % overdue, slowest dishes, peak overdue hour | Service report, Analytics |
 | `v_feedback_summary` | Average rating, count, 1–3★ with text | Service report, Analytics, AI review |
 | `v_campaign_funnel` | Sent → held → delivered → read → came back; spent, discount, WhatsApp cost | Campaigns, Today, Costs |
+| `v_campaign_recipients` | One row per recipient: masked number, send / delivery / read times, offer window, first reply, orders and spend in the window, redemption (channel, bill, discount, staff), opt-out in the window, came back | Campaign detail Recipients and Opted out, recipients CSV (backend, always with `cafe_id`) |
+| `v_campaign_insights` | Per campaign: queued, sent, held, delivered, read, failed, replied, ordered, redeemed (counter / table bill), came back, opted out; ordered, counter-bill and came-back revenue, discount, WhatsApp cost | Campaigns list, campaign detail Overview, Insights |
+| `v_redemptions` | Every redemption with campaign name, café-local `day`, first name, masked number, bill, discount, staff name, order number, table | Redeem offer "Redeemed today", campaign Redemptions tab, Insights by staff and day |
 | `v_unit_costs` | Cost per order, WhatsApp 7 d, AI 7 d, fallback rate | Platform Costs, daily summary |
 | `v_daily_costs` | Per café per day: AI cost by model, WhatsApp cost by category (`estimated` vs `actual`), calls, orders | Kill switch, daily summary, weekly cost review |
 | `v_conversation_metrics` | Per café per day: human-handoff rate by `reason_tag`, time to confirm (first inbound of the visit → order), turns per order | Daily summary, AI review |
 
 - Revenue = WhatsApp orders from snapshots; `CANCELLED` excluded from revenue, visits and spend. Anonymised customers stay as anonymous rows.
+- Campaign results use the offer window: send → `valid_until`, or send + 30 days when that is empty, capped at now. "Came back" = a non-cancelled order in the window or a redemption; a visit can count for more than one campaign. Legacy table-bill redemptions without `bill_paise` fall back to the session subtotal.
 - AI cost per order = `llm_calls.cost` of the conversation's calls since its previous order, plus calls with that `order_id`. Costs are summed per `currency`.
 - `refresh_views` runs nightly ("Updated nightly"). Today tiles and a `sending` campaign need same-day numbers, so those stay plain views **[verify]**. Plain views run as the caller so RLS applies; materialised views stay out of the exposed schema and are read through a filtered plain view **[verify]**.
 
@@ -151,7 +156,7 @@ Contract: `contracts/schema.sql`. Implemented by `supabase/migrations/`.
 | `api` | Console routes, `/platform/*` | Restro Console | `Authorization: Bearer <Supabase JWT>` |
 | `worker` | `/internal/*` | Pub/Sub push, Cloud Tasks, Cloud Scheduler | OIDC for `invoker-sa` |
 
-The console reads tables and views through Supabase (no custom read endpoints) and calls `api` for every write. So the notifications list is a Supabase read of `notifications` and the dead-letter list a read of `pending_work` where `status = dead_lettered`; acting on them goes through the endpoints below. Exceptions that are API reads: `GET /consents/export`, `GET /platform/audit/export`, `POST /campaigns/audience-preview`.
+The console reads tables and views through Supabase (no custom read endpoints) and calls `api` for every write. So the notifications list is a Supabase read of `notifications` and the dead-letter list a read of `pending_work` where `status = dead_lettered`; acting on them goes through the endpoints below. Exceptions that are API reads: `GET /consents/export`, `GET /platform/audit/export`, `POST /campaigns/audience-preview`, `GET /bills/{table_session_id}`, `POST /offers/lookup` (eligibility is code shared with redeem; decision 18), `GET /campaigns/{id}/recipients/export`, `GET /audit/*` and `GET /orders/{id}/history` (labels, sentences and severity reasons come from the code catalogue; decision 19).
 
 ### Console request check
 
@@ -175,16 +180,18 @@ Body: `error.code` (stable snake_case), `error.message` (safe to show), `error.d
 | 403 | `forbidden` | No membership, role too low, café mismatch, no support session |
 | 404 | `not_found` | Missing or another café's |
 | 409 | `version_conflict` | Row changed since read; response carries the current row |
-| 409 | `code_already_used` | Code redeemed on another order |
+| 409 | `code_already_used` | Code already redeemed on another order, on a bill or at the counter; `details` has `redeemed_at`, `channel`, `redeemed_by_name`, `order_number`, `table_label` |
+| 409 | `already_redeemed_this_visit` | Counter redeem when this customer redeemed another code in the last 60 minutes (either channel) |
 | 409 | `window_closed` | Staff reply after the customer's 24-hour window closed |
 | 422 | `invalid_transition` | Not allowed from current status, or undo after 5 s |
-| 422 | `invalid_code` | Unknown, expired or another café's code |
+| 422 | `invalid_code` | Unknown, expired or another café's code (generic text); a cancelled campaign, a code not sent yet or a failed send carry `details.verdict` (`campaign_cancelled` / `not_sent` / `not_delivered`) and the reason |
 | 429 | `rate_limited` | `Retry-After` set |
 | 5xx | `internal` | Retry with backoff |
 
 - Order transitions carry `expected_version`. Manual orders carry an `Idempotency-Key` header.
 - Set-state calls (ack, resolve, availability, pause, takeover, handback, deliver) are no-ops when the value is already set: 200, no second audit row or message.
 - Applying a code already on this table session returns 200.
+- `POST /offers/redeem` requires an `Idempotency-Key` header (8–80 chars), stored in `redemptions.idempotency_key`: the same key returns the same redemption (200, no second audit row); the same key with another code or amount is 400.
 
 ### Endpoints
 
@@ -200,7 +207,9 @@ Body: `error.code` (stable snake_case), `error.message` (safe to show), `error.d
 | `POST /requests/{id}/ack` | — | `shift_manager`+ (`low_rating`: `manager`+), support | `acknowledged` | `request.ack` |
 | `POST /requests/{id}/resolve` | — | same | `resolved`; help → chat back to bot | `request.resolve` |
 | `GET /bills/{table_session_id}` | — | `shift_manager`+, support | Bill sheet: orders, lines, subtotal, code, discount, total, computed by code | — |
-| `POST /bills/{table_session_id}/apply-code` | `{code}` | `shift_manager`+, support | Redeem; returns bill totals | `offer.redeem` |
+| `POST /bills/{table_session_id}/apply-code` | `{code}` | `shift_manager`+, support | Redeem on the bill (`channel = table_bill`, `bill_paise` = subtotal); same eligibility as `/offers/*`; returns bill totals | `offer.redeem` |
+| `POST /offers/lookup` | `{q}` (name, last 4 digits or code) | `shift_manager`+ | Read only: ≤ 20 customers with their offers, a verdict and reason each, open bill; masked numbers, never `wa_id` | — |
+| `POST /offers/redeem` | `{code, bill_paise}` + `Idempotency-Key` | `shift_manager`+ | Counter redemption: discount = `discount_percent` of `bill_paise`, rounded down; returns the amount to collect | `offer.redeem` |
 | `POST /bills/{table_session_id}/deliver` | — | `shift_manager`+, support | Resolve bill request, close session | `bill.deliver` |
 | `POST /conversations/{id}/takeover` | — | `shift_manager`+, support | `mode = human`, assigned to caller | `chat.takeover` |
 | `POST /conversations/{id}/reply` | `{text}` | `shift_manager`+, support | Send via `outbound`; takes over if in bot mode | `chat.reply` |
@@ -221,10 +230,16 @@ Body: `error.code` (stable snake_case), `error.message` (safe to show), `error.d
 | `PATCH /team/{membership_id}` | `{role?, active?}` | `owner`, support | Change role or deactivate; effective next request | `team.update` |
 | `POST /customers/{id}/delete` | — | `owner`, support | [Delete customer data](architecture.md#data-protection) | `customer.delete` |
 | `GET /consents/export` | — | `owner`, support | CSV of full consent history (masked numbers) | `consent.export` |
-| `POST /campaigns` · `PUT /campaigns/{id}` | Name, segment, template, offer, code prefix, valid until | `owner`, support | Create / edit a draft | — |
+| `POST /campaigns` · `PUT /campaigns/{id}` | Name, segment, template, offer, code prefix, valid until | `owner`, support | Create / edit a draft | `campaign.draft` |
 | `POST /campaigns/audience-preview` | `{segment, template_name}` | `owner`, support | Counts, daily limit, quality, cost, days | — |
 | `POST /campaigns/{id}/schedule` | `{scheduled_at}` | `owner`, support | `draft` → `scheduled` | `campaign.schedule` |
 | `POST /campaigns/{id}/cancel` | — | `owner`, support | → `cancelled`; queued recipients not sent | `campaign.cancel` |
+| `GET /campaigns/{id}/recipients/export` | — | `owner`, support | CSV of recipients and what happened (masked numbers, formula-safe) | `campaign.export` |
+| `GET /audit/entries` | Filters: `action`, `category`, `severity`, `actor_id`, `role`, `order_number`, `order_id`, `customer_id`, `conversation_id`, `from`, `to`, `q`; `before`, `limit` | `owner`, support | Staff actions newest first with label, category, severity, reason and a sentence; keyset paging; filter-only actions `order.accept` / `order.ready` / `order.serve` | — |
+| `GET /audit/facets` | `from`, `to` | `owner`, support | Counts by severity, action, person and category | — |
+| `GET /audit/catalog` | — | `owner`, support | Action labels, categories, roles, severity rules | — |
+| `GET /audit/export` | Same filters as entries | `owner`, support | CSV, ≤ 10 000 rows, formula-safe | `audit.export` |
+| `GET /orders/{id}/history` | — | `owner`, support | One order's timeline: customer, staff and automatic events, escalations, bill and code | — |
 | `POST /platform/cafes` | Café, Meta ids, secret refs, owner email | `platform_admin` | Create café (`onboarding`), invite owner | `cafe.create` |
 | `PATCH /platform/cafes/{id}/checklist` | `{item, done}` | `platform_admin` | Tick go-live item | `cafe.checklist` |
 | `POST /platform/cafes/{id}/templates/sync` | — | `platform_admin` | Pull templates from Meta | `template.sync` |

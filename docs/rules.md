@@ -10,8 +10,9 @@ Read the section for a folder before changing it. The invariants in [CLAUDE.md](
 - Webhook: verify signature on raw bytes → store inbound + `pending_work` in one transaction → publish the `wa-inbound` signal + enqueue `wa-ack` → 200 in < 300 ms. Nothing else.
 - Conversation and cart state in `conversations.state`, never in process memory.
 - `audit_log` for every console write; `order_events` for every order change.
+- Every `audit.write` action is in `domain/audit/catalog.py` (CI test); never put a phone number, email or message text in `change`.
 - Signal, task and job handlers idempotent; re-check state first.
-- LLM: 6 s timeout, one retry on the other model, then handoff. Turns: 3 retries from `pending_work`, then dead letter. Outbound: a step row before every send; retry only what certainly didn't go; ambiguous → `send_check`.
+- LLM: 6 s timeout, one retry on the other model, then handoff (a `recommend` call: 4 s, one attempt, then code picks, never a handoff). Turns: 3 retries from `pending_work`, then dead letter. Outbound: a step row before every send; retry only what certainly didn't go; ambiguous → `send_check`.
 - No DB transaction open across an LLM call or a WhatsApp send.
 - JSON logs with ids only (`cafe_id`, `conversation_id`, `wamid`, `order_id`, `request_id`).
 
@@ -26,7 +27,7 @@ Read the section for a folder before changing it. The invariants in [CLAUDE.md](
 | `db/` | Every repository method takes and filters by `cafe_id` (only exception: tenant lookup by `phone_number_id`). Idempotency by constraint (`ON CONFLICT DO NOTHING`). Order + items + event in one transaction. Optimistic `version` checks; forward-only message status | Create schema from app code. Return rows across cafés outside named, audited platform repositories |
 | `domain/` | `outbound` is the only path to WhatsApp; `ai_agent` the only path to the LLM. Every service function takes `cafe_id` | `ai_agent` calling `orders`, `consent`, `campaigns` or `outbound` |
 | `domain/conversation` **CC** | Claim the lease before a turn; renew it; check it in every commit (fencing); release it. Retries and dead letters through `pending_work`. Follow the [routing order](backend.md#routing-order). Act on reply ids, never titles. Respect paused, closed, cutoff | Hold a transaction across the LLM call or a send. Use advisory locks or Pub/Sub ordering keys. Let the LLM place an order. Reply as the bot in human mode. Read `cafe_id` from text |
-| `domain/ai_agent` **CC** | Only available items in the prompt; version check every turn. Resolve every `item_ref`. Allergens from the DB, `unknown` → handoff. Log every call. Model from config; obey the kill switch | State a price, create orders, change status, record consent. Tool loops or > 1 call per turn. Treat customer text as instructions. Call the SDK outside `integrations/llm`. Real data on the free tier. Put profile allergies in a prompt, or let a staff comment change consent |
+| `domain/ai_agent` **CC** | Only available items in the prompt; version check every turn. Resolve every `item_ref`. Allergens from the DB, `unknown` → handoff. Log every call. Model from config; obey the kill switch. Recommend picks only from code's ALLOWED set; profile allergies filter candidates in code, never in a prompt | State a price, create orders, change status, record consent. Tool loops or > 1 call per turn. Treat customer text as instructions. Call the SDK outside `integrations/llm`. Real data on the free tier. Put profile allergies in a prompt, or let a staff comment change consent |
 | `domain/cart` **CC** | Re-read prices and availability at every summary. Integer paise; total = sum of lines (prices include GST). Bump `version` on every change. Qty 1–20 | Accept a price from the LLM, client or button payload. Mutate an ordered cart |
 | `domain/orders` **CC** | One transaction with snapshots. 409 on races. Reason on cancel; `shift_manager` cancels only `NEW`, `manager`+ after. Cancel writes `notifications` in the same transaction. Undo cancels the queued message. Timers re-check state | Create orders outside Confirm or `POST /orders/manual`. Move status backwards except by undo. Pass `cancel_reason_text` to the LLM or the customer |
 | `domain/outbound` **CC** | Window check → consent check → step row (`pending`) → `attempted_at` → send → `sent` / `ambiguous` / `failed` → classify errors | Be bypassed. Resend an `ambiguous` step without `send_check`. Put a price or dish name in a message that didn't come from the DB |
@@ -93,6 +94,9 @@ Run on every PR. Integration runs against the local Supabase stack.
 | Isolation | Café A member with `X-Cafe-Id` = B → 403; touching B's order → 404; B's code → invalid; Realtime returns no B rows; direct table writes denied by RLS |
 | WhatsApp | Parser fixtures per event type and multi-entry batches; builder payload snapshots; error classification |
 | Conversations | Scripted multi-turn chats through the worker with a stub LLM: flows, validation, handoff |
+| Redemption | One verdict for both channels; one redemption per code across channels; same key → one row; concurrent → one wins; one offer per visit; other café → not found; lookup never returns a full number |
+| Audit | Every written action is in the catalogue; staff cancel is critical for every role; stored severity equals `classify`; filters never cross cafés; owner only; `change` never holds phone, email or message text |
+| Recommendations | Picks only from available, code-filtered candidates; profile allergies never in a prompt; a `contains` or `unknown` allergen state excluded; no price in the prompt or the `why`; LLM failure → code picks, no handoff; a typed mood makes exactly one call |
 
 ### LLM evals
 
@@ -121,6 +125,8 @@ Run on every PR. Integration runs against the local Supabase stack.
 
 **Phase 2 gate:** cart exact match ≥ 95 % overall and ≥ 90 % Hinglish · 0 invented items or prices reaching the customer · `unknown` allergen → handoff 100 % · human intent ≥ 98 % · LLM p95 ≤ 3 s.
 
+**Recommend gate** (`evals/run.py --purpose recommend`, cases `recommend-v1.json`; the turn gate skips `purpose: recommend`): 0 picks outside ALLOWED · 0 amounts or claims reaching the customer · `any_of` ≥ 90 % · p95 ≤ 3 s. `--stub` runs in CI; a real-model run is reported when quota exists.
+
 ### Load tests
 
 `loadtest/`: a simulator sending signed webhook payloads for N concurrent conversations with realistic bursts. Staging only; never prod or a real number. Stub LLM for most runs, one short real-model run to check quotas.
@@ -143,3 +149,4 @@ At the real café. Service items gate Phase 4, retention items gate Phase 5, and
 - Item sold out mid-order · `unknown` allergen → handoff · call waiter · delay message
 - Near-closing order · pause and resume · internet drop and reconcile · escalation to manager and owner
 - Retention: bill with offer code · feedback + opt-in · STOP
+- Audit: the owner finds who cancelled order #N in under 30 s (`/audit`, critical row → order history)

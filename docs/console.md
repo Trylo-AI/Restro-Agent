@@ -34,12 +34,13 @@ Only `lib/` talks to Supabase or `api`. Features use `lib/` hooks; they never cr
 
 | Role | Groups | Phone tabs | Lands on |
 |---|---|---|---|
-| `shift_manager` | Service: Live orders, Calls and bills, Chats, Menu | Orders, Calls, Chats, Menu, More | Live orders |
-| `manager` | Service + Service report | Orders, Calls, Chats, Menu, More | Live orders |
-| `owner` | Today · Service · Customers, Campaigns, Analytics, Setup | Today, Orders, Calls, Chats, More | Today |
+| `shift_manager` | Service: Live orders, Calls and bills, Chats, Menu, Redeem offer | Orders, Calls, Chats, Menu, Redeem, More | Live orders |
+| `manager` | Service + Service report | Orders, Calls, Chats, Menu, Redeem, More | Live orders |
+| `owner` | Today · Service · Customers, Campaigns, Analytics, Setup, Audit log | Today, Orders, Calls, Chats, More | Today |
 | `platform_admin` | Cafés, Templates, Number health, Costs, AI review, Audit log | Cafés, Health, Templates, Audit, More | Cafés |
 
 - A route the role can't use redirects to its landing screen. Hiding is UX only; `api` returns 403 regardless and the UI handles it.
+- **Redeem offer** (`/redeem`, lucide `TicketPercent`, tab label "Redeem") is a Service item for every role: the shift manager redeems at the counter. The tab bar sizes one column per entry, so 5 entries are ~75 px each at 375 px with no horizontal scroll. **Audit log** (`/audit`, lucide `ScrollText`) is owner-only, after Setup ([plan](retention-audit-recommend.md)).
 - Desktop (≥ 768 px): sticky 244 px sidebar with café block, nav and user. Phone: bottom tab bar + More sheet. Dialogs are centred on desktop, bottom sheets on phones.
 - The active café name is on every screen.
 
@@ -152,7 +153,11 @@ Allergy rings until accepted (accepting is the kitchen check); the banner stays 
 | Service report | `/service-report` | `manager`+ | P1 | 4 |
 | Setup | `/setup/:tab` | `owner` | P1 | 4 → 6 |
 | Customers | `/customers/:id?` | `owner` | P2 | 5 |
-| Campaigns | `/campaigns`, `/campaigns/new`, `/campaigns/:id` | `owner` | P2 | 5 |
+| Campaigns | `/campaigns`, `/campaigns/new`, `/campaigns/:id` (tabs `?tab=overview\|recipients\|redemptions\|opted-out`) | `owner` | P2 | 5 |
+| Campaign insights | `/campaigns/insights` | `owner` | P2 | 5 |
+| Redeem offer | `/redeem` (Service nav); the same body as the Campaigns tab `/campaigns/redeem` (`owner`) | `shift_manager`+ | P2 | 5 |
+| Audit log | `/audit` | `owner` | P2 | 5 |
+| Order history | `/audit/orders/:orderId` | `owner` | P2 | 5 |
 | Today | `/today` | `owner` | P2 | 7 |
 | Analytics | `/analytics` | `owner` | P3 | 7 |
 | Platform | `/platform/...` | `platform_admin` | P3 | 7 |
@@ -186,7 +191,7 @@ Owner screens also open for `platform_admin` in support mode, minus Print ticket
 Moves orders New → Accepted → Ready → Served. Backend: [orders](backend.md#orders).
 
 - **Layout:** toolbar with Tabs / Board toggle (phones always Tabs), Pause WhatsApp ordering (`manager`+), Add manual order · summary strip ("1 overdue · 1 allergy · 2 new") · column tabs New / Accepted / Ready with counts and severity dots · type chips All · Overdue · Allergy · Not started · Due soon · New · Delayed + legend · card grid.
-- **Card:** allergy banner (until `READY`; this visit's `allergy_note` and "On profile: <allergen>") · table large · "#1048 · Riya · 6th visit" + **Profile** button ([customer profile](#customer-profile)) · severity and flag chips · timer "6 / 10 min" from `accepted_at` · progress bar · items with notes · redeemed code · escalation chain · total · Message, Print ticket, Cancel (New for `shift_manager`; every column for `manager`+), Delay, and the primary action (Accept / Mark ready / Mark served).
+- **Card:** allergy banner (until `READY`; this visit's `allergy_note` and "On profile: <allergen>") · table large · "#1048 · Riya · 6th visit" + **Profile** button ([customer profile](#customer-profile)) · severity and flag chips · timer "6 / 10 min" from `accepted_at` · progress bar · items with notes · redeemed code · escalation chain · total · Message, Print ticket, **History** (owner only: a link to the order's [history](#audit-log) `/audit/orders/:id`; a read, so it works offline), Cancel (New for `shift_manager`; every column for `manager`+), Delay, and the primary action (Accept / Mark ready / Mark served).
 - **Delay panel:** +2 · +5 (default) · +10 · custom 1–99, note ≤ 120, preview of the customer message.
 - **Cancel dialog:** reason Out of stock · Kitchen issue · Customer asked · Other (text field, required, ≤ 120). Note under the reasons: "The customer gets an apology. Your own text stays with the team." The reason goes to the audit log and to managers' and the owner's notifications.
 - **Manual order:** table, available items with qty and note, optional allergy note.
@@ -203,7 +208,7 @@ Moves orders New → Accepted → Ready → Served. Backend: [orders](backend.md
 
 409 → "Riya changed this order — check it again", card refreshes. 422 → "This order was already updated", refetch.
 
-**Done when:** a new order appears ≤ 2 s after Confirm with chime · transitions send `expected_version`; Undo within 5 s sends nothing · amber at 60 s, Due soon at 80 %, red past due; strip, chips, dots and badge agree · allergy rings every 30 s until accepted · Delay pushes due and sends the preview · Cancel needs a reason (text for Other); `shift_manager` sees Cancel only on New · 409 refreshes the card · a missed Realtime event shows up within 30 s · Tabs at 375 px with no horizontal scroll · Pause `manager`+ only; Print and manual order hidden in support mode.
+**Done when:** a new order appears ≤ 2 s after Confirm with chime · transitions send `expected_version`; Undo within 5 s sends nothing · amber at 60 s, Due soon at 80 %, red past due; strip, chips, dots and badge agree · allergy rings every 30 s until accepted · Delay pushes due and sends the preview · Cancel needs a reason (text for Other); `shift_manager` sees Cancel only on New · 409 refreshes the card · a missed Realtime event shows up within 30 s · Tabs at 375 px with no horizontal scroll · Pause `manager`+ only; History only for the owner; Print and manual order hidden in support mode.
 
 ### Calls and bills
 
@@ -247,7 +252,7 @@ Another staff member took over → "Meera is replying" + Take over. Idle hand-ba
 
 One shared panel (`shift_manager`+), opened from the **Profile** button on order cards and Calls and bills cards, and shown as the customer panel in Chats. Side panel on desktop, full-height bottom sheet on phones. Backend: [customer profile](backend.md#customer-profile-and-staff-comments).
 
-- **At a glance** (top box, no scrolling at 375 px, large type, one fact per line, icon + label on every chip): first name and "6th visit" / "First visit" · masked phone and segment · last visit ("12 Oct · 12 days ago") · usually orders (top 3 dishes) · **Allergy** first, in the allergy style used on order cards · Dislikes · Diet · Prefers (milk, sugar, spice, seating, likes, other). Each chip has × to remove a wrong value.
+- **At a glance** (top box, no scrolling at 375 px, large type, one fact per line, icon + label on every chip): first name and "6th visit" / "First visit" · masked phone and segment · last visit ("12 Oct · 12 days ago") · **Staff activity** (owner only; every staff action on this customer, all time: `/audit?customer=<id>&range=all`, see [audit log](#audit-log)) · usually orders (top 3 dishes) · **Allergy** first, in the allergy style used on order cards · Dislikes · Diet · Prefers (milk, sugar, spice, seating, likes, other). Each chip has × to remove a wrong value.
 - **Details** (below): Feedback (average, each rating with text) · Complaints (1–2★ and `complaint` / `frustration` handoffs, with the customer's words) · Recent orders (last 5, cancelled struck through) · Comments (newest first: author, time, the comment as written, what the AI changed with **Undo**, or "No profile changes" / "Couldn't read this — profile unchanged").
 - **Add a comment:** text ≤ 500 + Save; "Updating profile…" until the result arrives by Realtime. Hint: "Write what the customer told you — the profile updates itself. Offers and opt-outs can only be changed by the customer."
 
@@ -259,7 +264,7 @@ One shared panel (`shift_manager`+), opened from the **Profile** button on order
 
 Reads: `v_customer_card`, `customer_preferences`, `customer_notes`, `feedback`, `requests`, `orders` + `order_items` through Supabase.
 
-**Done when:** opens in one tap from a card · the top box reads at a glance at 375 px with no scrolling · a comment shows its applied changes within a few seconds on every console · Undo reverses them, 409 shows "Changed again since — remove it from the box instead" · × removes one value · numbers masked · empty profile and first visit look intentional, not broken.
+**Done when:** opens in one tap from a card · the top box reads at a glance at 375 px with no scrolling · a comment shows its applied changes within a few seconds on every console · Undo reverses them, 409 shows "Changed again since — remove it from the box instead" · × removes one value · numbers masked · Staff activity shows for the owner only · empty profile and first visit look intentional, not broken.
 
 ### Menu
 
@@ -289,7 +294,7 @@ Owner home. No sound on Today itself.
 | New opt-ins | `opted_in` rows today | `consents` |
 | Offer redemptions | This week (café timezone) | `redemptions` |
 
-**Needs attention**, critical first: WhatsApp disconnected · low rating not handled (→ Calls) · template rejected · ordering paused (Resume) · number quality Medium / Low. Plus **Service right now** (live order chips → Live orders), **Next campaign**, **Weekly report**.
+**Needs attention**, critical first: WhatsApp disconnected · low rating not handled (→ Calls) · template rejected · ordering paused (Resume) · number quality Medium / Low · N critical staff actions today (owner only, amber, no sound; → [audit log](#audit-log) `/audit?severity=critical&range=today`). Plus **Service right now** (live order chips → Live orders), **Next campaign**, **Weekly report**.
 
 KPIs refetch every 5 min; attention cards follow Realtime. **Done when:** tiles match the views and never count cancelled orders · each card appears and clears with its condition · Resume writes `ordering.resume` · Service right now matches Live orders · 375 px.
 
@@ -306,15 +311,33 @@ List, profile and read-only consent register. Backend: [customers](backend.md#cu
 
 ### Campaigns
 
-List, report, templates and the five-step wizard. Backend: [campaigns](backend.md#campaigns).
+Owner only (a non-owner on `/campaigns/*` goes to `/orders`). List, detail, Insights, the Redeem tab, templates and the five-step wizard. Backend: [campaigns](backend.md#campaigns), [redemption](backend.md#redemption).
 
-- **List:** notice "Only opted-in customers can be messaged. Sending is throttled and may roll over to the next day." · table of name, audience, status tag, came back · read-only template list with status chips ("Templates are created by the Restro team").
-- **Report:** funnel as % of sent: Sent → Held by WhatsApp (tooltip: normal, a cross-business limit) → Delivered → Read → Came back; they spent, discount given, WhatsApp cost. Scheduled → Cancel scheduled send; draft → Continue editing.
+- **Tabs row** on the list: **Campaigns · Insights · Redeem**. `new`, `insights` and `redeem` are reserved values of `:campaignId`; campaign ids are UUIDs. Redeem is the same body as `/redeem` ([Redeem offer](#redeem-offer)).
+- **List:** notice "Only opted-in customers can be messaged. Sending is throttled and may roll over to the next day." · table of Name (+ scheduled date) · Audience · Status tag · Sent · Redeemed (% of delivered) · Came back (% of sent), all from `v_campaign_insights`; cards on phones · read-only template list with status chips ("Templates are created by the Restro team").
+- **Detail** (`/campaigns/:id?tab=overview|recipients|redemptions|opted-out`; a draft still opens the Wizard). Header: ← Campaigns, name, status chip, **Export CSV** (`GET /campaigns/{id}/recipients/export`, masked numbers, audited `campaign.export`; toast "Exported 412 rows"), Cancel scheduled send / Stop sending. Meta line plus "Codes valid till 12 Oct" (café timezone) or "No expiry (30-day window for results)".
+  - **Overview:** funnel as % of sent: Sent → Delivered → Read → Replied → Came back → Redeemed. Side counts: Held by WhatsApp ⓘ (tooltip: normal, a cross-business limit), Failed, Still to send (queued incl. deferred), Opted out after. Tiles: Came-back revenue ("WhatsApp orders in the offer window + counter bills with a code"), Discount given, Redeemed ("N at the counter · M on a table bill"), WhatsApp cost ("—" while 0). Redemptions by day: stacked bars, counter vs table bill. A collapsible "What these mean" glossary (Replied, Came back, Redeemed, Offer window, Opted out after).
+  - **Recipients:** `v_campaign_recipients`, 50 per page server-side with an exact count, name search (300 ms debounce, like Redeem), status chips All · Not sent · Sent · Delivered · Read · Held · Failed, outcome chips (AND) Redeemed · Not redeemed · Came back · Replied · Opted out after (Redeemed and Not redeemed exclude each other). Columns: name + masked phone · code · status · sent / read · replied · orders in window + spent · redeemed (when · channel · by whom · discount) · opted out after (date · source). Cards on phones. Count line "412 recipients · 37 match". While the next filter or page loads, the last page stays on screen, dimmed, with "· updating…" on the count line and the pager in place.
+  - **Redemptions:** `v_redemptions` for the campaign: time · customer · code · "Counter" / "T7 bill #1041" · bill · discount · staff ("Former staff" when the membership is gone, "Unknown" for no staff).
+  - **Opted out:** recipients with `opted_out_at`: name · masked phone · when · "Replied STOP" / "Tapped Stop offers" / "Blocked on WhatsApp". "Opted out within the offer window after this campaign was sent."
+- **Insights** (`/campaigns/insights`): period chips 30 d · 90 d (default) · All (campaigns by `scheduled_at`, redemptions by café-local `day`; the panels stay on screen while a new period loads). KPI tiles: Offers delivered · Redeemed (% of delivered) · Came back (% of sent) · Came-back revenue ("Summed per campaign; a visit can count for more than one campaign") · Discount given · Opted out after. Best campaign: highest came back / sent among campaigns with ≥ 10 delivered, ties to more redemptions, else "Not enough results yet: a campaign needs 10 delivered messages". Sortable comparison table (rows open the detail); cards on phones, where a "Sort by" select and an Ascending / Descending toggle replace the header. Redemptions by day (stacked), by staff (name · total · at counter · on bills · discount · last), the latest 25. Empty: "No campaigns sent in this period."
 - **Wizard:** Audience → Template → Message → Schedule → Review, with a live WhatsApp preview (Order now button, "Reply STOP to opt out"). Draft saved on Continue past Message. Review shows every audience-preview line and the quality warning.
 
-Schedule is disabled with no approved marketing template, no recipients, a past time, or a disconnected number. `sending` campaigns refetch every 60 s.
+Schedule is disabled with no approved marketing template, no recipients, a past time, or a disconnected number. The list, detail and Insights refetch every 60 s (`sending` campaigns move while open). Every read of `v_campaign_insights`, `v_campaign_recipients` and `v_redemptions` filters `.eq("cafe_id", cafeId)`. Money only from view or API paise through `inr()`; masked numbers only, the CSV included. The staff label is the same everywhere (`staffLabel` in `lib/offers.ts`): the name, "Former staff", or "Unknown". Code in `features/campaigns/` (`CampaignsScreen`, `CampaignDetail`, `CampaignInsights`, `labels.ts`), `lib/campaignInsights.ts`, `styles/campaigns.css`.
 
-**Done when:** tags and Came back correct · funnel matches `v_campaign_funnel` · opted-out never counted · Schedule and Cancel audited · preview has Order now and the STOP line · 375 px.
+**Done when:** list numbers match `v_campaign_insights` · the detail funnel matches the view row and opted-out is never counted as came back · recipient chips filter on the server and page by 50 · Export downloads the masked API CSV and is audited · Insights picks the best campaign only with ≥ 10 delivered and shows redemptions by staff · Schedule, Cancel and draft saves audited · preview has Order now and the STOP line · non-owners on `/campaigns/*` go to `/orders` · 375 px with no horizontal scroll, every table included.
+
+### Redeem offer
+
+`/redeem` (Service nav "Redeem offer", tab-bar label "Redeem") for `shift_manager`+, and the same body as the Campaigns Redeem tab (`/campaigns/redeem`, owner). One column, phone first, max 720 px. Eligibility, reasons, discounts and the amount to collect all come from the API ([redemption](backend.md#redemption)); the console never decides them. Code in `features/redeem/` and `lib/offers.ts`.
+
+- **Search:** "Redeem an offer" · "Search by name, the last 4 digits of their number, or the code they show you." Large autofocused input, `enterKeyHint="search"`, 300 ms debounce, ≥ 2 characters, `POST /offers/lookup` (text in the body, never the URL). Exactly 1–3 digits shows "Type the last 4 digits of the number" and makes no call; 5+ digits shows the API's 400 text. The input is kept on error.
+- **Results:** one card per customer, eligible first (server order). First name (bold), full name muted if different, masked phone, "6th visit · last 12 Oct"; "Deleted customer" when found only by code. Open-bill chip "At T7 · bill open · ₹ 640", or "T7 bill already has code BACK20-7KQ". Offer rows newest first: mono code (highlighted when it is the searched code), campaign, offer text, "valid till 12 Oct" (café timezone), and a verdict chip (colour + icon + label): Eligible · Used · Expired · Cancelled · Not sent yet · Didn't reach them. The reason and the amber warning come from the API; a used code also shows where, when, by whom and the discount. Only eligible rows have **Redeem at counter** and, when an open bill has no code, **Apply to T7 bill** (`POST /bills/{table_session_id}/apply-code`) → "Applied to T7 bill · ₹ 128 off".
+- **Redeemed today:** `v_redemptions` with `.eq("cafe_id", cafeId)` and `day` = today in `cafes.timezone` (never the browser's), newest first: time · first name + masked phone · code · "Counter" / "T7 bill" · "−₹ 248" · "by Ravi" ("by Former staff" when the membership is gone, "by Unknown" for no staff, as on every campaign screen). Refetches every 30 s and after the user's own redemption or Apply.
+- **Dialog** (centred on desktop, bottom sheet on phones): "Redeem BACK20-7KQ" · "Riya · Weekend comeback · 20 % off the bill" or "Offer: free cookie · no bill discount". Field "Amount paid (₹, before discount)", `inputMode="decimal"`, parsed by `toPaise()`; rejects 0, more than 2 decimals, under ₹ 1 ("Check the amount: at least ₹ 1") and over ₹ 1,00,000 ("Check the amount: over ₹ 1,00,000"). Button repeats the amount ("Redeem 20 % off ₹ 1,240"), disabled offline or busy. `Idempotency-Key` created when the dialog opens and reused on every retry; changing the amount after a failed attempt creates a new key. Success: large **"Collect ₹ 992"** (`total_paise`), "Bill ₹ 1,240 · Discount −₹ 248 · Redeemed by you at 12:41", Done; toast "BACK20-7KQ redeemed · ₹ 248 off". Errors inline with the API text: 422 `invalid_code`, 409 `code_already_used` ("Already used. …"), 409 `already_redeemed_this_visit` ("One offer per visit. …"), 400 amount, 403 "You don't have access to this.", network (amount kept, retry with the same key). On 409 or 422 the lookup is refetched.
+- **States:** idle (hint + Redeemed today) · "Searching…" · "No customer matches "xyz". Try the last 4 digits of their number or the code." · "No offers for Riya." · "Showing 20. Type more of the name." · "Couldn't search. Try again." + Retry · offline (Redeem and Apply disabled).
+
+**Done when:** a shift manager at 375 px finds a customer by name, last 4 digits and code (typed without the dash or in lower case too) with the API's verdict and reason · only eligible offers can be redeemed · a counter redemption shows Collect from the API and appears in Redeemed today · a retry reuses the key and never redeems twice · a second till on the same code shows "Already used" with who, when and where · Apply uses the bill path · Redeem disabled offline · Redeemed today uses the café-local date · no full number anywhere · no horizontal scroll at 375 px.
 
 ### Analytics and service report
 
@@ -336,6 +359,45 @@ Owner. Tabs **Tables & QR · Team · Settings · Alerts**, each with its own URL
 
 **Done when:** QR opens WhatsApp with "Hi, I'm at Table N" · invite, role change and deactivation work and deactivation blocks the next request · settings save with `settings.update` · alert number validated · 375 px.
 
+### Audit log
+
+Owner only (D15; `platform_admin` once support mode exists). Who did what in this café: every staff write, newest first, one plain sentence per action. Reads go through the API (`/audit/*`), never Supabase: sentences, labels and severity reasons come from `domain/audit/catalog.py` (decision 19). The only Supabase read is the Customer filter's typeahead over the customer list. Backend: [audit](backend.md#audit). Non-owners get no nav entry and are sent to `/orders`; the API answers 403.
+
+- **Toolbar:** date presets Today · Yesterday · 7 days (default) · 30 days · Custom (two `datetime-local` fields), plus All time when an order, customer or chat filter is set (then the default) · search "Search name, order #, dish…" (300 ms; "#42" or "42" is an order number and, like Order #, searches all time) · **Critical only** switch with a red count badge · **Export CSV**.
+- **Summary strip** from `/audit/facets` for the date range: "**3 critical** · 7 warnings · 142 actions in the last 7 days". Each count applies that severity filter.
+- **Filter bar:** multi-selects Category · Action (Order accepted, Order cancelled, Chat taken over first, then grouped by category with the filter-only accept / ready / serve first under Orders; zero-count options greyed but selectable) · Person (team members with a role chip and "(inactive)", former members the log still names, "Restro support", "AI (from comments)"; the last two filter by role) · Role · Order # · Customer (typeahead over the customer list, 300 ms after the last key, up to 8 matches, first names only). Active filters show as chips with ×, plus **Clear all**.
+- **List:** day headers (Today, Yesterday, "Sat, 25 Oct") that stick just below the console header. Row: time · severity marker · sentence with the actor in bold · category chip · link chips `#42` → order history, first name → customer, Chat → the chat, Campaign → the campaign · expand chevron (`aria-expanded`).
+- **Severity:** colour + icon + label, never colour alone, never a pulse (D26: pulse means "act now"; history isn't urgent):
+
+| Severity | Look |
+|---|---|
+| `critical` | 4 px `--color-accent` left border, accent tint, `CircleAlert`, "Critical", the reason as a muted subline |
+| `warning` | Amber left border and tint, `TriangleAlert`, "Warning", the reason |
+| `info` | Plain row |
+
+- **Expanded row:** the details list (reason, staff note, was / now, discount, bill total, fields changed, …) · Order history · Open chat · Open customer · Only this person · Only this order · Only this action (an accept row filters on `order.accept`) · a collapsible **Technical details** block (action, role, support, ids, raw `change` JSON).
+- **Paging:** 50 a page; **Show older** passes the page's `next` as `before`; at the end "That's everything for these filters." The list and the counts refetch every 60 s and on focus; no Realtime.
+- **URL keys:** `range`, `from`, `to`, `q`, `critical=1`, `severity`*, `category`*, `action`*, `actor`*, `role`* (* = repeatable), `order`, `order_id`, `customer`, `conversation`. Every filter change is a history entry; defaults are left out, so a plain `/audit` stays plain; paging isn't in the URL; unknown values are dropped before they reach the API.
+- **Phone (375 px):** search, then Critical only and **Filters (n)**, which opens a bottom sheet with the presets, every filter and Export. Rows become cards; the critical border and tint stay; no horizontal scroll.
+- **States:** "Nothing recorded between 25 Oct and 1 Nov. Staff actions appear here as they happen." · "No actions match these filters." + Clear filters · `CircleCheck` "No critical actions in this period." · 403 "Only the owner can see the audit log." · network "Couldn't load the audit log. Try again." (filters kept) · with rows on screen: "Couldn't load more." + Try again (Show older failed) or "Couldn't refresh. Showing the last loaded entries." + Try again (the 60 s / focus refresh failed) · 400: the API's message inline · export: spinner, then "Audit log exported (312 rows)", or the API's message ("Too many rows — narrow the dates or filters." over 10 000 rows).
+
+**Order history** (`/audit/orders/:orderId`, owner): header "Order #42 · T4 · Riya · Cancelled" with total, source and "placed 31 Oct, 12:41" · a red **Cancelled** block, "Cancelled by Priya — Out of stock" (or "Cancelled by the customer"), with the staff's own text under "Staff note (never sent to the customer)" · the timeline, oldest first on a vertical rail, with actor icons customer `UserRound`, staff `BadgeCheck`, support `LifeBuoy`, AI `Sparkles`, automatic `Clock` and the same severity look · footer "All actions on this order in the audit log" (`/audit?order_id=…&range=all`) and Open customer · 404 "Order not found in this café."
+
+**Entry points (owner only):** **History** on every order card (`/audit/orders/:id`) · **Staff activity** on the customer profile (`/audit?customer=<id>&range=all`) · on Today, an amber card "N critical staff actions today" → `/audit?severity=critical&range=today`.
+
+| Read | API |
+|---|---|
+| Rows | `GET /audit/entries` (filters + `before`, `limit`) |
+| Counts | `GET /audit/facets?from&to` |
+| Labels, categories, roles | `GET /audit/catalog` (static per deploy, cached for the session) |
+| CSV | `GET /audit/export` (same filters; `audit-log-YYYY-MM-DD.csv`; audited as `audit.export`) |
+| Order history | `GET /orders/{id}/history` |
+| Customer typeahead | Supabase `v_customer_profile` (name, visits; 8 rows; RLS) |
+
+Code: `features/audit/` (`AuditScreen`, `AuditFilters`, `AuditRow`, `OrderHistory`, `filters.ts`), `lib/audit.ts`, `styles/audit.css`.
+
+**Done when:** a staff cancel shows as a critical row with icon, label and reason · filters by action (including Order accepted), category, severity, person, role, order, customer, chat and dates, all kept in the URL and shareable · searching "#42" and Order # 42 find the same order over all time · a chip × removes one filter, Clear all removes every one · Show older pages to the end · the order history merges every source, with the cancel highlighted and the staff note labelled · CSV of the current view, toast with the row count · non-owners: no nav entry, redirect, 403 · the filter sheet works at 375 px with no horizontal scroll · the owner finds who cancelled order #N in under 30 s.
+
 ### Platform
 
 Our cross-café console (`platform_admin`). Until P3 the team uses Supabase Studio, GCP console and WhatsApp Manager. No sounds. Secrets are never shown — only `token_ref` / `pin_ref`.
@@ -354,5 +416,6 @@ Our cross-café console (`platform_admin`). Until P3 the team uses Supabase Stud
 - Status chip: Disconnected (critical) · Paused (warning) · Needs attention (onboarding or any checklist item open) · Live (calm).
 - Onboard form takes Secret Manager references only and rejects anything that looks like a token.
 - Open as support → owner console of that café under the support bar; Exit → Cafés.
+- **Audit log (P3)** reuses the café audit log rather than building a second one: the backend `domain/audit/viewer` functions already take `cafe_id`, and the console reuses `features/audit` (`AuditRow`, `filters.ts`, `lib/audit.ts`) with a café filter added. Not built in this change.
 
 **Done when:** only `platform_admin` reaches `/platform/...` · onboarding accepts refs only and writes `cafe.create` · checklist, sync and support actions audited · support bar on every screen and every action `support = true`.

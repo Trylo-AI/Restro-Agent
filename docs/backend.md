@@ -23,9 +23,10 @@ Back-edges: cart cleared or Cancel → `browsing`; Edit or any change at `confir
 | `awaiting` | `null` · `name` · `table` · `rating` · `feedback_text`. The next text answers it, no LLM |
 | `cart` | `{items: [{item_id, qty, note}], version}` |
 | `order_edit` | `{order_id, order_version, items}` while editing a `NEW` order |
-| `clarify_strikes` | 0–2; 2 → handoff `repeated_unclear`; reset by any valid action |
+| `clarify_strikes` | 0–2; 2 → handoff `repeated_unclear`; reset by any valid action (picks included; intent `recommend` never adds one) |
 | `allergy_note` | Allergy mentioned this visit; copied to the order |
 | `feedback_order_id` | Order a pending rating belongs to |
+| `rec` | The last picks, ids only: `{shown: [item_id] (≤ 12), mood: light\|energy\|cool\|comfort\|sweet\|null, mood_text: ≤ 60 sanitised \| null, llm_calls, at}`. Reset with the visit. See [Recommendations](#recommendations) |
 
 ### Routing order
 
@@ -34,7 +35,7 @@ First match wins.
 1. `optout` button or `STOP` → opt out, in any step and mode.
 2. `mode = human` → store, show in Chats, re-arm `idle_handback`. No bot reply.
 3. QR text (matches `tables.qr_text` after normalising) → join or open the table session → greeting.
-4. Interactive reply → handler by reply id.
+4. Interactive reply → handler by reply id. `menu` alone → categories; `recommend` · `rec_mood:{code}` · `rec_more` → the [recommend flow](#recommendations), after the paused / closed check.
 5. Non-text → "Sorry, I can only read text. Please type your order." + Menu · Call waiter.
 6. `awaiting` set → save the answer.
 7. Keyword (call waiter, bill) → deterministic handler.
@@ -49,11 +50,12 @@ Reply ids are `action[:arg[:arg]]`. Handlers act on the id, never the title, and
 
 | Flow | Trigger | Reply | Stale or invalid |
 |---|---|---|---|
-| New customer | First message, no name | "Hi! Welcome to <café>. What should we call you?" → Menu · Recommend · Call waiter | Answer > 3 words or a dish → free text; ask the name after the order |
+| New customer | First message, no name | "Hi! Welcome to <café>. What should we call you?" → Menu · Recommend · Call waiter (Recommend sends [picks](#recommendations)) | Answer > 3 words or a dish → free text; ask the name after the order |
 | Returning | Name known | "Hi <name>! Last time: <items>. Same again?" → Same again · Menu · Call waiter | — |
 | Same again | `reorder:{order_id}` | Available items to cart, sold-out named → summary | Not this customer's → menu |
-| Menu / category | `menu` · `cat:{slug}[:{page}]` | Categories with ≥ 1 available item / items with name, price, veg mark | Empty → menu |
-| Item | `item:{item_id}` | +1 to cart → summary | Sold out → "<dish> is sold out today" + menu |
+| Menu / category | `menu` · `cat:{slug}[:{page}]` | Categories with ≥ 1 available item, led by a "For you" row (`recommend` "✨ Suggest for me") when there are ≤ 9 categories / items with name, price, veg mark | Empty → menu |
+| Item | `item:{item_id}` (`item:{item_id}:rec` from the picks, counted as `rec_added`) | +1 to cart (or to the `NEW` order being edited) → summary | Sold out → "<dish> is sold out today" + menu |
+| Recommend | `recommend` · `rec_mood:{light\|energy\|cool\|comfort\|sweet}` · `rec_more` · intent `recommend` | Up to 3 picks with code-rendered names and prices + mood rows + Other ideas · Full menu ([Recommendations](#recommendations)) | No safe dish → "I couldn't find a dish on our menu that fits your preferences…" + Menu · Call waiter; Other ideas used up → "That's everything I'd suggest right now." + categories; unknown mood code → no mood |
 | Cart summary | Cart changed | [Confirmation](#confirmation) with `confirm:` · `edit:` · `cancel:{cart_version}` | Old version → latest summary; already ordered → "Already placed — order #N" |
 | Table | Confirm without a table session | "Which table are you at?" (`table:{table_id}`) | Unknown → ask again |
 | Order received | Order created | "Order #N received — about X min" → Edit order · Cancel order · Call waiter | — |
@@ -66,7 +68,7 @@ Reply ids are `action[:arg[:arg]]`. Handlers act on the id, never the title, and
 
 ## AI agent
 
-One structured Gemini call (Vertex AI, global endpoint) per free-text turn, only in `bot` mode, at most once per turn (plus one retry). No tools, no loop. The LLM interprets and drafts; code decides. The only other calls are the [cancellation message](#transitions) draft and reading a [staff comment](#customer-profile-and-staff-comments) into profile changes.
+One structured Gemini call (Vertex AI, global endpoint) per free-text turn, only in `bot` mode, at most once per turn (plus one retry). No tools, no loop. The LLM interprets and drafts; code decides. The only other calls are the Recommend tap's `recommend` call (one per Recommend, mood or Other ideas tap; one attempt, 4 s, code picks on failure, never a handoff; see [Recommendations](#recommendations)), the [cancellation message](#transitions) draft and reading a [staff comment](#customer-profile-and-staff-comments) into profile changes. A typed mood never makes a second call: its picks ride the turn output.
 
 ### Output
 
@@ -74,12 +76,13 @@ Contract `contracts/llm_output.schema.json`, JSON-schema output mode. Output tha
 
 | Field | Values | Code does |
 |---|---|---|
-| `intent` | `browse` · `ask_question` · `add_items` · `modify_cart` · `confirm` · `cancel` · `order_status` · `human` · `smalltalk` · `unclear` | Picks the handler (below) |
+| `intent` | `browse` · `ask_question` · `add_items` · `modify_cart` · `confirm` · `cancel` · `order_status` · `human` · `smalltalk` · `unclear` · `recommend` | Picks the handler (below) |
 | `cart_ops[]` | `{op: add\|remove\|set_qty\|set_note, item_ref, qty, note}` | Resolves each `item_ref` against the live menu, rejects unknown and sold-out, applies the rest |
 | `allergen_question` | `{allergen, item_ref}` or null | Answers from `menu_item_allergens` |
 | `needs_human` | `{flag, reason: asked\|frustration\|complaint\|allergen_unknown\|repeated_unclear}` | Handoff with that reason |
 | `clarify` | string or null | Sent instead of acting; +1 strike |
 | `reply` | string | Checked (no amounts, length) and sent with code-rendered blocks |
+| `recommend` | `{mood (≤ 60) or null, picks: ≤ 3 [{item_ref, why (≤ 80)}]}` with intent `recommend`, else null (required and nullable) | Sanitises the mood; resolves each pick to an available dish on the turn view (unresolved → dropped, `rec_ref_unresolved`); every `why` through `clean_why`, and dropped when it names a dish that is not a pick; then re-filters and tops up ([Recommendations](#recommendations)) |
 
 `item_ref` is the menu `id` from the prompt; when nothing fits it is the customer's words, so code can tell "sold out" from "not on the menu". `qty` 1–20.
 
@@ -92,6 +95,7 @@ Contract `contracts/llm_output.schema.json`, JSON-schema output mode. Output tha
 | `ask_question` | `reply`; allergen questions answered by code |
 | `browse`, `smalltalk` | `reply`; named dishes shown as a code-rendered list; smalltalk gets one line + Menu button |
 | `unclear` | Send `clarify`, +1 strike |
+| `recommend` | Apply any `cart_ops` first (summary), then the picks from the same call; never a clarify strike, no second call |
 | `human` or `needs_human.flag` | [Handoff](#handoff) |
 
 An order is created only by `confirm:{cart_version}` or `confirm` on an unchanged cart.
@@ -100,10 +104,10 @@ An order is created only by `confirm:{cart_version}` or `confirm` on an unchange
 
 | Part | Contents | Cached |
 |---|---|---|
-| Prefix: rules | Role; hard rules (never state a price, total, discount or time; never invent dishes); reply in the customer's language (Hinglish first-class); café name; tone; Hinglish few-shots | Yes |
+| Prefix: rules | Role; hard rules (never state a price, total, discount or time; never invent dishes); reply in the customer's language (Hinglish first-class); café name; tone; the recommendation rule (suggestions or a mood without naming dishes → intent `recommend` with ≤ 3 picks and a short `why` with no price, number or claim; a named dish with a quantity, or "the second one", is `add_items`); Hinglish few-shots (each with `"recommend": null`, plus one recommend shot) | Yes |
 | Prefix: menu | One line per available item `id\|name\|price\|veg\|spice\|tags`; sold-out excluded | Yes |
 | Suffix: customer | First name, visit count, recent orders (90 days), favourites, profile diet / likes / dislikes / other preferences — from SQL. Never profile allergies | No |
-| Suffix: state | Open / closed / paused / near closing; cart lines; step | No |
+| Suffix: state | Open / closed / paused / near closing and the café's local day and time; cart lines; step | No |
 | Suffix: history | Last ~6 turns | No |
 
 - Prefix cached in worker memory per `(cafe_id, menu_version)`; one tiny query per turn checks the version, so a sold-out toggle applies on the next message. A settings change drops the cache.
@@ -111,6 +115,7 @@ An order is created only by `confirm:{cart_version}` or `confirm` on an unchange
 - Never in the prompt: phone numbers, `wa_id`, other customers, secrets, full history.
 - Tone (café setting, wording only): `warm` "Welcome back! The usual?" · `crisp` "Hi. What can I get you?" · `playful` "Back for more? Excellent taste."
 - Model is a per-café config value; `platform_admin` changes it without a deploy. Routing options decided in Phase 2 from evals: Flash only · Flash-Lite only · router (Flash-Lite default; Flash for recommendations, allergen questions, multi-item, Hindi script, after a failed clarify).
+- The Recommend tap has its own prompt (no prices, ids only, the same short ids as this view, cached on the view per language): see [Recommendations](#recommendations).
 
 ### Failures
 
@@ -119,12 +124,94 @@ Timeout 6 s. Error, timeout, Vertex 429 or invalid output → one retry on the o
 ### Guardrails
 
 - **Items.** Available → applied. Sold out → "<Item> is sold out right now" + up to 3 available items from the same category. Not on the menu → "I couldn't find <words> on our menu" + categories, +1 strike. Any rejected op discards the LLM `reply`; code says what was added and what wasn't. Lists, summaries and orders come only from the DB, so an invented dish can't appear.
-- **Prices.** `reply`, `clarify` and every `note` are scanned for amounts (₹, Rs, INR, rupees, /-, number + currency). A hit drops the model text, sends the code-rendered message and flags the turn for AI review.
+- **Prices.** `reply`, `clarify` and every `note` are scanned for amounts (₹, Rs, INR, rupees, /-, number + currency, and in Devanagari रुपये / रुपए / रुपया / रु with ASCII or Devanagari digits). A hit drops the model text, sends the code-rendered message and flags the turn for AI review.
+- **Recommendation text.** Every model `intro` and `why` that can reach the customer, from the `recommend` call and from the turn output, goes through `clean_why`. It is dropped on any digit (ASCII or Devanagari), any amount, a claim (vegan, Jain, healthy, nutrition, protein, allergen, safe, diet, low-cal, discount, offer, deal, coupon, cashback and their Hindi forms), a URL, or "free" / "muft". It is also dropped when it names a menu dish that is not one of the picks shown (whole name, any case): that dish may have been filtered out for an allergy, diet, dislike or the cart. Code then writes the `why` ("Popular here this week" and so on) or its own intro.
 - **Allergens.** See [allergens](#allergens). The LLM only detects the question; `unknown` always reaches a person.
-- **Clarify strikes.** +1 for `unclear`, `clarify`, or every op rejected as not on the menu. Valid action resets to 0. Two → handoff `repeated_unclear`.
+- **Clarify strikes.** +1 for `unclear`, `clarify`, or every op rejected as not on the menu. Valid action resets to 0. Two → handoff `repeated_unclear`. Intent `recommend` and every Recommend tap never add a strike, even when one of their ops is not on the menu.
 - **Injection.** Customer text is data. With no tools, injection can at most change `reply` wording.
 - **Off-topic.** One short friendly line and back to the menu. No general knowledge, no other businesses.
 - **Free-tier rule.** Until Gemini runs on Vertex AI (Phase 3), prompts contain synthetic data only.
+
+### Recommendations
+
+The Recommend button, the "✨ Suggest for me" row, the five mood rows, "Other ideas" and a typed mood all end in one picks message. Code decides which dishes may be suggested and renders every name and price. The model only orders the allowed dishes and writes a short reason ([decision 20](decisions.md#20-ai-recommendations-from-code-filtered-candidates)).
+
+| Way in | Path | LLM |
+|---|---|---|
+| `recommend` (greeting button, "For you" row in the category list when ≤ 9 categories) | Tap → `conversation/recommend.on_tap` | One `recommend` call |
+| `rec_mood:{light\|energy\|cool\|comfort\|sweet}` | Tap; the prompt gets a fixed phrase ("something cold and refreshing") | One `recommend` call |
+| `rec_more` "Other ideas" | Tap; excludes `state.rec.shown`, keeps the mood or the sanitised `mood_text` | One `recommend` call |
+| Typed ("what do you recommend", "kuch thanda") | Routing rule 9 → turn call → intent `recommend` → `recommend.from_turn` | None extra: the picks ride the turn call |
+
+Taps sit below the paused / closed check (fixed reply, no call); `mode = human` stays silent. Tap-path language is English unless the customer's last typed message has Devanagari.
+
+**Candidates (code, `domain/recommend`).** Hard filters, in order:
+1. Available only.
+2. Allergies: profile `allergy` (stored as the allergen id, e.g. `tree_nuts`, or as a free word) plus this visit's `allergy_note`. A known allergen (id, label or alias) keeps only dishes marked `free_from`, so `contains` and `unknown` both leave. Any other word removes dishes whose name or description holds it as a whole word. Either case adds the caveat "I've left out dishes our menu doesn't mark free from your allergy. Please tell our team about severe allergies."
+3. Diet: veg / vegetarian / vegan / jain / eggetarian keep `veg = true`; vegan also drops milk or eggs `contains`; Jain drops root-vegetable words.
+4. Dislikes: whole word, plurals included.
+5. Spice: profile 0 keeps ≤ 1, profile 1 keeps ≤ 2.
+6. Cart (or the order being edited) and, on Other ideas, the dishes already shown.
+7. At most 60, by history then popularity.
+
+Nothing claims a dish is vegan, Jain or allergen-free. Allergies never reach a prompt.
+
+**Code ranking** (the fallback, and the top-up after the model):
+- Favourites first: ≤ 2 from the customer's last 180 days, by times then recency.
+- Then popular dishes (30 days, cached per café for 10 min), then one per category in name order.
+- At most 2 picks per category.
+- A mood puts matching categories and names first (`cool` → cold / iced / shake / cooler…, `sweet` → dessert / bake / chocolate…).
+- Near closing, dishes with `prep_minutes ≤ 10` lead within each tier.
+- Code `why`: "You've had this N times" · "You had this last time" · "Popular here this week" · "From our <category>".
+
+**The `recommend` call** (`ai_agent/recommend.py`, `llm_calls.purpose = recommend`):
+- System prompt: rules plus one line per available dish, `id|name|veg|spice|category|prep|description`, with **no price**. It uses the same short ids as the turn prompt and is cached on the menu view per language.
+- Suffix: CUSTOMER (first name only if it is letters ≤ 20) · PREFERENCES (never allergy; values kept only if letters-only ≤ 40) · HISTORY (ids) · POPULAR HERE · NOW (local day and time, near closing) · CART · ALREADY SHOWN · MOOD (the fixed phrase, or the sanitised model summary on Other ideas) · ALLOWED. No customer free text, phone, `wa_id` or price.
+- Output `$defs.recommend`: `{intro ≤ 160, picks ≤ 3 [{item_ref, why ≤ 80}]}`.
+- Model: `llm_recommend_model`, else the café model, else the primary (not Flash-Lite). The `cheap` kill switch still forces Flash-Lite.
+- One attempt, `llm_recommend_timeout_seconds` (4 s), 300 output tokens.
+- Validation: refs that are unknown or outside ALLOWED are dropped (`recommend_pick_dropped`); picks are deduped and capped at 3; the intro and each `why` go through `clean_why`; an intro or `why` that names a menu dish that is not one of the picks is dropped (`rec_intro_names_dish`, `rec_why_names_dish`).
+
+**Code picks alone (no handoff, no strike):**
+- ≤ 3 candidates (no call)
+- kill switch `handoff`
+- the per-visit cap reached (`recommend_llm_per_visit`, 6, counted in `state.rec.llm_calls`; `recommend_capped`)
+- timeout, error or invalid output, or no valid model pick (`recommend_fallback`)
+
+The intro is then "Here are a few favourites:" or "For <mood phrase>, try:".
+
+**Before render.**
+- The candidates are re-read (availability and allergen states) and re-filtered.
+- Model picks that are still valid are kept and topped up from the code ranking to min(3, candidates).
+- A last check runs against the final picks: a model intro or `why` that names any available dish not shown is replaced by code text (the code intro or the code `why`). This covers dishes that were filtered out, sold out on the re-read, in the cart, or just not picked.
+
+**Typed moods.**
+- The turn output's picks resolve to available dishes and go through the same hard filters.
+- Each `why` goes through `clean_why`. The turn prompt shows prices, so a `why` with any digit is replaced by the code `why`. So is a `why` that names a dish that is not a pick.
+- Picks are then topped up from the code ranking. The turn `reply` is used as the intro only after the same `clean_why` and dish-name checks; otherwise code writes it.
+- Cart ops in the same message apply first (summary), then the picks with a code intro.
+- "2 cold coffee" or "the second one" after the picks is `add_items`; there is no awaiting step.
+
+**Message.** One list message, ≤ 10 rows, button "See picks":
+- Body (code, ≤ 1024): the intro, then "1. <name> · ₹<price>" with the `why` under each pick, the allergy caveat when a filter applied, and "Tap a dish to add it, or pick a mood." (while editing: "Tap a dish to add it to order #N.").
+- Section Picks for you: `item:{id}:rec`, "₹190 · veg · Tap to add".
+- Section Pick by mood: every mood except the active one.
+- Section More: `rec_more` Other ideas (only while candidates remain) and `menu` Full menu.
+
+| Case | Reply |
+|---|---|
+| No candidate after the filters | "I couldn't find a dish on our menu that fits your preferences[ and allergies]. You can browse everything or ask our team." + Menu · Call waiter; nothing escalated |
+| No available dish | The paused reply |
+| Other ideas used up | "That's everything I'd suggest right now." + categories |
+| A pick sold out before the tap | The sold-out reply |
+
+**State, tracing, privacy.**
+- `state.rec` holds ids only, and strikes reset.
+- Counters `rec_shown`, `rec_llm`, `rec_added`. Degradations `recommend_fallback`, `recommend_capped`, `recommend_pick_dropped`.
+- The log line `recommend` holds ids and counts only.
+- These are customer actions, so there is no audit.
+- Reads and the call run with no transaction open. State and outbound rows commit in the turn's fenced transaction. A retried turn may make a second, metered call; the message is still sent once.
+- Cost is about $0.0006 per call on Flash **[verify pricing]**.
 
 ## Cart
 
@@ -315,7 +402,7 @@ Owner only; validated in the console and again in the backend. Required `name`, 
 - Key `(cafe_id, wa_id)`. Upserted on every inbound (`first_seen_at`, `last_inbound_at`); `last_visit_at` set on order creation. One conversation per customer.
 - Name asked once; only the first name goes to the LLM.
 - Returning summary (SQL, never the LLM): first name, visits, last order's items, top 3 items (90 days), stated preferences except allergies. Never phone, spend or ratings.
-- `customer_preferences` only when stated by the customer, in chat or to staff (e.g. `diet = vegan`, `milk = oat`). A stored allergy is shown to staff, never used to answer allergen questions.
+- `customer_preferences` only when stated by the customer, in chat or to staff (e.g. `diet = vegan`, `milk = oat`). A stored allergy is shown to staff and removes dishes from [recommendations](#recommendations), in code only (never in a prompt). It is never used to answer allergen questions.
 - Segments: **Lapsed** no order in 30 days · **Regular** 3+ orders in 60 days · **New** exactly 1 visit (checked in that order).
 
 ### Customer profile and staff comments
@@ -464,24 +551,189 @@ Every outbound goes through `domain/outbound`. Callers pass café, recipient, me
 
 Owner only. Audience = segment ∩ latest consent `opted_in`: `all_opted_in` · `lapsed` (no order in 30 days) · `regulars` (3+ orders in 60 days).
 
-**Wizard:** 1 audience → 2 approved marketing template → 3 offer text, code prefix, valid until → 4 date and time → 5 review (in segment, excluded, will receive, daily limit from the messaging tier, days needed, estimated cost, quality warning if Medium or Low) → Schedule.
+**Wizard:** 1 audience → 2 approved marketing template → 3 offer text, code prefix, valid until → 4 date and time → 5 review (in segment, excluded, will receive, daily limit from the messaging tier, days needed, estimated cost, quality warning if Medium or Low) → Schedule. Every draft save (`POST /campaigns`, `PUT /campaigns/{id}`) writes `campaign.draft` with `campaign_id`, `new`, `fields` (sorted names of the changed fields) and `discount_percent`. It never includes the offer text.
 
 **Sender**
 
 - `campaign_start` (every 5 min) snapshots one `campaign_recipients` row per eligible customer with a unique code (`BACK20-7KQ` = prefix + 3 random chars); campaign → `sending`. Later opt-ins are not added.
 - One `campaign-send` task per recipient, below the number's throughput. Consent and template re-checked at each send.
+- The message says "valid till" with the café-local date of `valid_until` (`cafes.timezone`). That is the last day the code works, and the verdict uses the same date ([redemption](#redemption)).
 - Over the daily limit → `deferred`, never dropped; `campaign_resume` re-queues at 10:00.
 - `131049` → `held` ("Held by WhatsApp"), not retried.
 - `completed` when nothing is `queued` or `deferred`.
 
 Campaign status: `draft` → `scheduled` → `sending` → `completed`, or `cancelled`. Recipient status: `queued` → `sent` → `delivered` → `read`; `queued` ⇄ `deferred`; `sent` → `held` or `failed`; never backwards.
 
-**Report:** Sent (incl. held) → Held → Delivered → Read → Came back (has a redemption). Results: they spent (linked orders, cancelled excluded), discount given, WhatsApp cost.
+**Report** (`v_campaign_insights` per campaign, `v_campaign_recipients` per recipient; owner only through base-table RLS). `v_campaign_funnel` is unchanged; Today and Platform Costs still use it.
+
+- **Offer window:** from the send (`wa_messages.sent_at`, else the attempt or the row time) to `valid_until`, or to send + 30 days when `valid_until` is empty, and never later than now. Replies, orders and opt-outs count only inside it.
+- **Ladder:** Sent (incl. held) → Delivered → Read → **Replied** (any inbound in the window, an opt-out tap included) → **Came back** (a non-cancelled WhatsApp order in the window, **or** a redemption on either channel, so walk-ins who redeem at the counter count) → **Redeemed** (a `redemptions` row, table bill or counter). Redeemed is the headline because it is the only hard proof.
+- **Came-back revenue:** the orders in the window plus the counter bills that carried a code (`bill_paise`). It is summed per campaign, so one visit can count for two overlapping campaigns, and cross-campaign totals say so.
+- **Discount given**, **Opted out after** (the first opt-out in the window, with its `source`) and **WhatsApp cost**.
+- The discount comes from the redemption; "came back" comes from the window. Table-bill rows from before `bill_paise` existed fall back to the session subtotal.
+
+**Recipients CSV:** `GET /campaigns/{id}/recipients/export` (owner, `domain/campaigns/export.py`).
+
+- Columns: `first_name, masked_phone, code, status, sent_at, delivered_at, read_at, replied_at, orders_in_window, spent_inr, redeemed_at, redemption_channel, bill_inr, discount_inr, redeemed_by, opted_out_at, opted_out_source`.
+- First names and masked numbers only. A deleted customer gets a blank name and `deleted`.
+- Times are in the café timezone. Rupees use integer maths.
+- A cell starting with `= + - @`, a tab or a carriage return gets a leading `'`.
+- Another café's campaign returns 404.
+- After the read, `campaign.export` (`campaign_id`, `rows`) is written in its own transaction.
 
 ### Redemption
 
-The shift manager types the code on the bill sheet.
+A code is redeemed once, through one of two channels. On the **table bill**, the shift manager types it on the bill sheet (`POST /bills/{id}/apply-code`, `domain/bills`). At the **counter**, the Redeem screen applies it to the amount paid (`POST /offers/redeem`) when there is no WhatsApp bill. Both channels ask `domain/campaigns/redemption.check_code` for the verdict, so there is one rule, and the console never decides eligibility. Both are recorded in `redemptions` (`channel` `table_bill` / `counter`), and `campaign_recipient_id` stays unique across them.
 
-- Valid when the code exists in this café, `valid_until` hasn't passed and it isn't redeemed. Errors: "This isn't a valid code, or it has expired." · "This code was already used today on #1041."
-- One transaction: insert `redemptions`; link the session's latest non-cancelled order (`source = campaign`, `campaign_recipient_id`); audit `offer.redeem`.
-- One code per bill, one redemption per code, never across cafés. Attribution is by redemption only.
+**Verdict** (first match wins):
+
+| Verdict | When | Reason shown to staff |
+|---|---|---|
+| `not_found` | Not a code of this café (another café's code included) | "This isn't a valid code, or it has expired." |
+| `redeemed` | Already redeemed, either channel | "Used today at 12:41 at the counter by Ravi" / "Used on 12 Oct on the T7 bill (#1041) by Ravi" (" by …" when the staff name is known) |
+| `campaign_cancelled` | The campaign was cancelled, even if the code was already sent | "The café cancelled this offer." |
+| `not_sent` | Recipient `queued` or `deferred` | "Not sent yet: the customer hasn't received this code." |
+| `not_delivered` | Recipient `failed` (incl. blocked at send) | "This message failed: the customer never got the code." |
+| `expired` | The café-local date now is after the café-local date of `valid_until` | "Expired on 12 Oct." |
+| `eligible` | Otherwise; `held` counts as sent | "20 % off the bill · valid till 12 Oct" / "Offer: <offer_text> · no bill discount" |
+
+A code works through the end of the café-local day of `valid_until` (`cafes.timezone`), on both channels. Without `valid_until` it never expires. Times and dates in reasons are café-local.
+
+An eligible code can carry one warning, the first that applies:
+
+1. `held`: "WhatsApp held this message; the customer may not have seen it."
+2. Another code redeemed by this customer in the last 60 minutes, either channel: "Riya used BACK20-7KQ at 12:41. One offer per visit at the counter."
+3. Latest consent `opted_out`: "Opted out of offers since; this code still works." Consent governs messages, not an offer already made.
+
+**Errors.** `422 invalid_code` with `details.verdict`. For `not_found` and `expired` the message is the generic "This isn't a valid code, or it has expired."; for the other verdicts it is the reason above. `409 code_already_used` carries `details` `redeemed_at`, `channel`, `redeemed_by_name`, `order_number` and `table_label`. The counter's message is the "Used …" reason. The table bill keeps "This code was already used today on #1041.", "…used on 12 Oct." and "…used today at the counter.", with "today" judged in the café timezone.
+
+These messages can name the customer, the code or a staff member, so they appear only in the response body. The errors (`StaffMessage`: `InvalidCode`, `CodeAlreadyUsed`, `AlreadyRedeemedThisVisit`, and the bill's `OneCodePerBill`) record only their error code in traces (`ops_runs.failure_reason` and the failure fingerprint).
+
+**Lookup** (`POST /offers/lookup`, shift manager and up, read only, never audited):
+
+- `q` is a name (matched anywhere; `%` and `_` escaped), exactly the last 4 digits of the number, or a code (any case, spaces dropped). A code typed without its dash is a name query that also matches codes. A code-shaped query that finds nothing is retried as a name ("Jo-Ann").
+- 1–3 or 5+ digits, or fewer than 2 characters, return 400.
+- Deleted customers are found only by code, which works as a bearer code.
+- Results: up to 20 customers (`truncated` beyond), with an eligible offer first, then by last visit. Each customer shows up to 10 offers, newest first, with the searched code always kept.
+- Each customer also shows the open table bill: the latest non-cancelled order's open session, its subtotal and any code already on it.
+- Masked numbers only; `wa_id` is never returned. Logs hold ids and the query kind, never the query.
+
+**Counter** (`POST /offers/redeem`, shift manager and up). One transaction, no LLM, no WhatsApp:
+
+- The amount is paid before the discount, ₹ 1 to ₹ 1,00,000 (100 to 10 000 000 paise); anything else is a 400 "Check the amount".
+- Discount = the campaign's `discount_percent` of the amount, rounded down to the paisa; 0 (recorded) without a percentage.
+- The `Idempotency-Key` header (8 to 80 characters) is required. The same key returns the same redemption (200, no second audit row), even when two sends arrive at once. The same key with another code or amount is a 400.
+- **One offer per visit:** a customer with any redemption in the last 60 minutes, either channel, gets `409 already_redeemed_this_visit`. The table bill keeps "one code per bill" only and doesn't apply the 60-minute rule.
+- The response includes `total_paise` ("Collect") = bill − discount.
+- A counter redemption doesn't change `customers.last_visit_at`.
+
+**Lock order:**
+
+1. The table bill only: lock the bill's `table_sessions` row (`for no key update`). A double tap or two codes on one bill run one after the other. The counter never locks a session, so the two paths keep one order and cannot deadlock. A new order can still reference the session, and delivering the bill waits for an in-flight apply.
+2. Read the code without a lock.
+3. Lock the customer row (`for no key update`).
+4. Take `for share` on the recipient and campaign.
+5. Re-check the verdict. The table bill reads the bill (orders, the code already on it) only now.
+
+Two tills, or a till and a table bill, are serialised: the second sees the first's committed row and gets 409. On one bill, a repeated tap returns the discounted bill, and a second code gets 400 "This bill already has a code (…). One code per bill." A campaign cancel waits for an in-flight redemption to commit. The unique `campaign_recipient_id` and `(cafe_id, idempotency_key)` indexes, with `on conflict do nothing`, are the backstop.
+
+**Table bill:**
+
+- One code per bill.
+- Applying the code already on this bill is a no-op that returns the current bill.
+- The insert records `bill_paise` = the subtotal at redemption.
+- It links the session's latest non-cancelled order (`source = campaign`, `campaign_recipient_id`).
+
+**Audit:** `offer.redeem` has one payload for both channels: `table_session_id`, `order_id`, `order_number`, `campaign_id`, `recipient_id`, `customer_id`, `code`, `channel`, `discount_percent`, `bill_paise` and `discount_paise`. Keys may be null; there is no name and no number.
+
+There is no undo or void: `redemptions` is append-only, and mistakes show in the audit log and the Redemptions tab. Voiding is an open decision.
+
+## Audit
+
+One `audit_log` row per console write, written by `app.domain.audit.write(conn, cafe_id, actor, action, change)` in the caller's transaction. The owner reads it through `/audit/*` and `GET /orders/{id}/history` (decision 19); `audit_log` RLS is unchanged (platform read only). Design: [retention-audit-recommend.md](retention-audit-recommend.md#feature-2-audit-log).
+
+### Write contract
+
+- `change` holds changed fields, ids, codes and counts only. `FORBIDDEN_KEYS` (`phone`, `wa_id`, `email`, `text`, `body`, `message`, `token`, `secret`, `password`, `alert_phone`, `cancel_reason_text`, `note`, `allergy_note`) are refused at any depth (nested dicts and lists such as `ops[*]`) with a `ValueError`, so the caller's transaction rolls back. `settings.update` keeps the names of changed fields (`fields: ["alert_phone"]`), never a value.
+- Severity is computed at write time by `catalog.classify(action, actor_role, support, change)` and stored in `audit_log.severity` (not null since `20261101000002`). A row keeps the classification it was written with; reads re-run `classify` only for the reason text.
+- Subjects: `order_id`, `customer_id`, `conversation_id` are copied from `change` when they are valid UUIDs (`catalog.subjects`). No FK, so append-only rows never block or cascade. `actor_name` snapshots the member's display name inside the INSERT, so a removed member keeps a name.
+- Every action written anywhere in `backend/app` must be in `CATALOG` (`test_every_written_action_is_in_catalog`, an AST scan).
+- Not audited: reads other than exports, telemetry, print ticket, sign-ins (Supabase Auth), and customer and system actions (they are in `order_events` / `escalations` and appear in the order history).
+- **Support mode (follow-up):** call sites build `audit.Actor(p.user_id, p.role)` today. When support mode ships they must pass `support=p.support`; `classify` then floors the row at `warning` ("Restro support acted in your café").
+
+### Catalogue
+
+`backend/app/domain/audit/catalog.py`. Rules apply top to bottom; the first match wins. Restro support (or `platform_admin`) is always at least `warning`.
+
+| Action | Category | Severity |
+|---|---|---|
+| `order.transition` | orders | info |
+| `order.cancel` | orders | **critical** always: "Cancelled after the kitchen accepted it" from ACCEPTED / READY, else "Cancelled by staff" |
+| `order.undo` | orders | warning "Status was reversed" |
+| `order.delay` | orders | warning "Long delay" from 15 min, else info |
+| `order.manual`, `notification.ack` | orders | info |
+| `request.ack`, `request.resolve`, `bill.deliver` | calls | info |
+| `chat.takeover` | chats | warning "Took the chat from a teammate" when `from_assigned_to` is someone else, else info |
+| `chat.reply`, `chat.handback` | chats | info |
+| `menu.availability` | menu | warning "Open orders contain this dish" when sold out with flagged orders |
+| `menu.update` | menu | **critical** "An allergen was marked absent" (`contains → free_from`); warning for other allergen changes, a price change, or sold out with flagged orders |
+| `menu.import` | menu | warning "Bulk change to prices and dishes" |
+| `ordering.pause` / `ordering.resume` | settings | warning "Customers can't order" / info |
+| `settings.update` | settings | warning "Alert number changed" when `alert_phone` is in `fields` |
+| `table.update`, `audit.export` | settings | info |
+| `team.invite` | team | **critical** "New owner" for `role = owner` |
+| `team.update` | team | **critical** "Access level changed" when `from_role` ≠ `role`; warning "Deactivated"; legacy rows without `from_role` → warning |
+| `customer.note` | customers | info |
+| `customer.profile_update` | customers | **critical** when an allergy is removed ("AI removed an allergy from a staff comment" for `staff_via_ai`) |
+| `customer.profile_undo` | customers | **critical** "Undo removed an allergy" when the undone ops added an allergy |
+| `customer.delete`, `consent.export` | customers | **critical** |
+| `campaign.draft` | campaigns | info |
+| `campaign.schedule`, `campaign.cancel`, `campaign.export` | campaigns | warning |
+| `offer.redeem` | offers | warning "Large discount" from ₹ 500 (`discount_paise ≥ 50 000`); critical with `override` (reserved) |
+| `offer.void` (reserved, never written) | offers | critical |
+| `support.open`, `support.exit` | platform | warning |
+| `cafe.create`, `cafe.checklist`, `template.sync`, `dead_letter.retry`, `dead_letter.resolve` | platform | info (the support floor applies) |
+| anything else | other | info, labelled with the action string |
+
+**Filter aliases (D28a).** Accept, ready and serve stay stored as `order.transition`. `order.accept`, `order.ready` and `order.serve` are filter-only: `order.transition` with `change->>'to'` = `ACCEPTED` / `READY` / `SERVED`. Facets count them separately (an accept counts as "Order accepted", not "Order status changed"), and an entry's label follows its `to`. The catalogue marks them `filter_only`.
+
+**Sentences** (`describe`). The actor comes first: "Priya (Shift manager)", "Restro support", "AI, from Ravi's comment,", "Restro (automatic)" or "A former team member (Manager)". Customers are named by first name only, "a customer (data deleted)" or "a guest" (D21). Money goes through `rupees()`, which matches the console's `inr()`. `details()` adds Reason, Staff note (joined from `orders.cancel_reason_text` at read time, never copied into `change`), Was / Now, Discount, Bill total, Fields changed, Allergen changes, Taken from, Via, Table, Campaign, Code, Audience and Scheduled for.
+
+### Payload per action
+
+| Action | `change` |
+|---|---|
+| `order.transition`, `order.cancel`, `order.undo` | `order_id`, `number`, `from`, `to`, `customer_id` (when set); cancel adds `reason_code` (the note stays on the order) |
+| `order.delay` | `order_id`, `number`, `minutes`, `has_note`, `customer_id` |
+| `order.manual` | `order_id`, `number`, `table`, `lines` (`item_id`, `name`, `qty`, `price_paise`), `total_paise`, `has_allergy_note` |
+| `chat.takeover` | `conversation_id`, `customer_id`, `via` (`takeover` · `reply` · `table`), `from_mode`, `from_assigned_to` (read under a row lock, `select … for update`, before the mode changes, so when two staff take over at once the second row names the first), `table_session_id` (via `table`) |
+| `chat.reply` | `conversation_id`, `customer_id`, `chars` (never the text) |
+| `chat.handback` | `conversation_id`, `customer_id` |
+| `request.ack`, `request.resolve` | `request_id`, `kind`, plus `order_id`, `conversation_id`, `table_session_id` when set |
+| `bill.deliver` | `table_session_id`, `total_paise`, `orders` (numbers), `subtotal_paise`, `discount_paise`, `code` |
+| `menu.availability` | `item_id`, `name`, `available`, `orders_flagged` |
+| `menu.update` | `item_id`, `name`, `new`, `fields`, `allergens` (count), `orders_flagged`, `price_paise_from` / `to`, `available_from` / `to`, `allergens_changed` (`allergen`, `from`, `to`; edits only, read before the allergens are replaced, same transaction) |
+| `menu.import` | `created`, `updated`, `rows` |
+| `settings.update` | `fields` (names only) |
+| `table.update` | `table_id`, `label`, `new` |
+| `team.invite` | `membership_id`, `user_id`, `role` (never the email) |
+| `team.update` | `membership_id`, `user_id`, `from_role`, `role`, `from_active`, `active` |
+| `customer.note` | `customer_id`, `note_id`, `chars` |
+| `customer.profile_update` | `customer_id`, `note_id` (AI) or `by_hand`, `ops` (`op`, `kind`, `value`) |
+| `customer.profile_undo` | `customer_id`, `note_id`, `ops` (the comment's ops that were undone) |
+| `customer.delete` | `customer_id`, `request_id` |
+| `consent.export`, `campaign.export`, `audit.export` | `rows` (+ `campaign_id`; `filters` names for `audit.export`) |
+| `campaign.draft` | `campaign_id`, `new`, `fields`, `discount_percent` (no offer text) |
+| `campaign.schedule` / `campaign.cancel` | `campaign_id` (+ `scheduled_at`, `audience`) |
+| `offer.redeem` | D28, both channels: `table_session_id`, `order_id`, `order_number`, `campaign_id`, `recipient_id`, `customer_id`, `code`, `channel`, `discount_percent`, `bill_paise`, `discount_paise` |
+
+### Reads
+
+- Owner only (D15); `shift_manager` and `manager` get 403. Routes: `GET /audit/entries`, `/audit/facets`, `/audit/catalog`, `/audit/export` and `GET /orders/{id}/history` (`api/staff/audit.py` → `domain/audit/viewer.py`).
+- Window (D23): with no `from`, the last 7 days; an order, customer or chat filter searches all time; `from ≥ to` or more than 366 days → 400. `to` is exclusive and defaults to now.
+- A `q` such as `#42` or `42` becomes the order-number filter. Any other `q` matches the staff name, `change.name` / `label` / `table`, or the customer's name (`ilike`, with `%` and `_` escaped). It also matches an action or category label (`catalog.match_labels`), but only at the start of a word: "served" finds "Order served" and never "Redemption reversed (reserved)". The alias labels the owner sees on accept, ready and serve rows ("Order accepted", "Order marked ready", "Order served") match through `catalog.match_aliases`, which returns `order.transition` rows with that `to`. The log line `audit_read` has filter names, the row count and `q_present`, never `q`.
+- Categories intersect actions. The customer filter also matches rows on that customer's chat. "Critical only" adds a literal `severity <> 'info'`, so the partial index `audit_log_cafe_flagged` applies.
+- Keyset paging on `(at, id)` descending. `next` is base64url `iso|uuid`, sent back as `before`; a bad one gives 400. A page's names come from at most 5 batched queries, each filtered by `cafe_id`.
+- Export: the same filters, at most 10 000 rows (else 400 "Too many rows — narrow the dates or filters."). A cell starting with `=`, `+`, `-`, `@`, tab or CR is prefixed with `'`. The file is named `audit-log-<café-local date>.csv`, and `audit.export` is written in its own transaction.
+- Order history merges four sources: customer and system `order_events` (staff ones come from `audit_log`, so nothing is duplicated), escalations (warning: "No one accepted in 60 s — sent to managers", then "Still not accepted — sent to the owner"), the order's `audit_log` rows, and `bill.deliver` / `offer.redeem` rows on its table session from the order's creation. Oldest first, at most 200 events; 404 for another café's order.
+- Migrations: `20261101000001` added the columns, with severity nullable, plus a one-time backfill of the derived columns (the append-only trigger is off for that UPDATE only). `20261101000002` re-ran the backfill, made `severity` not null and dropped the function.

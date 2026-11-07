@@ -210,7 +210,7 @@ Dependencies point one way: `api → domain → integrations | db`; `core` is us
 | Module | Owns | Tables |
 |---|---|---|
 | `conversation` | Work queue, lease, retries and dead letters; one turn: batch, route, steps, deterministic flows | `conversations`, `inbound_messages`, `pending_work` |
-| `ai_agent` | Prompt, the LLM call, output validation, guardrails, cancellation drafts, kill switch | `llm_calls` |
+| `ai_agent` | Prompt, the LLM call, output validation, guardrails, cancellation drafts, recommendation ranking (`recommend.py`, picks only from code's allowed ids), kill switch | `llm_calls` |
 | `menu` | Items, availability, allergens, CSV import, menu version | `menu_items`, `menu_item_allergens` |
 | `cart` | Cart ops, pricing, confirmation | `conversations.state.cart` |
 | `orders` | `transition()`, flags, delay, manual order, table sessions, bills | `orders`, `order_items`, `order_events`, `tables`, `table_sessions` |
@@ -218,12 +218,13 @@ Dependencies point one way: `api → domain → integrations | db`; `core` is us
 | `notifications` | In-app notifications for `manager` and `owner` | `notifications` |
 | `outbound` | The only send path | `wa_messages`, `templates` |
 | `consent` | Opt-in, opt-out, register | `consents` |
-| `campaigns` | Audience, codes, sender, redemption | `campaigns`, `campaign_recipients`, `redemptions` |
+| `campaigns` | Audience, codes, sender; redemption (`redemption.py`: the one eligibility verdict, staff lookup, counter redeem; `bills` delegates eligibility to it); recipients CSV (`export.py`) | `campaigns`, `campaign_recipients`, `redemptions`, `v_campaign_recipients` |
 | `customers` | Identity, summary, profile, staff comments, preferences, segments, deletion | `customers`, `customer_preferences`, `customer_notes`, `data_deletion_requests` |
 | `feedback` | Rating ask and answer, low-rating request | `feedback` |
 | `timers` | `schedule(kind, subject_id, delay)` and dispatch | — |
+| `recommend` | Recommendation candidates: hard filters in code (availability, allergies, diet, dislikes, spice), history and popular items, code fallback ranking | `orders`, `order_items` (reads) |
 | `analytics` | Reads of `v_*` views, reports | `v_*` |
-| `audit` | One `audit_log` row per console write | `audit_log` |
+| `audit` | One `audit_log` row per console write; severity catalogue (`catalog.py`); owner read API (`viewer.py`) | `audit_log` |
 
 All state lives in Postgres. The only in-memory state is the menu prompt prefix keyed by `(cafe_id, menu_version)` and the café token cache (10 min).
 
@@ -287,6 +288,8 @@ Under India's DPDP Act the customer is the data principal, the café the data fi
 - The prompt gets a SQL customer summary (first name, visits, recent items, stated preferences except allergies), never the number or other customers. A staff comment goes to the LLM only to read it into profile changes, with the current profile and nothing else.
 - Real customer data goes only to Gemini on Vertex AI (GCP terms); never the free tier, staging or a laptop. The global endpoint gives no data-residency guarantee: prompts may be processed outside India. Accepted for the MVP; the privacy policy says so.
 - `webhook_events` kept 30 days. Orders, consents, redemptions, `llm_calls` (no content), `audit_log` kept for the pilot.
+- The audit log holds ids, codes and counts; names are rendered at read time, first names only for customers. `change` never holds a phone number, email or message text (`audit.write` refuses those keys). Exports (`audit.export`, `campaign.export`, `consent.export`) are themselves audited.
+- Recommendations: profile allergies, the number and customer free text never reach the `recommend` prompt; allergies filter candidates in code.
 
 **Logs and backups**
 
@@ -439,6 +442,8 @@ Café-floor problems reach staff first through console urgency and the escalatio
 |---|---|---|
 | `v_daily_costs` | Per café per day: AI cost by model, WhatsApp cost by category (estimated vs actual), calls, orders | Kill switch, `daily_summary`, weekly review |
 | `v_unit_costs` | Cost per order, per café, per campaign; WhatsApp 7 d, AI 7 d, fallback rate | Platform Costs, cost model |
+
+**Recommend cap.** A Recommend, mood or "Other ideas" tap makes at most one `recommend` call, and a visit at most 6 (`state.rec.llm_calls`); after that, and under the kill switch, code ranks the picks with no call. About $0.0006 per call on Flash **[verify pricing]**.
 
 **Kill switch.** `llm_spend_check` reads today's AI cost from `v_daily_costs` every 15 min. Over the limit an env flag either routes all LLM traffic to the cheaper model (`cheap`) or skips the LLM entirely and hands free text to staff (`handoff`); buttons keep working.
 

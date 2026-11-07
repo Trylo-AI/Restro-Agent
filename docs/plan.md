@@ -45,7 +45,7 @@ Café roles nest `shift_manager` ⊂ `manager` ⊂ `owner` (`memberships.role`).
 | Webhook verify, dedupe, tenant from `phone_number_id`; Postgres work queue with leases, retries and dead letters; send layer with 24-hour window, consent checks and outbound step records; cost metering | P0 | 0 → 1 |
 | Greeting (new vs returning, name capture), menu lists, cart summary with Confirm / Edit / Cancel, order on Confirm, status messages | P0 | 1 |
 | Free-text ordering (one structured LLM call per turn, validated in code) | P0 | 1 → 2 |
-| Questions, recommendations, allergen answers (`unknown` → handoff) | P0 | 2 |
+| Questions, recommendations, allergen answers (`unknown` → handoff); Recommend gives up to 3 personal picks (code-filtered, AI-ranked from preferences, past orders and mood) | P0 | 2 |
 | Console login; Live orders: Accept / Mark ready / Mark served | P0 | 1 |
 | Shift manager cancels a `NEW` order with a reason (fixed list + custom text; `manager`+ after); AI-written cancellation message | P0 | 4 |
 | Undo, delay; urgency alerts and escalation; Chats (take over, reply, hand back); Menu (sold-out toggle, allergens); Realtime recovery (refetch on reconnect + every 30 s) | P0 | 4 |
@@ -55,7 +55,8 @@ Café roles nest `shift_manager` ⊂ `manager` ⊂ `owner` (`memberships.role`).
 | Customer profile from the order card (at-a-glance box, feedback, complaints, orders); staff comments the AI applies to the profile | P1 | 4 |
 | Opening hours, last-order cutoff, pause ordering; print ticket, offline banner, manual order, menu CSV import; Setup; service report | P1 | 4 |
 | Feedback 1–5, opt-in after `SERVED`, counter QR, STOP; "same again?"; template sync | P1 | 5 |
-| Campaign wizard, sender, funnel report; redemption at the bill; Customers (profiles, segments, consent register, delete data) | P2 | 5 |
+| Campaign wizard, sender, funnel report; redemption at the bill and at the counter (Redeem offer); campaign detail and insights; Customers (profiles, segments, consent register, delete data) | P2 | 5 |
+| Audit log: owner sees who did what, with severity highlighting, filters, order history and CSV | P2 | 5 |
 | Weekly owner report · Today screen | P2 | 6 · 7 |
 | Analytics; platform screens | P3 | 7 |
 
@@ -186,6 +187,14 @@ Build against the default. When decided, move it to [decisions](decisions.md) an
 | Opt-out `source` | Which `source` do STOP / button / 131050 rows get? | Add `keyword`, `button`, `meta_block` | Phase 5 |
 | Chat retention | How long is chat text kept? | Kept for the pilot; removed on deletion | Phase 6 |
 | Pilot number | New dedicated number or the café's existing one? | Dedicated | Phase 3 |
+| Codes from a cancelled campaign | Should codes already sent before a cancel still work? | No (unchanged) | Phase 5 |
+| Redemption void | Can a manager void a mistaken redemption? | No; audit only | Phase 5 |
+| Counter visit | Does a counter redemption count as a visit (`last_visit_at`, segments)? | No | Phase 5 |
+| Discount cap | A per-campaign maximum discount in ₹? | None | Phase 5 |
+| Audit access | Do managers see the audit log? | No, owner only | Phase 7 |
+| Large-discount flag | Threshold for a `warning` on `offer.redeem` | ₹ 500 | Phase 7 |
+| Sign-in audit | Show sign-ins (`auth.audit_log_entries`) in the audit log? | Not built | Phase 7 |
+| Recommend model | Flash or Flash-Lite for `recommend` (part of "LLM routing") | Café model / primary | Phase 2 exit |
 
 ## Risks
 

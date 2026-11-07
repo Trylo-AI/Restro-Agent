@@ -64,7 +64,7 @@ Cloud Tasks for ack, debounced processing, timers and campaign sends; Cloud Sche
 
 ## 8. One structured LLM call per turn
 
-Free text gets exactly one call with a fixed JSON schema; buttons and commands get none. No tool loop.
+Free text gets exactly one call with a fixed JSON schema; buttons and commands get none, except the Recommend, mood and "Other ideas" taps, which make one `recommend` call ([decision 20](#20-ai-recommendations-from-code-filtered-candidates)). Still at most one LLM call per turn. No tool loop.
 
 - **Why:** tokens are the largest variable cost and the slowest step; structured output keeps validation deterministic.
 - **Rejected:** tool-calling loop (more round trips); LLM for every message.
@@ -142,6 +142,30 @@ Staff (`shift_manager`+) add free-text comments to a customer's profile. One str
 - **Rejected:** keeping the app Gemini-only and testing the model alone, which skips the router, guardrails and cart, the parts under test.
 - **Cost:** a second adapter in `integrations/llm`. Results describe our prompt and system on these models, not on Gemini, so the production model choice still needs a Vertex AI run. Never real customer data: the data terms and region differ.
 
+## 18. Counter redemption and one eligibility rule
+
+Offer codes can be redeemed at the counter as well as on a table bill. Counter redemptions live in `redemptions` with `channel = counter`, the amount entered (`bill_paise`) and the till's `idempotency_key`; table-bill rows get `channel = table_bill`. `domain/campaigns/redemption.py` owns the one verdict (eligible, redeemed, expired, cancelled, not sent, not delivered) and `bills.apply_code` delegates to it, so both channels give the same answer. Staff find offers through `POST /offers/lookup`, an API read, because eligibility is code and `campaign_recipients` is owner-only. Decided by Aman, 1 Nov 2026 ([plan](retention-audit-recommend.md#feature-1-campaigns)).
+
+- **Why:** customers pay at the counter without a WhatsApp bill; one row per code across both channels keeps "one redemption per code" a database guarantee; one verdict means staff and the table bill never disagree.
+- **Rejected:** a separate counter-redemptions table (two places to check for "already used"); eligibility computed in the console from Supabase reads (would need `campaign_recipients` and full numbers for digit search); a GET lookup (names and digits in URLs and logs).
+- **Cost:** an exception to "reads go through Supabase"; the counter has no bill identity, so "one offer per visit" is a 60-minute rule per customer; redemptions stay append-only, so a mistaken one can't be undone (open decision).
+
+## 19. Audit severity stored at write time; owner reads the audit log through the API
+
+`audit_log` gains `severity` (`critical` / `warning` / `info`), computed by `domain/audit/catalog.classify()` inside `audit.write`, plus the subjects `order_id`, `customer_id`, `conversation_id` copied from `change` (no FK) and an `actor_name` snapshot. The owner reads it through `/audit/*` and `/orders/{id}/history`; `audit_log` RLS stays platform-only. Existing rows get the derived columns by a one-time backfill (`audit_log_backfill_derived()`) with the append-only trigger off for that statement; facts are never touched. `severity` is nullable until `audit.write` sets it everywhere, then becomes required (migration `20261101000002`). Owner only for now (open decision). Decided by Aman, 1 Nov 2026 ([plan](retention-audit-recommend.md#feature-2-audit-log)).
+
+- **Why:** "critical only" needs an indexable column; one rules module gives the label, sentence and reason; a record keeps the classification it had when written. Labels and sentences come from code, and raw `change` isn't for direct client queries.
+- **Rejected:** classifying at read time only (no index, a rule change rewrites history); a generic `entity_type` / `entity_id` (can't index each filter Aman asked for); FKs from `audit_log` (append-only rows would block or cascade deletes); exposing `audit_log` to the owner through RLS.
+- **Cost:** a documented append-only exception for the backfill; one extra subquery and five index updates per audited write (budget ≤ 2 ms p95); every new action needs a catalogue entry (CI test).
+
+## 20. AI recommendations from code-filtered candidates
+
+The WhatsApp Recommend button, the five mood rows and "Other ideas" suggest up to 3 dishes. Code builds the candidates (available only; profile and visit allergies, diet, dislikes and spice filtered in code; cart and already-shown removed), then one `recommend` LLM call (single attempt, 4 s) ranks them by preferences, past orders and mood and writes a short `why`. Code renders every name and price and re-checks availability before sending. Typed moods ride the existing turn call (intent `recommend`), so a turn still makes at most one call. Any failure, the kill switch or the per-visit cap gives code-ranked picks (favourites, popular, one per category), never a handoff. The prompt carries no prices, no allergies and no customer free text; every model string reaching the customer passes `clean_why` (no digit, amount, claim, URL or "free"). Model: `llm_recommend_model`, default the café model or the primary (Flash). Decided by Aman, 1 Nov 2026 ([plan](retention-audit-recommend.md#feature-3-ai-recommendations)). Amends 8.
+
+- **Why:** Aman asked for personal picks instead of the plain menu; filtering in code keeps allergy safety out of the model (consistent with 16); the model can't state a price it never sees.
+- **Rejected:** showing the menu as before; letting the model pick from the whole menu; an `awaiting` mood step (a typed order after the picks must still order); a second call on typed moods.
+- **Cost:** one metered call per tap (cap 6 per visit, about $0.0006 each on Flash **[verify pricing]**); a slow model means a 4 s wait before code picks; we never claim vegan, Jain or allergen-free, so the copy carries a caveat.
+
 ## Smaller decisions
 
 | Topic | Decision |
@@ -165,3 +189,26 @@ Staff (`shift_manager`+) add free-text comments to a customer's profile. One str
 | Realtime on phones | WhatsApp backup alert + escalation chain |
 | Multi-café | Café switcher yes; multi-location features no |
 | Onboarding | Hosted only; no Embedded Signup |
+| Redeem in the console | A Service nav item "Redeem offer" (`/redeem`) for `shift_manager`+ and a Redeem tab inside Campaigns (`/campaigns/redeem`, owner), one component. Campaigns is owner-only and shift managers staff the counter (1 Nov 2026) |
+| Campaign "accepted" | A ladder: Read → Replied (any inbound in the window, an opt-out tap included) → Came back (a non-cancelled WhatsApp order in the window or a redemption) → Redeemed. The headline is Redeemed, the only hard proof. A visit can count for more than one campaign, and cross-campaign totals say so |
+| Offer window | Send → `valid_until`, or send + 30 days when that is empty, capped at now. Replies, orders and opt-outs count only inside it |
+| Opt-out after an offer | Doesn't void the code; staff see a warning. Consent governs messages, not an offer already made |
+| Counter discount | `discount_percent` of the amount entered (before the discount), floored to the paisa; 0 without a percentage. Amount ₹ 1 to ₹ 1,00,000 |
+| One offer per visit | At the counter, one redemption per customer per 60 minutes across both channels (409 `already_redeemed_this_visit`). The table bill keeps "one code per bill", skips the 60-minute rule but takes the same customer row lock. Lookup warns |
+| Campaign views | New `v_campaign_insights` and `v_campaign_recipients` (`security_invoker`, owner through base-table RLS, no `has_role`, so the backend CSV reuses them) and `v_redemptions` (definer view filtered by `is_member`, like `v_staff_names`). `v_campaign_funnel` unchanged |
+| Deleted customer's code | Still redeemable by code (a bearer code); not findable by name or digits |
+| Code expiry | A code is valid to the end of the café-local day of `valid_until` (`cafes.timezone`), on both channels; "valid till" in the offer message uses the same date. Changes the table-bill rule, which compared timestamps (Aman, 1 Nov 2026) |
+| Audit expand then contract | `audit_log.severity` is added nullable; a second one-statement migration (`20261101000002`, with the new `audit.write`) re-runs the backfill and sets `not null`. The only departure from one consolidated migration for this work |
+| Names in audit text | Customers by first name only in sentences and the CSV |
+| Audit date range | Default 7 days; an order, customer or chat filter searches all time; at most 366 days; the export is capped at 10 000 rows |
+| Audited reads | Only exports: `audit.export`, `campaign.export`, `consent.export` |
+| Audit highlight | Critical and warning rows get a left border, icon, text label and tint; no pulse (pulse means "act now"); 60 s refetch, no Realtime |
+| Cancel note in the audit log | `orders.cancel_reason_text` is joined at read time, never copied into `change` |
+| "Who accepted" filter | Accept, ready and serve stay stored as `order.transition`; the catalogue adds filter-only `order.accept` / `order.ready` / `order.serve` (= `order.transition` with `change.to`), counted separately and listed first under Orders |
+| `offer.redeem` payload | One shape for both channels: `table_session_id`, `order_id`, `order_number`, `campaign_id`, `recipient_id`, `customer_id`, `code`, `channel` (`table_bill` / `counter`), `discount_percent`, `bill_paise`, `discount_paise`; keys may be null |
+| Recommend cap | 6 `recommend` calls per visit (`state.rec.llm_calls`), then code picks |
+| Suggest for me | A "✨ Suggest for me" row at the top of the category list when there are ≤ 9 categories: the returning greeting with a last order has no room for a Recommend button |
+| Recommend language | On a tap: English unless the customer's last inbound text has Devanagari |
+| Typed "recommend + order" | Apply the cart changes (summary), then append the picks: one turn, one call |
+| Recommendation storage | Picks live in `conversations.state.rec` (ids only); no new table |
+| Retention, audit and recommend migrations | One consolidated expand migration `20261101000001_retention_audit_recommend.sql`, plus the audit contract migration above |
