@@ -66,6 +66,9 @@ REASONS: dict[str, Reason] = {
     "publish_failed_sweep": Reason(False, "The wake-up signal failed; stuck_inbound_check will re-signal"),
     "profile_note_failed": Reason(False, "A staff comment couldn't be read; the profile is unchanged"),
     "ack_failed": Reason(True, "Read receipt / typing indicator not shown"),
+    "recommend_fallback": Reason(False, "AI picks unavailable or invalid; code-ranked picks were sent"),
+    "recommend_capped": Reason(True, "Per-visit recommend call cap reached; code-ranked picks sent"),
+    "recommend_pick_dropped": Reason(True, "A model pick was outside the allowed set or had a claim; dropped"),
 }
 
 LEVELS = {1: "stage", 2: "step", 3: "call"}

@@ -2,10 +2,12 @@
 
 Cart ops apply to the cart, or to the NEW order being edited; rejected ops are explained by code; allergen
 questions are answered from menu data only (`unknown` → a person); `confirm` acts only at `confirming` with an
-unchanged cart; two unclear turns → handoff. Every message text here is code-rendered or a model reply that
-passed the amount scan.
+unchanged cart; two unclear turns → handoff. Intent `recommend` applies any cart ops first, then sends code-checked
+picks from the same call (never a strike). Every message text here is code-rendered or a model reply that passed
+the amount scan.
 """
 
+from dataclasses import replace
 from typing import Any
 
 import asyncpg
@@ -17,6 +19,7 @@ from app.domain import handoff
 from app.domain.ai_agent import calls, guardrails
 from app.domain.ai_agent.interpret import Interpretation, Op, Rejection, interpret
 from app.domain.conversation import confirm, flows, render
+from app.domain.conversation import recommend as recommend_flow
 from app.domain.conversation.turn import Reply, Turn, TurnContext, TurnResult
 from app.integrations.whatsapp import messages as m
 
@@ -147,6 +150,17 @@ async def handle_text(ctx: TurnContext, state: dict[str, Any], turn: Turn) -> Tu
         return _handoff(ctx, state, it.needs_human)
     if it.allergen is not None:
         return _allergen_replies(ctx, state, it)
+    if it.intent == "recommend":  # no second call; never a clarify strike
+        if not (it.ops or it.rejections):
+            return await recommend_flow.from_turn(ctx, state, it)
+        state["clarify_strikes"] = 0  # a dish not found here never adds up to a handoff
+        result = await _apply_ops(ctx, state, replace(it, reply=None))  # summary, then picks with a code intro
+        if result.commit:
+            return result
+        picks = await recommend_flow.from_turn(ctx, result.state or state, it, with_intro=False)
+        result.state = picks.state
+        result.replies += picks.replies
+        return result
     if it.intent in ("add_items", "modify_cart") or it.ops or it.rejections:
         return await _apply_ops(ctx, state, it)
     if it.intent == "confirm":

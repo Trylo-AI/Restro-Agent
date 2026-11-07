@@ -5,7 +5,10 @@ from collections.abc import AsyncIterator
 import asyncpg
 import pytest
 
+from app.domain import recommend
 from app.domain.ai_agent import prompt
+from app.integrations import llm
+from app.integrations.llm import StubLlm
 from tests.integration.conftest import CafeFixture, drop_test_cafe
 from tests.integration.conversation_kit import (
     Kitchen,
@@ -104,3 +107,20 @@ async def test_consent_export_is_masked_and_audited(k: Kitchen) -> None:
     assert "+91 99••• ••001" in lines[1] and "Priya" in lines[1] and "opted_in,1,feedback_flow" in lines[1]
     assert WA not in r.text
     assert await k.db.fetchval("select count(*) from audit_log where cafe_id = $1 and action = 'consent.export'", k.cafe_id) == 1
+
+
+async def test_recommend_prompt_has_no_phone_wa_id_or_allergy(k: Kitchen) -> None:
+    await a_customer_with_history(k)  # a peanut allergy on the profile, one past order
+    for item_id in k.items.values():  # every dish free from peanuts, so the model gets candidates
+        await k.db.execute("insert into menu_item_allergens (cafe_id, item_id, allergen, state) "
+                           "values ($1, $2, 'peanuts', 'free_from')", k.cafe_id, item_id)
+    recommend._allergen_cache.clear()
+    stub = StubLlm(lambda s, u: {"intro": "A few ideas", "picks": []})
+    llm.set_client(stub)
+    sent = await k.say(WA, tap="recommend")
+    assert len(stub.calls) == 1 and "Picks for you" in str(sent[0].body)
+    seen = stub.calls[0]["system"] + stub.calls[0]["prompt"]
+    for secret in (WA, WA[-10:], "peanut", "Sharma", "₹"):
+        assert secret not in seen
+    assert "allerg" not in stub.calls[0]["prompt"].lower()  # the system rules name allergens only to forbid claims
+    assert "CUSTOMER: Priya;" in stub.calls[0]["prompt"]  # first name only

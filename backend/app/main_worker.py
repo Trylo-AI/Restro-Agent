@@ -21,6 +21,7 @@ from app.domain import campaigns, jobs
 from app.domain import feedback as _feedback  # noqa: F401  (registers the feedback timer)
 from app.domain import outbound as _outbound  # noqa: F401  (registers the send_check timer)
 from app.domain.conversation import agent_turn, pipeline, router
+from app.domain.conversation import recommend as recommend_flow
 from app.domain.handoff import service as _help_timers  # noqa: F401  (registers help timers, dead-letter hook)
 from app.domain.orders import service as _order_timers  # noqa: F401  (registers order timers)
 from app.ops.tracing import recorder
@@ -29,6 +30,7 @@ LOG_DIR = Path(__file__).resolve().parents[1] / "logs"
 
 pipeline.set_handler(router.route)
 router.set_free_text_handler(agent_turn.handle_text)
+router.set_recommend_handler(recommend_flow.on_tap)
 jobs.register("campaign_start", 60)(campaigns.start_due)  # every 5 min in the cloud (Cloud Scheduler)
 jobs.register("campaign_resume", 600)(campaigns.resume_deferred)
 jobs.register("ops_sweep", 60)(recorder.sweep)  # RUNNING runs of a dead process → ABANDONED

@@ -41,6 +41,10 @@ class Settings(BaseSettings):
     llm_timeout_seconds: float = 6.0
     llm_kill_switch: Literal["off", "cheap", "handoff"] = "off"
     llm_daily_spend_limit_usd: float = 2.0
+    # Recommend taps (docs/backend.md#recommendations): one attempt, short timeout, then code-ranked picks.
+    llm_recommend_model: str | None = None  # default: the café model, else the primary (not Flash-Lite)
+    llm_recommend_timeout_seconds: float = 4.0
+    recommend_llm_per_visit: int = 6
 
     # WhatsApp
     wa_transport: Literal["simulator", "meta"] = "simulator"

@@ -22,8 +22,8 @@
   {"id": "am-2", "category": "ambiguous", "text": "that green drink", "expect": {"intent": ["unclear", "browse", "ask_question"]}},
   {"id": "am-3", "category": "ambiguous", "text": "coffee", "expect": {"intent": ["unclear", "browse", "ask_question"]}},
 
-  {"id": "rc-1", "category": "recommendation", "text": "kuch healthy, protein wala, spicy nahi", "expect": {"intent": ["browse", "ask_question"]}},
-  {"id": "rc-2", "category": "recommendation", "text": "what do you recommend for breakfast?", "expect": {"intent": ["browse", "ask_question"]}},
+  {"id": "rc-1", "category": "recommendation", "text": "kuch healthy, protein wala, spicy nahi", "expect": {"intent": ["recommend"], "recommend": {"min_picks": 1}}},
+  {"id": "rc-2", "category": "recommendation", "text": "what do you recommend for breakfast?", "expect": {"intent": ["recommend"], "recommend": {"min_picks": 1}}},
 
   {"id": "al-1", "category": "allergen", "text": "does the brownie have nuts?", "expect": {"intent": ["ask_question"], "allergen": "tree_nuts"}},
   {"id": "al-2", "category": "allergen", "text": "is the cold coffee dairy free?", "expect": {"intent": ["ask_question"], "allergen": "milk"}},

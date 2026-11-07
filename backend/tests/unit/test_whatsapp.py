@@ -68,6 +68,15 @@ def test_list_keeps_ten_rows_and_clips_titles() -> None:
     assert m.limit_violations(p) == []
 
 
+def test_recommendation_list_of_ten_rows_is_within_meta_limits() -> None:
+    from app.domain.conversation import render
+
+    picks = [(f"id-{i}", f"A dish with a long long name {i}", 1234500, i % 2 == 0, "Why " * 30) for i in range(3)]
+    p = m.payload(render.recommendations(picks, "Intro " * 40, allergy=True, editing=1048))
+    rows = [r for s in p["interactive"]["action"]["sections"] for r in s["rows"]]
+    assert len(rows) == 10 and m.limit_violations(p) == []
+
+
 def test_limit_checker_flags_a_raw_violation() -> None:
     bad = {"type": "interactive", "interactive": {"type": "button", "body": {"text": "x"},
            "action": {"buttons": [{"type": "reply", "reply": {"id": "a", "title": "x" * 25}}]}}}

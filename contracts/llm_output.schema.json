@@ -2,17 +2,17 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://restro.local/contracts/llm_output.schema.json",
   "title": "Restro LLM structured outputs",
-  "description": "One structured output per LLM call (docs/backend.md#ai-agent). The model interprets and drafts; code validates every field. Output that doesn't parse against the matching $defs entry is a failed call.",
+  "description": "One structured output per LLM call: turn, recommend, cancel_draft, profile_note (docs/backend.md#ai-agent). The model interprets and drafts; code validates every field. Output that doesn't parse against the matching $defs entry is a failed call.",
   "$defs": {
     "turn": {
       "type": "object",
       "description": "One free-text customer turn.",
       "additionalProperties": false,
-      "required": ["intent", "cart_ops", "allergen_question", "needs_human", "clarify", "reply"],
+      "required": ["intent", "cart_ops", "allergen_question", "needs_human", "clarify", "reply", "recommend"],
       "properties": {
         "intent": {
           "type": "string",
-          "enum": ["browse", "ask_question", "add_items", "modify_cart", "confirm", "cancel", "order_status", "human", "smalltalk", "unclear"]
+          "enum": ["browse", "ask_question", "add_items", "modify_cart", "confirm", "cancel", "order_status", "human", "smalltalk", "unclear", "recommend"]
         },
         "cart_ops": {
           "type": "array",
@@ -48,7 +48,51 @@
           }
         },
         "clarify": { "type": ["string", "null"], "maxLength": 300 },
-        "reply": { "type": "string", "maxLength": 600 }
+        "reply": { "type": "string", "maxLength": 600 },
+        "recommend": {
+          "type": ["object", "null"],
+          "description": "Only with intent recommend: the customer asked for suggestions or described a mood/craving without naming dishes to order.",
+          "additionalProperties": false,
+          "required": ["mood", "picks"],
+          "properties": {
+            "mood": { "type": ["string", "null"], "maxLength": 60, "description": "Short summary of the mood or craving" },
+            "picks": {
+              "type": "array",
+              "maxItems": 3,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["item_ref", "why"],
+                "properties": {
+                  "item_ref": { "type": "string", "minLength": 1, "maxLength": 80, "description": "Menu id from the prompt (m3)" },
+                  "why": { "type": "string", "maxLength": 80, "description": "One short reason; no prices, no health or allergen claims" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "recommend": {
+      "type": "object",
+      "description": "Up to 3 picks from the ALLOWED ids for the Recommend tap (docs/backend.md#recommendations). Code renders names and prices.",
+      "additionalProperties": false,
+      "required": ["intro", "picks"],
+      "properties": {
+        "intro": { "type": "string", "maxLength": 160 },
+        "picks": {
+          "type": "array",
+          "maxItems": 3,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["item_ref", "why"],
+            "properties": {
+              "item_ref": { "type": "string", "minLength": 1, "maxLength": 10 },
+              "why": { "type": "string", "maxLength": 80 }
+            }
+          }
+        }
       }
     },
     "cancel_draft": {

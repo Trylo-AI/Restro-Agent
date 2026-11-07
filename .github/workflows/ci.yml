@@ -25,6 +25,7 @@ jobs:
       - run: ruff check .
       - run: mypy app
       - run: pytest -q -m "not integration"
+      - run: python ../evals/run.py --purpose recommend --stub
 
   backend-integration:
     runs-on: ubuntu-latest

@@ -3,6 +3,7 @@
 One structured call; on error, timeout, 429 or invalid output, one retry on the other model. Every attempt
 (failures included) writes `llm_calls` with its cost. Kill switch: `cheap` → only the cheaper model, no retry
 on the dearer one; `handoff` → no call at all (the caller hands the turn to staff).
+A `recommend` call passes its own model, a shorter timeout and `retry=False`: one attempt, then code picks.
 """
 
 import json
@@ -60,16 +61,24 @@ class Attempted:
 async def call(*, cafe_id: str, cafe_model: str | None, purpose: str, system: str, prompt: str, schema_name: str,
                max_output_tokens: int, conversation_id: str | None = None, message_id: str | None = None,
                order_id: str | None = None, note_id: str | None = None,
-               trace_suffix: str = "") -> Attempted | None:
-    """Returns the first good attempt, or None when every attempt failed (caller hands off)."""
+               trace_suffix: str = "", timeout_s: float | None = None, retry: bool = True,
+               models_override: list[str] | None = None, fail_reason: str = "llm_handoff") -> Attempted | None:
+    """Returns the first good attempt, or None when every attempt failed (caller hands off, or falls back).
+
+    `models_override` replaces the café / primary chain (the `cheap` kill switch still wins); `retry=False` keeps
+    only the first model; `fail_reason` is the degradation recorded when nothing worked.
+    """
     s = get_settings()
     out_schema = schema(schema_name)
     fault = await devhooks.consume_fault("llm")
     last: Attempted | None = None
     if kill_switch() != "off":
         tracing.degraded("llm_kill_switch", mode=kill_switch())
+    chain = models_override if models_override and kill_switch() != "cheap" else models(cafe_model)
+    if not retry:
+        chain = chain[:1]
     with tracing.span("agent.call", purpose=purpose):
-        for i, model in enumerate(models(cafe_model)):
+        for i, model in enumerate(chain):
             if i > 0:
                 tracing.degraded("llm_fallback_model", model=model, first_outcome=last.result.outcome if last else None)
             with tracing.span("llm.call", target=model, purpose=purpose, **{"llm.model": model}) as sp:
@@ -77,7 +86,7 @@ async def call(*, cafe_id: str, cafe_model: str | None, purpose: str, system: st
                     result = LlmResult(outcome="error", provider=llm.client().provider, model=model)
                 else:
                     result = await llm.client().generate(model=model, system=system, prompt=prompt, schema=out_schema,
-                                                         timeout_s=s.llm_timeout_seconds,
+                                                         timeout_s=timeout_s or s.llm_timeout_seconds,
                                                          max_output_tokens=max_output_tokens)
                     if i == 0 and fault == "llm_invalid":
                         result.outcome, result.data = "invalid_output", None
@@ -108,7 +117,7 @@ async def call(*, cafe_id: str, cafe_model: str | None, purpose: str, system: st
                             result.raw, result.data, [])
             if result.ok:
                 return last
-    tracing.degraded("llm_handoff", purpose=purpose)
+    tracing.degraded(fail_reason, purpose=purpose)
     return None
 
 

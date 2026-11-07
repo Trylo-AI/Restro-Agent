@@ -7,7 +7,19 @@ Keep wording here so it can be reviewed in one place.
 from collections.abc import Sequence
 
 from app.domain.cart import Priced
-from app.integrations.whatsapp.messages import Button, Buttons, ListMessage, Row, Section, Template, Text
+from app.integrations.whatsapp.messages import (
+    BODY_MAX,
+    ROW_DESC_MAX,
+    ROW_TITLE_MAX,
+    Button,
+    Buttons,
+    ListMessage,
+    Row,
+    Section,
+    Template,
+    Text,
+    clip,
+)
 
 MENU = Button("menu", "Menu")
 RECOMMEND = Button("recommend", "Recommend")
@@ -65,9 +77,13 @@ def ask_name_after_order() -> Text:
 
 # ── Menu ──────────────────────────────────────────────────────────────────
 
-def categories(cats: Sequence[tuple[str, str, int]]) -> ListMessage:
+def categories(cats: Sequence[tuple[str, str, int]], with_recommend: bool = True) -> ListMessage:
+    """With ≤ 9 categories a "For you" row leads (the returning greeting has no room for a Recommend button)."""
     rows = [Row(f"cat:{slug}", label, f"{n} item{'s' if n != 1 else ''}") for slug, label, n in cats]
-    return ListMessage("What would you like? Pick a category.", "See menu", [Section("Menu", rows)])
+    sections = [Section("Menu", rows)]
+    if with_recommend and len(cats) <= MAX_CATEGORIES_WITH_SUGGEST:
+        sections.insert(0, Section("For you", [Row("recommend", "✨ Suggest for me", "Up to 3 picks for you")]))
+    return ListMessage("What would you like? Pick a category.", "See menu", sections)
 
 
 def category_items(label: str, slug: str, items: Sequence[tuple[str, str, int, bool, int]], page: int,
@@ -79,6 +95,46 @@ def category_items(label: str, slug: str, items: Sequence[tuple[str, str, int, b
         rows.append(Row(f"cat:{slug}:{page + 1}", "More…", f"More in {label}"))
     rows.append(Row("menu", "← All categories"))
     return ListMessage(f"{label} — tap a dish to add it.", "Choose", [Section(label, rows)])
+
+
+# ── Recommendations ───────────────────────────────────────────────────────
+
+MAX_CATEGORIES_WITH_SUGGEST = 9
+# Same codes and titles as domain/recommend.MOODS (kept here: render imports no domain module).
+MOOD_ROWS = [("light", "Something light"), ("energy", "Need a pick-me-up"), ("cool", "Something cold"),
+             ("comfort", "Comfort food"), ("sweet", "Something sweet")]
+ALLERGY_CAVEAT = ("I've left out dishes our menu doesn't mark free from your allergy. "
+                  "Please tell our team about severe allergies.")
+
+
+def recommendations(picks: Sequence[tuple[str, str, int, bool, str]], intro: str, *, mood: str | None = None,
+                    more: bool = True, allergy: bool = False, editing: int | None = None) -> ListMessage:
+    """picks: (item_id, name, price_paise, veg, why). Names and prices come from the DB; `intro` and each `why` are
+    code text or model text that passed clean_why. ≤ 10 rows: ≤ 3 picks, the moods (not the active one), More."""
+    lines = [intro]
+    for n, (_, name, paise, _, why) in enumerate(picks[:3], start=1):
+        lines.append(f"{n}. {name} · {inr(paise)}")
+        if why:
+            lines.append(f"   {why}")
+    if allergy:
+        lines.append(ALLERGY_CAVEAT)
+    lines.append(f"Tap a dish to add it to order #{editing}." if editing else "Tap a dish to add it, or pick a mood.")
+    rows = [Row(f"item:{iid}:rec", clip(name, ROW_TITLE_MAX), clip(f"{inr(paise)} · {veg_mark(veg)} · Tap to add", ROW_DESC_MAX))
+            for iid, name, paise, veg, _ in picks[:3]]
+    sections = [Section("Picks for you", rows),
+                Section("Pick by mood", [Row(f"rec_mood:{code}", title) for code, title in MOOD_ROWS if code != mood]),
+                Section("More", ([Row("rec_more", "Other ideas")] if more else []) + [Row("menu", "Full menu")])]
+    return ListMessage(clip("\n".join(lines), BODY_MAX), "See picks", sections)
+
+
+def no_safe_picks(allergy: bool) -> Buttons:
+    clause = " and allergies" if allergy else ""
+    return Buttons(f"I couldn't find a dish on our menu that fits your preferences{clause}. "
+                   "You can browse everything or ask our team.", [MENU, CALL_WAITER])
+
+
+def no_more_picks() -> Text:
+    return Text("That's everything I'd suggest right now.")
 
 
 # ── Cart and confirmation ─────────────────────────────────────────────────

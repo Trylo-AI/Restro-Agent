@@ -29,7 +29,8 @@ class StubLlm:
         out = self.responder(system, prompt) if self.responder else None
         if out is None:
             out = {"intent": "unclear", "cart_ops": [], "allergen_question": None,
-                   "needs_human": {"flag": False, "reason": None}, "clarify": "Could you say that again?", "reply": ""}
+                   "needs_human": {"flag": False, "reason": None}, "clarify": "Could you say that again?", "reply": "",
+                   "recommend": None}
         if out == "timeout":
             return LlmResult(outcome="timeout", provider=self.provider, model=model, latency_ms=self.latency_ms)
         if out == "error":
@@ -56,7 +57,7 @@ def menu_words(_system: str, prompt: str) -> dict[str, Any] | None:
     text = prompt.rsplit("CUSTOMER NOW SAYS:\n", 1)[-1].strip()
     if _CONFIRM.match(text):
         return {"intent": "confirm", "cart_ops": [], "allergen_question": None,
-                "needs_human": {"flag": False, "reason": None}, "clarify": None, "reply": ""}
+                "needs_human": {"flag": False, "reason": None}, "clarify": None, "reply": "", "recommend": None}
     ops = []
     for part in re.split(r",|\band\b", text):
         m = _LINE.match(part.strip())
@@ -65,4 +66,20 @@ def menu_words(_system: str, prompt: str) -> dict[str, Any] | None:
     if not ops:
         return None
     return {"intent": "add_items", "cart_ops": ops, "allergen_question": None,
-            "needs_human": {"flag": False, "reason": None}, "clarify": None, "reply": "Done! Anything else?"}
+            "needs_human": {"flag": False, "reason": None}, "clarify": None, "reply": "Done! Anything else?",
+            "recommend": None}
+
+
+def recommend_picks(*names: str, intro: str = "Here are a few ideas for you.", why: str = "A good fit right now",
+                    mood: str | None = None) -> Responder:
+    """Tests: picks these dishes by name (ids looked up in the system prompt's menu lines). The Recommend call (its
+    prompt has ALLOWED) gets {intro, picks}; a turn gets intent `recommend` with the same picks."""
+    def respond(system: str, prompt: str) -> dict[str, Any]:
+        refs = [m.group(1) for n in names if (m := re.search(rf"^(m\d+)\|{re.escape(n)}\|", system, re.M))]
+        picks = [{"item_ref": r, "why": why} for r in refs]
+        if "\nALLOWED: " in prompt:
+            return {"intro": intro, "picks": picks}
+        return {"intent": "recommend", "cart_ops": [], "allergen_question": None,
+                "needs_human": {"flag": False, "reason": None}, "clarify": None, "reply": intro,
+                "recommend": {"mood": mood, "picks": picks}}
+    return respond

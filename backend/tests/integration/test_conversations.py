@@ -69,7 +69,8 @@ async def test_taps_only_order_from_qr_to_confirm(k: Kitchen) -> None:
     named = await k.say(WA, "riya")
     assert "Nice to meet you, Riya" in named[0].text
     cats = await k.say(WA, tap="menu")
-    assert set(ids(cats)) >= {"cat:cold-coffee", "cat:toasts", "cat:desserts", "cat:tea"}
+    assert ids(cats)[0] == "recommend"  # the "For you" row leads (≤ 9 categories)
+    assert set(ids(cats)[1:]) == {"cat:cold-coffee", "cat:toasts", "cat:desserts", "cat:tea"}
     dishes = await k.say(WA, tap="cat:cold-coffee")
     assert f"item:{k.items['Cold Coffee']}" in ids(dishes)
     assert "₹190" in str(dishes[0].body)  # price rendered by code from the DB

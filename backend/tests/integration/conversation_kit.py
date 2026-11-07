@@ -9,6 +9,7 @@ import asyncpg
 from app.db.repositories import pending_work as pw
 from app.db.repositories.cafes import Cafe
 from app.domain.conversation import agent_turn, ingress, pipeline, router
+from app.domain.conversation import recommend as recommend_flow
 from app.integrations import tasks
 from app.integrations.whatsapp import client as wa_client
 from app.integrations.whatsapp import simulated
@@ -120,6 +121,7 @@ def install(transport: RecordingTransport, rec: TaskRecorder) -> None:
     tasks.set_backends(signal_impl=rec, tasks_impl=rec)
     pipeline.set_handler(router.route)
     router.set_free_text_handler(agent_turn.handle_text)
+    router.set_recommend_handler(recommend_flow.on_tap)
     pw.DEBOUNCE_SECONDS = 0.0  # tests drive turns directly
 
 

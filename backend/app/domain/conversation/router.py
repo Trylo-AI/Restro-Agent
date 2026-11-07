@@ -3,7 +3,8 @@
 1. `optout` button or STOP → opt out, in any step and mode.
 2. mode = human → store only (shown in Chats); no bot reply.
 3. QR text → join or open the table session → greeting.
-4. Interactive reply → handler by reply id.
+4. Interactive reply → handler by reply id (`recommend` · `rec_mood:{code}` · `rec_more` → the recommend handler,
+   after the paused / closed check; `menu` alone → categories).
 5. Non-text → "please type" + Menu · Call waiter.
 6. `awaiting` set → save the answer.
 7. Keyword (call waiter, bill, status, menu) → deterministic handler.
@@ -31,6 +32,7 @@ from app.domain import consent, feedback
 from app.domain.conversation import confirm, flows, render
 from app.domain.conversation.turn import Reply, Turn, TurnContext, TurnResult
 from app.integrations.whatsapp.messages import Text
+from app.ops import tracing
 
 KEYWORDS: dict[str, set[str]] = {
     "stop": {"stop", "unsubscribe", "stop offers", "stop messages", "band karo"},
@@ -60,6 +62,23 @@ _free_text: FreeTextHandler = _fallback_free_text
 def set_free_text_handler(handler: FreeTextHandler) -> None:
     global _free_text
     _free_text = handler
+
+
+RecommendHandler = Callable[[TurnContext, dict[str, Any], Turn, str, str | None], Awaitable[TurnResult]]
+
+
+async def _menu_for_recommend(ctx: TurnContext, state: dict[str, Any], turn: Turn, action: str,
+                              arg: str | None) -> TurnResult:
+    """Until conversation/recommend is registered: the category list."""
+    return TurnResult(state=state, replies=await flows.menu_categories(ctx))
+
+
+_recommend: RecommendHandler = _menu_for_recommend
+
+
+def set_recommend_handler(handler: RecommendHandler) -> None:
+    global _recommend
+    _recommend = handler
 
 
 def normalise(text: str) -> str:
@@ -132,7 +151,7 @@ async def route(ctx: TurnContext, turn: Turn) -> TurnResult:
 
     # 4 · taps
     if turn.kind == "tap":
-        return await _tap(ctx, state, turn.reply_id or "")
+        return await _tap(ctx, state, turn)
 
     # 5 · non-text
     if turn.kind == "other":
@@ -246,8 +265,8 @@ def _int(value: str | None, default: int = -1) -> int:
         return default
 
 
-async def _tap(ctx: TurnContext, state: dict[str, Any], reply_id: str) -> TurnResult:
-    action, *args = reply_id.split(":")
+async def _tap(ctx: TurnContext, state: dict[str, Any], turn: Turn) -> TurnResult:
+    action, *args = (turn.reply_id or "").split(":")
     arg = args[0] if args else None
 
     if action == "help":
@@ -278,11 +297,15 @@ async def _tap(ctx: TurnContext, state: dict[str, Any], reply_id: str) -> TurnRe
     if blocked:
         return TurnResult(state=state, replies=blocked)
 
-    if action in ("menu", "recommend"):
+    if action == "menu":
         return TurnResult(state=state, replies=await flows.menu_categories(ctx))
+    if action in ("recommend", "rec_mood", "rec_more"):
+        return await _recommend(ctx, state, turn, action, arg)
     if action == "cat" and arg:
         return TurnResult(state=state, replies=await flows.category_page(ctx, arg, _int(args[1] if len(args) > 1 else None, 0)))
     if action == "item" and arg:
+        if args[1:] == ["rec"]:
+            tracing.count(rec_added=1)  # a recommended dish was tapped
         if state.get("order_edit"):
             return await _add_to_edit(ctx, state, arg)
         return TurnResult(state=state, replies=await flows.add_item(ctx, state, arg))

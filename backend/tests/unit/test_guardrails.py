@@ -31,7 +31,8 @@ def test_refund_promises_are_caught(text: str) -> None:
 
 @pytest.mark.parametrize("words,expected", [
     ("nuts", "tree_nuts"), ("Tree nuts", "tree_nuts"), ("dairy", "milk"), ("peanut", "peanuts"), ("gluten", "gluten"),
-    ("anda", "eggs"), ("badam", "tree_nuts"), ("kiwi", None), ("", None),
+    ("anda", "eggs"), ("badam", "tree_nuts"), ("tree_nuts", "tree_nuts"), ("Tree_Nuts", "tree_nuts"), ("kiwi", None),
+    ("", None),
 ])
 def test_allergen_names_normalise(words: str, expected: str | None) -> None:
     got = g.normalise_allergen(words)
@@ -61,3 +62,25 @@ def test_llm_cost_is_never_under_reported_for_unknown_models() -> None:
     assert pricing.cost("gemini-2.5-flash-lite", 1_000_000, 0, 0) == 0.10
     assert pricing.cost("some-new-model", 1_000_000, 0, 1_000_000) == pricing.DEFAULT[0] + pricing.DEFAULT[2]
     assert pricing.cost("gemini-2.5-flash", 1000, 1000, 0) == round(1000 * 0.075 / 1_000_000, 6)
+
+
+@pytest.mark.parametrize("text", ["A nut-free treat", "100% vegan", "Jain friendly", "Healthy and light", "Safe for you",
+                                  "Free cookie with it", "Allergen friendly", "Good deal today", "Visit kaapi.in",
+                                  "http://example.test", "Low-cal option", "Sabse healthy", "मुफ्त में"])
+def test_clean_why_claims(text: str) -> None:
+    assert g.clean_why(text) is None
+
+
+def test_clean_why_keeps_plain_reasons_and_caps() -> None:
+    assert g.clean_why("  Your usual,  and it's warm out ") == "Your usual, and it's warm out"
+    assert g.clean_why("Ek accha pick-me-up") == "Ek accha pick-me-up"
+    assert g.clean_why("only 190") is None and g.clean_why("१९० में") is None and g.clean_why("") is None
+    capped = g.clean_why("word " * 40) or ""
+    assert len(capped) <= 80 and capped.endswith("…")
+    assert len(g.clean_why("word " * 60, 160) or "") <= 160
+
+
+@pytest.mark.parametrize("text", ["सिर्फ सौ रुपये", "190 रुपए", "१९० रु", "रु. 50", "दो सौ रुपया", "१९० rs"])
+def test_hindi_amount_words_detected(text: str) -> None:
+    assert g.has_amount(text)
+    assert g.clean_reply(text) is None
