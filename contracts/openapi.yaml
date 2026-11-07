@@ -6,7 +6,9 @@ info:
     Console and webhook REST API (docs/data-and-api.md#api). Contract: change only in a PR that updates
     backend, console and docs together.
 
-    Reads go through Supabase (RLS + Realtime); every write is one of these endpoints.
+    Reads go through Supabase (RLS + Realtime), except `/audit/*`, `/orders/{id}/history`, `/offers/lookup`,
+    `/bills/*`, `/consents/export`, `/campaigns/{id}/recipients/export` and the audience preview; every write is one
+    of these endpoints.
     Every console call sends `Authorization: Bearer <Supabase JWT>` and `X-Cafe-Id` (picks among the caller's
     own memberships; the resource's café wins and a mismatch is 403). No endpoint accepts `cafe_id` in a body
     or query string. Money is integer paise. Every write returns the changed row and writes one `audit_log` row.
@@ -29,6 +31,8 @@ tags:
   - name: customers
   - name: notifications
   - name: campaigns
+  - name: offers
+  - name: audit
   - name: telemetry
   - name: webhooks
 
@@ -429,6 +433,9 @@ paths:
         One code per bill, one redemption per code. Applying the code already on this session is a 200 no-op.
         422 `invalid_code` "This isn't a valid code, or it has expired."; 409 `code_already_used` "This code was
         already used today on #1041."
+        Eligibility is the same check as `POST /offers/lookup` / `POST /offers/redeem`; 422 carries
+        `error.details.verdict`; 409 carries the earlier redemption in `error.details`. Records `channel = table_bill`
+        and `bill_paise` = the subtotal at redemption.
       parameters:
         - { name: table_session_id, in: path, required: true, schema: { type: string, format: uuid } }
         - { $ref: "#/components/parameters/CafeId" }
@@ -448,6 +455,47 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Bill" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /offers/lookup:
+    post:
+      tags: [offers]
+      summary: Find a customer's offer codes and whether each can be redeemed now (shift_manager+). Read only, no audit
+      description: |
+        `q` is a name (matched anywhere), exactly the last 4 digits of the number, or a code (any case). POST so the search
+        text never lands in URLs or logs. This café only; deleted customers found only by code. ≤ 20 customers, eligible
+        first; ≤ 10 offers each, newest first. Same verdict as `POST /offers/redeem` and apply-code. Never a full number.
+        400 "Type the last 4 digits of the number." for 1–3 or 5+ digits.
+      parameters: [{ $ref: "#/components/parameters/CafeId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: false, required: [q], properties: { q: { type: string, minLength: 2, maxLength: 40 } } }
+      responses:
+        "200": { description: Matching customers and offers, content: { application/json: { schema: { $ref: "#/components/schemas/OfferLookup" } } } }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+
+  /offers/redeem:
+    post:
+      tags: [offers]
+      summary: Redeem a code at the counter against the amount paid (shift_manager+). Audit `offer.redeem` (channel counter)
+      description: |
+        Discount = the campaign's `discount_percent` of `bill_paise`, rounded down; 0 without a percentage. `Idempotency-Key`
+        required: same key → same redemption (200, no second audit row); same key with another code → 400.
+        422 `invalid_code` (`details.verdict`: not_found, expired, campaign_cancelled, not_sent, not_delivered);
+        409 `code_already_used` (`details`: redeemed_at, channel, redeemed_by_name, order_number, table_label);
+        409 `already_redeemed_this_visit` when this customer redeemed another code in the last 60 minutes.
+      parameters:
+        - { $ref: "#/components/parameters/CafeId" }
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, minLength: 8, maxLength: 80 } }
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CounterRedeemInput" } } } }
+      responses:
+        "200": { description: The redemption and the amount to collect, content: { application/json: { schema: { $ref: "#/components/schemas/CounterRedemption" } } } }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
 
@@ -671,7 +719,7 @@ paths:
   /campaigns:
     post:
       tags: [campaigns]
-      summary: Create a draft (owner)
+      summary: Create a draft (owner). Audit `campaign.draft`
       parameters: [{ $ref: "#/components/parameters/CafeId" }]
       requestBody:
         required: true
@@ -689,7 +737,7 @@ paths:
   /campaigns/{id}:
     put:
       tags: [campaigns]
-      summary: Edit a draft (owner)
+      summary: Edit a draft (owner). Audit `campaign.draft`
       parameters: [{ $ref: "#/components/parameters/Id" }, { $ref: "#/components/parameters/CafeId" }]
       requestBody:
         required: true
@@ -764,6 +812,100 @@ paths:
               schema: { $ref: "#/components/schemas/Campaign" }
         "422": { $ref: "#/components/responses/Error" }
 
+  /campaigns/{id}/recipients/export:
+    get:
+      tags: [campaigns]
+      summary: CSV of a campaign's recipients and what happened, masked numbers (owner). Audit `campaign.export`
+      parameters: [{ $ref: "#/components/parameters/Id" }, { $ref: "#/components/parameters/CafeId" }]
+      responses:
+        "200": { description: CSV, content: { text/csv: { schema: { type: string } } } }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /audit/entries:
+    get:
+      tags: [audit]
+      summary: Staff actions in this café, newest first (owner)
+      description: |
+        Severity, label, category and a sentence rendered by `domain/audit/catalog.py`. No `from` → last 7 days, unless an
+        order, customer or conversation filter is set (then all time). Range ≤ 366 days. `q`: "#42"/"42" = order number;
+        otherwise staff name, customer first name, dish or table name, action label. Keyset paging: pass `next` as `before`.
+        `action` also takes the filter-only actions `order.accept`, `order.ready` and `order.serve` (stored as
+        `order.transition` with that `change.to`; never written).
+      parameters:
+        - { $ref: "#/components/parameters/CafeId" }
+        - { $ref: "#/components/parameters/AuditAction" }
+        - { $ref: "#/components/parameters/AuditCategoryQ" }
+        - { $ref: "#/components/parameters/AuditSeverityQ" }
+        - { $ref: "#/components/parameters/AuditActorId" }
+        - { $ref: "#/components/parameters/AuditRole" }
+        - { $ref: "#/components/parameters/AuditOrderNumber" }
+        - { $ref: "#/components/parameters/AuditOrderId" }
+        - { $ref: "#/components/parameters/AuditCustomerId" }
+        - { $ref: "#/components/parameters/AuditConversationId" }
+        - { $ref: "#/components/parameters/AuditFrom" }
+        - { $ref: "#/components/parameters/AuditTo" }
+        - { $ref: "#/components/parameters/AuditQ" }
+        - { name: before, in: query, schema: { type: string, maxLength: 120 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+      responses:
+        "200": { description: One page, content: { application/json: { schema: { $ref: "#/components/schemas/AuditPage" } } } }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+
+  /audit/facets:
+    get:
+      tags: [audit]
+      summary: Counts for the filter dropdowns and summary strip, for a date range (owner)
+      parameters: [{ $ref: "#/components/parameters/CafeId" }, { $ref: "#/components/parameters/AuditFrom" }, { $ref: "#/components/parameters/AuditTo" }]
+      responses:
+        "200": { description: Facets, content: { application/json: { schema: { $ref: "#/components/schemas/AuditFacets" } } } }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+
+  /audit/catalog:
+    get:
+      tags: [audit]
+      summary: Action labels, categories, roles and severity rules (owner). Static per deploy
+      parameters: [{ $ref: "#/components/parameters/CafeId" }]
+      responses:
+        "200": { description: Catalogue, content: { application/json: { schema: { $ref: "#/components/schemas/AuditCatalog" } } } }
+        "403": { $ref: "#/components/responses/Error" }
+
+  /audit/export:
+    get:
+      tags: [audit]
+      summary: CSV of the filtered audit log, ≤ 10 000 rows (owner). Audit `audit.export`
+      description: Same filters as /audit/entries. 400 "Too many rows — narrow the dates or filters." over the cap.
+      parameters:
+        - { $ref: "#/components/parameters/CafeId" }
+        - { $ref: "#/components/parameters/AuditAction" }
+        - { $ref: "#/components/parameters/AuditCategoryQ" }
+        - { $ref: "#/components/parameters/AuditSeverityQ" }
+        - { $ref: "#/components/parameters/AuditActorId" }
+        - { $ref: "#/components/parameters/AuditRole" }
+        - { $ref: "#/components/parameters/AuditOrderNumber" }
+        - { $ref: "#/components/parameters/AuditOrderId" }
+        - { $ref: "#/components/parameters/AuditCustomerId" }
+        - { $ref: "#/components/parameters/AuditConversationId" }
+        - { $ref: "#/components/parameters/AuditFrom" }
+        - { $ref: "#/components/parameters/AuditTo" }
+        - { $ref: "#/components/parameters/AuditQ" }
+      responses:
+        "200": { description: CSV, content: { text/csv: { schema: { type: string } } } }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+
+  /orders/{id}/history:
+    get:
+      tags: [orders, audit]
+      summary: One order's full timeline — customer, staff, automatic events, escalations, bill and code (owner)
+      parameters: [{ $ref: "#/components/parameters/Id" }, { $ref: "#/components/parameters/CafeId" }]
+      responses:
+        "200": { description: Timeline, oldest first, content: { application/json: { schema: { $ref: "#/components/schemas/OrderHistory" } } } }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
   /webhooks/whatsapp:
     get:
       tags: [webhooks]
@@ -807,6 +949,24 @@ components:
       in: header
       required: true
       schema: { type: string, format: uuid }
+    AuditAction:
+      name: action
+      in: query
+      style: form
+      explode: true
+      description: Stored actions, plus the filter-only `order.accept`, `order.ready` and `order.serve` (never written)
+      schema: { type: array, maxItems: 40, items: { type: string, pattern: "^[a-z_]+\\.[a-z_]+$" } }
+    AuditCategoryQ:      { name: category, in: query, style: form, explode: true, schema: { type: array, items: { $ref: "#/components/schemas/AuditCategory" } } }
+    AuditSeverityQ:      { name: severity, in: query, style: form, explode: true, schema: { type: array, items: { $ref: "#/components/schemas/AuditSeverity" } } }
+    AuditActorId:        { name: actor_id, in: query, style: form, explode: true, schema: { type: array, maxItems: 20, items: { type: string, format: uuid } } }
+    AuditRole:           { name: role, in: query, style: form, explode: true, schema: { type: array, items: { $ref: "#/components/schemas/AuditActorRole" } } }
+    AuditOrderNumber:    { name: order_number, in: query, schema: { type: integer, minimum: 1 } }
+    AuditOrderId:        { name: order_id, in: query, schema: { type: string, format: uuid } }
+    AuditCustomerId:     { name: customer_id, in: query, schema: { type: string, format: uuid }, description: "Includes the customer's chat rows" }
+    AuditConversationId: { name: conversation_id, in: query, schema: { type: string, format: uuid } }
+    AuditFrom:           { name: from, in: query, schema: { type: string, format: date-time } }
+    AuditTo:             { name: to, in: query, schema: { type: string, format: date-time }, description: Exclusive }
+    AuditQ:              { name: q, in: query, schema: { type: string, maxLength: 60 } }
 
   responses:
     Error:
@@ -852,7 +1012,8 @@ components:
             code:
               type: string
               enum: [bad_request, unauthenticated, forbidden, not_found, version_conflict, code_already_used,
-                     window_closed, invalid_transition, invalid_code, rate_limited, internal]
+                     window_closed, invalid_transition, invalid_code, rate_limited, internal,
+                     already_redeemed_this_visit]
             message: { type: string, description: Safe to show to staff }
             details: { type: object }
 
@@ -1099,3 +1260,212 @@ components:
         estimated_cost: { type: [number, "null"], description: "null until prices are tracked" }
         quality: { type: [string, "null"] }
         template_status: { type: string }
+
+    OfferVerdict: { type: string, enum: [eligible, redeemed, expired, campaign_cancelled, not_sent, not_delivered] }
+
+    OfferRedemption:
+      type: object
+      required: [redeemed_at, channel, discount_paise]
+      properties:
+        redeemed_at: { type: string, format: date-time }
+        channel: { type: string, enum: [table_bill, counter] }
+        redeemed_by_name: { type: [string, "null"] }
+        order_number: { type: [integer, "null"] }
+        table_label: { type: [string, "null"] }
+        bill_paise: { type: [integer, "null"] }
+        discount_paise: { type: integer }
+
+    OfferCheck:
+      type: object
+      required: [recipient_id, code, campaign_id, campaign_name, recipient_status, verdict, reason, matched]
+      properties:
+        recipient_id: { type: string, format: uuid }
+        code: { type: string }
+        campaign_id: { type: string, format: uuid }
+        campaign_name: { type: string }
+        offer_text: { type: [string, "null"] }
+        discount_percent: { type: [integer, "null"] }
+        valid_until: { type: [string, "null"], format: date-time }
+        sent_at: { type: [string, "null"], format: date-time }
+        recipient_status: { type: string, enum: [queued, deferred, sent, delivered, read, held, failed] }
+        verdict: { $ref: "#/components/schemas/OfferVerdict" }
+        reason: { type: string, description: Safe to show to staff }
+        warning: { type: [string, "null"] }
+        matched: { type: boolean, description: The code that was searched for }
+        redemption: { anyOf: [{ $ref: "#/components/schemas/OfferRedemption" }, { type: "null" }] }
+
+    OfferOpenBill:
+      type: object
+      required: [table_session_id, table_label, subtotal_paise]
+      properties:
+        table_session_id: { type: string, format: uuid }
+        table_label: { type: string }
+        subtotal_paise: { type: integer }
+        code: { type: [string, "null"] }
+
+    OfferCustomer:
+      type: object
+      required: [customer_id, deleted, visits, offers]
+      properties:
+        customer_id: { type: string, format: uuid }
+        name: { type: [string, "null"] }
+        first_name: { type: [string, "null"] }
+        masked_phone: { type: [string, "null"] }
+        deleted: { type: boolean }
+        visits: { type: integer }
+        last_visit_at: { type: [string, "null"], format: date-time }
+        open_bill: { anyOf: [{ $ref: "#/components/schemas/OfferOpenBill" }, { type: "null" }] }
+        offers: { type: array, items: { $ref: "#/components/schemas/OfferCheck" } }
+
+    OfferLookup:
+      type: object
+      required: [query_kind, customers, truncated]
+      properties:
+        query_kind: { type: string, enum: [name, phone_last4, code] }
+        customers: { type: array, maxItems: 20, items: { $ref: "#/components/schemas/OfferCustomer" } }
+        truncated: { type: boolean }
+
+    CounterRedeemInput:
+      type: object
+      additionalProperties: false
+      required: [code, bill_paise]
+      properties:
+        code: { type: string, minLength: 3, maxLength: 20 }
+        bill_paise: { type: integer, minimum: 100, maximum: 10000000, description: Amount paid before the discount }
+
+    CounterRedemption:
+      type: object
+      required: [redemption_id, code, channel, campaign_id, campaign_name, customer_id, bill_paise, discount_paise, total_paise, redeemed_at]
+      properties:
+        redemption_id: { type: string, format: uuid }
+        code: { type: string }
+        channel: { type: string, enum: [counter] }
+        campaign_id: { type: string, format: uuid }
+        campaign_name: { type: string }
+        offer_text: { type: [string, "null"] }
+        discount_percent: { type: [integer, "null"] }
+        customer_id: { type: string, format: uuid }
+        first_name: { type: [string, "null"] }
+        bill_paise: { type: integer }
+        discount_paise: { type: integer }
+        total_paise: { type: integer, description: "To collect: bill_paise − discount_paise" }
+        redeemed_at: { type: string, format: date-time }
+        redeemed_by_name: { type: [string, "null"] }
+
+    AuditSeverity: { type: string, enum: [critical, warning, info] }
+
+    AuditCategory: { type: string, enum: [orders, calls, chats, menu, customers, campaigns, offers, team, settings, platform, other] }
+
+    AuditActorRole: { type: string, enum: [shift_manager, manager, owner, platform_admin, staff_via_ai, system] }
+
+    AuditActor:
+      type: object
+      required: [user_id, name, role, support]
+      properties:
+        user_id: { type: [string, "null"], format: uuid }
+        name: { type: string }
+        role: { $ref: "#/components/schemas/AuditActorRole" }
+        support: { type: boolean }
+
+    AuditEntry:
+      type: object
+      required: [id, at, action, label, category, severity, sentence, actor, details, change]
+      properties:
+        id: { type: string, format: uuid }
+        at: { type: string, format: date-time }
+        action: { type: string }
+        label: { type: string }
+        category: { $ref: "#/components/schemas/AuditCategory" }
+        severity: { $ref: "#/components/schemas/AuditSeverity" }
+        severity_reason: { type: [string, "null"] }
+        sentence: { type: string, description: "Rendered by code; first names only; money as ₹" }
+        actor: { $ref: "#/components/schemas/AuditActor" }
+        order:
+          type: [object, "null"]
+          required: [id, number, status]
+          properties: { id: { type: string, format: uuid }, number: { type: integer }, status: { $ref: "#/components/schemas/OrderStatus" } }
+        customer:
+          type: [object, "null"]
+          required: [id, name]
+          properties: { id: { type: string, format: uuid }, name: { type: [string, "null"] } }
+        conversation_id: { type: [string, "null"], format: uuid }
+        links:
+          type: object
+          properties:
+            campaign_id: { type: string, format: uuid }
+            item_id: { type: string, format: uuid }
+            table_session_id: { type: string, format: uuid }
+            membership_id: { type: string, format: uuid }
+            request_id: { type: string, format: uuid }
+        details:
+          type: array
+          items: { type: object, required: [label, value], properties: { label: { type: string }, value: { type: string } } }
+        change: { type: object, description: "Raw changed fields (ids, codes, counts; never phone numbers or message text)" }
+
+    AuditPage:
+      type: object
+      required: [entries, next]
+      properties:
+        entries: { type: array, items: { $ref: "#/components/schemas/AuditEntry" } }
+        next: { type: [string, "null"] }
+
+    AuditFacets:
+      type: object
+      required: [from, to, total, by_severity, actions, actors, categories]
+      properties:
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        total: { type: integer }
+        by_severity: { type: object, required: [critical, warning, info], properties: { critical: { type: integer }, warning: { type: integer }, info: { type: integer } } }
+        actions: { type: array, items: { type: object, required: [action, label, category, count], properties: { action: { type: string }, label: { type: string }, category: { $ref: "#/components/schemas/AuditCategory" }, count: { type: integer } } } }
+        actors: { type: array, items: { type: object, required: [user_id, name, role, count], properties: { user_id: { type: [string, "null"], format: uuid }, name: { type: string }, role: { $ref: "#/components/schemas/AuditActorRole" }, count: { type: integer } } } }
+        categories: { type: array, items: { type: object, required: [category, label, count], properties: { category: { $ref: "#/components/schemas/AuditCategory" }, label: { type: string }, count: { type: integer } } } }
+
+    AuditCatalog:
+      type: object
+      required: [actions, categories, roles, severities]
+      properties:
+        actions: { type: array, items: { type: object, required: [action, label, category, max_severity, rule], properties: { action: { type: string }, label: { type: string }, category: { $ref: "#/components/schemas/AuditCategory" }, max_severity: { $ref: "#/components/schemas/AuditSeverity" }, rule: { type: string }, filter_only: { type: boolean, description: "order.accept / order.ready / order.serve: filter only, never written" } } } }
+        categories: { type: array, items: { type: object, required: [id, label], properties: { id: { $ref: "#/components/schemas/AuditCategory" }, label: { type: string } } } }
+        roles: { type: array, items: { type: object, required: [id, label], properties: { id: { $ref: "#/components/schemas/AuditActorRole" }, label: { type: string } } } }
+        severities: { type: array, items: { $ref: "#/components/schemas/AuditSeverity" } }
+
+    OrderHistory:
+      type: object
+      required: [order, events]
+      properties:
+        order:
+          type: object
+          required: [id, number, status, source, created_at, total_paise]
+          properties:
+            id: { type: string, format: uuid }
+            number: { type: integer }
+            status: { $ref: "#/components/schemas/OrderStatus" }
+            source: { type: string }
+            table: { type: [string, "null"] }
+            customer: { type: [object, "null"], properties: { id: { type: string, format: uuid }, name: { type: [string, "null"] } } }
+            created_at: { type: string, format: date-time }
+            total_paise: { type: integer }
+            cancel_reason_code: { type: [string, "null"] }
+            cancel_reason_text: { type: [string, "null"], description: Staff-only text }
+            cancelled_by_name: { type: [string, "null"] }
+        events:
+          type: array
+          maxItems: 200
+          items:
+            type: object
+            required: [at, kind, severity, sentence, actor]
+            properties:
+              at: { type: string, format: date-time }
+              kind: { type: string, enum: [status, action, escalation] }
+              severity: { $ref: "#/components/schemas/AuditSeverity" }
+              severity_reason: { type: [string, "null"] }
+              sentence: { type: string }
+              actor:
+                type: object
+                required: [type, name]
+                properties: { type: { type: string, enum: [customer, staff, support, ai, system] }, name: { type: string }, role: { type: [string, "null"] } }
+              from_status: { anyOf: [{ $ref: "#/components/schemas/OrderStatus" }, { type: "null" }] }
+              to_status: { anyOf: [{ $ref: "#/components/schemas/OrderStatus" }, { type: "null" }] }
+              audit_id: { type: [string, "null"], format: uuid }
+              details: { type: array, items: { type: object, required: [label, value], properties: { label: { type: string }, value: { type: string } } } }

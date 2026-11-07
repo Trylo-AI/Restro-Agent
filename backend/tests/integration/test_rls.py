@@ -108,6 +108,9 @@ def test_anon_sees_nothing() -> None:
     ("DELETE", "menu_items?name=eq.Espresso", None),
     ("PATCH", "menu_items?name=eq.Espresso", {"available": False}),
     ("POST", "customer_notes", {"text": "x"}),
+    ("POST", "v_redemptions", {"code": "X"}),
+    ("PATCH", "v_redemptions?code=neq.x", {"discount_paise": 0}),
+    ("DELETE", "v_redemptions?code=neq.x", None),
 ])
 def test_client_writes_are_refused(method: str, path: str, body: dict[str, object] | None) -> None:
     r = rest(method, path, token("owner@restro.test"), json=body)
@@ -126,6 +129,7 @@ def test_staff_names_visible_to_every_member_of_their_cafe_only() -> None:
 @pytest.mark.parametrize(("view", "min_role"), [
     ("v_daily_revenue", "owner"), ("v_top_items", "owner"), ("v_customer_segments", "owner"),
     ("v_customer_profile", "owner"), ("v_campaign_funnel", "owner"),
+    ("v_campaign_recipients", "owner"), ("v_campaign_insights", "owner"),
     ("v_prep_times", "manager"), ("v_service_report", "manager"), ("v_feedback_summary", "manager"),
 ])
 def test_analytics_views_follow_their_role(view: str, min_role: str) -> None:
@@ -135,6 +139,26 @@ def test_analytics_views_follow_their_role(view: str, min_role: str) -> None:
     r = rest("GET", f"{view}?select=cafe_id&limit=1000", token("owner@restro.test"))
     assert r.status_code == 200, r.text
     assert {row["cafe_id"] for row in r.json()} <= cafe_ids(token("owner@restro.test"))
+
+
+def test_redemptions_view_member_only_own_cafe() -> None:
+    """Definer view like v_staff_names: every member reads their own café's redemptions; masked number, no wa_id."""
+    for email in ("shift@restro.test", "b-shift@restro.test"):
+        jwt = token(email)
+        r = rest("GET", "v_redemptions?select=*&limit=1000", jwt)
+        assert r.status_code == 200, r.text
+        assert {row["cafe_id"] for row in r.json()} <= cafe_ids(jwt)
+        assert all("wa_id" not in row and (row["masked_phone"] is None or "••" in row["masked_phone"]) for row in r.json())
+    anon = rest("GET", "v_redemptions?select=code", None)
+    assert anon.status_code != 200 or anon.json() == []
+
+
+def test_owner_cannot_select_audit_log_via_supabase() -> None:
+    """The owner reads the audit log only through /audit/* (decision 19); audit_log RLS stays platform-only."""
+    r = rest("GET", "audit_log?select=id,action&limit=5", token("owner@restro.test"))
+    assert r.status_code in (200, 401, 403), r.text
+    if r.status_code == 200:
+        assert r.json() == []
 
 
 def test_owner_sees_masked_profiles_and_revenue() -> None:

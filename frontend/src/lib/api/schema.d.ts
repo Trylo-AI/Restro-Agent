@@ -888,6 +888,9 @@ export interface paths {
          * @description One code per bill, one redemption per code. Applying the code already on this session is a 200 no-op.
          *     422 `invalid_code` "This isn't a valid code, or it has expired."; 409 `code_already_used` "This code was
          *     already used today on #1041."
+         *     Eligibility is the same check as `POST /offers/lookup` / `POST /offers/redeem`; 422 carries
+         *     `error.details.verdict`; 409 carries the earlier redemption in `error.details`. Records `channel = table_bill`
+         *     and `bill_paise` = the subtotal at redemption.
          */
         post: {
             parameters: {
@@ -917,6 +920,112 @@ export interface paths {
                         "application/json": components["schemas"]["Bill"];
                     };
                 };
+                409: components["responses"]["Error"];
+                422: components["responses"]["Error"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/offers/lookup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Find a customer's offer codes and whether each can be redeemed now (shift_manager+). Read only, no audit
+         * @description `q` is a name (matched anywhere), exactly the last 4 digits of the number, or a code (any case). POST so the search
+         *     text never lands in URLs or logs. This café only; deleted customers found only by code. ≤ 20 customers, eligible
+         *     first; ≤ 10 offers each, newest first. Same verdict as `POST /offers/redeem` and apply-code. Never a full number.
+         *     400 "Type the last 4 digits of the number." for 1–3 or 5+ digits.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-Cafe-Id": components["parameters"]["CafeId"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        q: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Matching customers and offers */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["OfferLookup"];
+                    };
+                };
+                400: components["responses"]["Error"];
+                403: components["responses"]["Error"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/offers/redeem": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Redeem a code at the counter against the amount paid (shift_manager+). Audit `offer.redeem` (channel counter)
+         * @description Discount = the campaign's `discount_percent` of `bill_paise`, rounded down; 0 without a percentage. `Idempotency-Key`
+         *     required: same key → same redemption (200, no second audit row); same key with another code → 400.
+         *     422 `invalid_code` (`details.verdict`: not_found, expired, campaign_cancelled, not_sent, not_delivered);
+         *     409 `code_already_used` (`details`: redeemed_at, channel, redeemed_by_name, order_number, table_label);
+         *     409 `already_redeemed_this_visit` when this customer redeemed another code in the last 60 minutes.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-Cafe-Id": components["parameters"]["CafeId"];
+                    "Idempotency-Key": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CounterRedeemInput"];
+                };
+            };
+            responses: {
+                /** @description The redemption and the amount to collect */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CounterRedemption"];
+                    };
+                };
+                400: components["responses"]["Error"];
+                403: components["responses"]["Error"];
                 409: components["responses"]["Error"];
                 422: components["responses"]["Error"];
             };
@@ -1414,7 +1523,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Create a draft (owner) */
+        /** Create a draft (owner). Audit `campaign.draft` */
         post: {
             parameters: {
                 query?: never;
@@ -1456,7 +1565,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Edit a draft (owner) */
+        /** Edit a draft (owner). Audit `campaign.draft` */
         put: {
             parameters: {
                 query?: never;
@@ -1631,6 +1740,297 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/campaigns/{id}/recipients/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** CSV of a campaign's recipients and what happened, masked numbers (owner). Audit `campaign.export` */
+        get: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-Cafe-Id": components["parameters"]["CafeId"];
+                };
+                path: {
+                    id: components["parameters"]["Id"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description CSV */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/csv": string;
+                    };
+                };
+                403: components["responses"]["Error"];
+                404: components["responses"]["Error"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/audit/entries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Staff actions in this café, newest first (owner)
+         * @description Severity, label, category and a sentence rendered by `domain/audit/catalog.py`. No `from` → last 7 days, unless an
+         *     order, customer or conversation filter is set (then all time). Range ≤ 366 days. `q`: "#42"/"42" = order number;
+         *     otherwise staff name, customer first name, dish or table name, action label. Keyset paging: pass `next` as `before`.
+         *     `action` also takes the filter-only actions `order.accept`, `order.ready` and `order.serve` (stored as
+         *     `order.transition` with that `change.to`; never written).
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Stored actions, plus the filter-only `order.accept`, `order.ready` and `order.serve` (never written) */
+                    action?: components["parameters"]["AuditAction"];
+                    category?: components["parameters"]["AuditCategoryQ"];
+                    severity?: components["parameters"]["AuditSeverityQ"];
+                    actor_id?: components["parameters"]["AuditActorId"];
+                    role?: components["parameters"]["AuditRole"];
+                    order_number?: components["parameters"]["AuditOrderNumber"];
+                    order_id?: components["parameters"]["AuditOrderId"];
+                    /** @description Includes the customer's chat rows */
+                    customer_id?: components["parameters"]["AuditCustomerId"];
+                    conversation_id?: components["parameters"]["AuditConversationId"];
+                    from?: components["parameters"]["AuditFrom"];
+                    /** @description Exclusive */
+                    to?: components["parameters"]["AuditTo"];
+                    q?: components["parameters"]["AuditQ"];
+                    before?: string;
+                    limit?: number;
+                };
+                header: {
+                    "X-Cafe-Id": components["parameters"]["CafeId"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description One page */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AuditPage"];
+                    };
+                };
+                400: components["responses"]["Error"];
+                403: components["responses"]["Error"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/audit/facets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Counts for the filter dropdowns and summary strip, for a date range (owner) */
+        get: {
+            parameters: {
+                query?: {
+                    from?: components["parameters"]["AuditFrom"];
+                    /** @description Exclusive */
+                    to?: components["parameters"]["AuditTo"];
+                };
+                header: {
+                    "X-Cafe-Id": components["parameters"]["CafeId"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Facets */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AuditFacets"];
+                    };
+                };
+                400: components["responses"]["Error"];
+                403: components["responses"]["Error"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/audit/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Action labels, categories, roles and severity rules (owner). Static per deploy */
+        get: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-Cafe-Id": components["parameters"]["CafeId"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Catalogue */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AuditCatalog"];
+                    };
+                };
+                403: components["responses"]["Error"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/audit/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * CSV of the filtered audit log, ≤ 10 000 rows (owner). Audit `audit.export`
+         * @description Same filters as /audit/entries. 400 "Too many rows — narrow the dates or filters." over the cap.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Stored actions, plus the filter-only `order.accept`, `order.ready` and `order.serve` (never written) */
+                    action?: components["parameters"]["AuditAction"];
+                    category?: components["parameters"]["AuditCategoryQ"];
+                    severity?: components["parameters"]["AuditSeverityQ"];
+                    actor_id?: components["parameters"]["AuditActorId"];
+                    role?: components["parameters"]["AuditRole"];
+                    order_number?: components["parameters"]["AuditOrderNumber"];
+                    order_id?: components["parameters"]["AuditOrderId"];
+                    /** @description Includes the customer's chat rows */
+                    customer_id?: components["parameters"]["AuditCustomerId"];
+                    conversation_id?: components["parameters"]["AuditConversationId"];
+                    from?: components["parameters"]["AuditFrom"];
+                    /** @description Exclusive */
+                    to?: components["parameters"]["AuditTo"];
+                    q?: components["parameters"]["AuditQ"];
+                };
+                header: {
+                    "X-Cafe-Id": components["parameters"]["CafeId"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description CSV */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/csv": string;
+                    };
+                };
+                400: components["responses"]["Error"];
+                403: components["responses"]["Error"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orders/{id}/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One order's full timeline — customer, staff, automatic events, escalations, bill and code (owner) */
+        get: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-Cafe-Id": components["parameters"]["CafeId"];
+                };
+                path: {
+                    id: components["parameters"]["Id"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Timeline */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["OrderHistory"];
+                    };
+                };
+                403: components["responses"]["Error"];
+                404: components["responses"]["Error"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/webhooks/whatsapp": {
         parameters: {
             query?: never;
@@ -1719,7 +2119,7 @@ export interface components {
         Error: {
             error: {
                 /** @enum {string} */
-                code: "bad_request" | "unauthenticated" | "forbidden" | "not_found" | "version_conflict" | "code_already_used" | "window_closed" | "invalid_transition" | "invalid_code" | "rate_limited" | "internal";
+                code: "bad_request" | "unauthenticated" | "forbidden" | "not_found" | "version_conflict" | "code_already_used" | "window_closed" | "invalid_transition" | "invalid_code" | "rate_limited" | "internal" | "already_redeemed_this_visit";
                 /** @description Safe to show to staff */
                 message: string;
                 details?: Record<string, never>;
@@ -1952,6 +2352,252 @@ export interface components {
             quality?: string | null;
             template_status?: string;
         };
+        /** @enum {string} */
+        OfferVerdict: "eligible" | "redeemed" | "expired" | "campaign_cancelled" | "not_sent" | "not_delivered";
+        OfferRedemption: {
+            /** Format: date-time */
+            redeemed_at: string;
+            /** @enum {string} */
+            channel: "table_bill" | "counter";
+            redeemed_by_name?: string | null;
+            order_number?: number | null;
+            table_label?: string | null;
+            bill_paise?: number | null;
+            discount_paise: number;
+        };
+        OfferCheck: {
+            /** Format: uuid */
+            recipient_id: string;
+            code: string;
+            /** Format: uuid */
+            campaign_id: string;
+            campaign_name: string;
+            offer_text?: string | null;
+            discount_percent?: number | null;
+            /** Format: date-time */
+            valid_until?: string | null;
+            /** Format: date-time */
+            sent_at?: string | null;
+            /** @enum {string} */
+            recipient_status: "queued" | "deferred" | "sent" | "delivered" | "read" | "held" | "failed";
+            verdict: components["schemas"]["OfferVerdict"];
+            /** @description Safe to show to staff */
+            reason: string;
+            warning?: string | null;
+            /** @description The code that was searched for */
+            matched: boolean;
+            redemption?: components["schemas"]["OfferRedemption"] | null;
+        };
+        OfferOpenBill: {
+            /** Format: uuid */
+            table_session_id: string;
+            table_label: string;
+            subtotal_paise: number;
+            code?: string | null;
+        };
+        OfferCustomer: {
+            /** Format: uuid */
+            customer_id: string;
+            name?: string | null;
+            first_name?: string | null;
+            masked_phone?: string | null;
+            deleted: boolean;
+            visits: number;
+            /** Format: date-time */
+            last_visit_at?: string | null;
+            open_bill?: components["schemas"]["OfferOpenBill"] | null;
+            offers: components["schemas"]["OfferCheck"][];
+        };
+        OfferLookup: {
+            /** @enum {string} */
+            query_kind: "name" | "phone_last4" | "code";
+            customers: components["schemas"]["OfferCustomer"][];
+            truncated: boolean;
+        };
+        CounterRedeemInput: {
+            code: string;
+            /** @description Amount paid before the discount */
+            bill_paise: number;
+        };
+        CounterRedemption: {
+            /** Format: uuid */
+            redemption_id: string;
+            code: string;
+            /** @enum {string} */
+            channel: "counter";
+            /** Format: uuid */
+            campaign_id: string;
+            campaign_name: string;
+            offer_text?: string | null;
+            discount_percent?: number | null;
+            /** Format: uuid */
+            customer_id: string;
+            first_name?: string | null;
+            bill_paise: number;
+            discount_paise: number;
+            /** @description To collect: bill_paise − discount_paise */
+            total_paise: number;
+            /** Format: date-time */
+            redeemed_at: string;
+            redeemed_by_name?: string | null;
+        };
+        /** @enum {string} */
+        AuditSeverity: "critical" | "warning" | "info";
+        /** @enum {string} */
+        AuditCategory: "orders" | "calls" | "chats" | "menu" | "customers" | "campaigns" | "offers" | "team" | "settings" | "platform" | "other";
+        /** @enum {string} */
+        AuditActorRole: "shift_manager" | "manager" | "owner" | "platform_admin" | "staff_via_ai" | "system";
+        AuditActor: {
+            /** Format: uuid */
+            user_id: string | null;
+            name: string;
+            role: components["schemas"]["AuditActorRole"];
+            support: boolean;
+        };
+        AuditEntry: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            at: string;
+            action: string;
+            label: string;
+            category: components["schemas"]["AuditCategory"];
+            severity: components["schemas"]["AuditSeverity"];
+            severity_reason?: string | null;
+            /** @description Rendered by code; first names only; money as ₹ */
+            sentence: string;
+            actor: components["schemas"]["AuditActor"];
+            order?: {
+                /** Format: uuid */
+                id: string;
+                number: number;
+                status: components["schemas"]["OrderStatus"];
+            } | null;
+            customer?: {
+                /** Format: uuid */
+                id: string;
+                name: string | null;
+            } | null;
+            /** Format: uuid */
+            conversation_id?: string | null;
+            links?: {
+                /** Format: uuid */
+                campaign_id?: string;
+                /** Format: uuid */
+                item_id?: string;
+                /** Format: uuid */
+                table_session_id?: string;
+                /** Format: uuid */
+                membership_id?: string;
+                /** Format: uuid */
+                request_id?: string;
+            };
+            details: {
+                label: string;
+                value: string;
+            }[];
+            /** @description Raw changed fields (ids, codes, counts; never phone numbers or message text) */
+            change: Record<string, never>;
+        };
+        AuditPage: {
+            entries: components["schemas"]["AuditEntry"][];
+            next: string | null;
+        };
+        AuditFacets: {
+            /** Format: date-time */
+            from: string;
+            /** Format: date-time */
+            to: string;
+            total: number;
+            by_severity: {
+                critical: number;
+                warning: number;
+                info: number;
+            };
+            actions: {
+                action: string;
+                label: string;
+                category: components["schemas"]["AuditCategory"];
+                count: number;
+            }[];
+            actors: {
+                /** Format: uuid */
+                user_id: string | null;
+                name: string;
+                role: components["schemas"]["AuditActorRole"];
+                count: number;
+            }[];
+            categories: {
+                category: components["schemas"]["AuditCategory"];
+                label: string;
+                count: number;
+            }[];
+        };
+        AuditCatalog: {
+            actions: {
+                action: string;
+                label: string;
+                category: components["schemas"]["AuditCategory"];
+                max_severity: components["schemas"]["AuditSeverity"];
+                rule: string;
+                /** @description order.accept / order.ready / order.serve: filter only, never written */
+                filter_only?: boolean;
+            }[];
+            categories: {
+                id: components["schemas"]["AuditCategory"];
+                label: string;
+            }[];
+            roles: {
+                id: components["schemas"]["AuditActorRole"];
+                label: string;
+            }[];
+            severities: components["schemas"]["AuditSeverity"][];
+        };
+        OrderHistory: {
+            order: {
+                /** Format: uuid */
+                id: string;
+                number: number;
+                status: components["schemas"]["OrderStatus"];
+                source: string;
+                table?: string | null;
+                customer?: {
+                    /** Format: uuid */
+                    id?: string;
+                    name?: string | null;
+                } | null;
+                /** Format: date-time */
+                created_at: string;
+                total_paise: number;
+                cancel_reason_code?: string | null;
+                /** @description Staff-only text */
+                cancel_reason_text?: string | null;
+                cancelled_by_name?: string | null;
+            };
+            events: {
+                /** Format: date-time */
+                at: string;
+                /** @enum {string} */
+                kind: "status" | "action" | "escalation";
+                severity: components["schemas"]["AuditSeverity"];
+                severity_reason?: string | null;
+                sentence: string;
+                actor: {
+                    /** @enum {string} */
+                    type: "customer" | "staff" | "support" | "ai" | "system";
+                    name: string;
+                    role?: string | null;
+                };
+                from_status?: components["schemas"]["OrderStatus"] | null;
+                to_status?: components["schemas"]["OrderStatus"] | null;
+                /** Format: uuid */
+                audit_id?: string | null;
+                details?: {
+                    label: string;
+                    value: string;
+                }[];
+            }[];
+        };
     };
     responses: {
         /** @description Error */
@@ -2012,6 +2658,21 @@ export interface components {
     parameters: {
         Id: string;
         CafeId: string;
+        /** @description Stored actions, plus the filter-only `order.accept`, `order.ready` and `order.serve` (never written) */
+        AuditAction: string[];
+        AuditCategoryQ: components["schemas"]["AuditCategory"][];
+        AuditSeverityQ: components["schemas"]["AuditSeverity"][];
+        AuditActorId: string[];
+        AuditRole: components["schemas"]["AuditActorRole"][];
+        AuditOrderNumber: number;
+        AuditOrderId: string;
+        /** @description Includes the customer's chat rows */
+        AuditCustomerId: string;
+        AuditConversationId: string;
+        AuditFrom: string;
+        /** @description Exclusive */
+        AuditTo: string;
+        AuditQ: string;
     };
     requestBodies: never;
     headers: never;

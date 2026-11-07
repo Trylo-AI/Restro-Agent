@@ -240,6 +240,7 @@ create table inbound_messages (
   processed_at    timestamptz
 );
 create index inbound_messages_unprocessed on inbound_messages (conversation_id, received_at) where processed_at is null;
+create index inbound_messages_conversation on inbound_messages (conversation_id, received_at);
 
 create table pending_work (
   id               uuid primary key default gen_random_uuid(),
@@ -453,6 +454,7 @@ create table campaign_recipients (
   wamid       text,
   unique (campaign_id, customer_id)
 );
+create index campaign_recipients_customer on campaign_recipients (customer_id);
 
 alter table orders add constraint orders_campaign_recipient_fk
   foreign key (campaign_recipient_id) references campaign_recipients (id);
@@ -468,8 +470,17 @@ create table redemptions (
   table_session_id      uuid references table_sessions (id),
   discount_paise        integer not null check (discount_paise >= 0),
   redeemed_by           uuid references auth.users (id),
-  redeemed_at           timestamptz not null default now()
+  redeemed_at           timestamptz not null default now(),
+  channel               text not null default 'table_bill' check (channel in ('table_bill', 'counter')),
+  bill_paise            integer check (bill_paise >= 0),  -- amount before discount; counter: as entered
+  idempotency_key       text check (char_length(idempotency_key) between 8 and 80),
+  constraint redemptions_channel_shape check (
+    (channel = 'table_bill' and table_session_id is not null)
+    or (channel = 'counter' and table_session_id is null and order_id is null and bill_paise is not null)),
+  constraint redemptions_discount_within_bill check (bill_paise is null or discount_paise <= bill_paise)
 );
+create unique index redemptions_idempotency on redemptions (cafe_id, idempotency_key) where idempotency_key is not null;
+create index redemptions_cafe_at on redemptions (cafe_id, redeemed_at desc);
 
 create table llm_calls (
   id              uuid primary key default gen_random_uuid(),
@@ -478,7 +489,7 @@ create table llm_calls (
   cafe_id         uuid not null references cafes (id) on delete cascade,
   provider        text not null check (provider in ('vertex', 'developer_api', 'stub', 'dashscope')),  -- dashscope: testing only
   model           text not null,
-  purpose         text not null check (purpose in ('turn', 'cancel_draft', 'profile_note')),
+  purpose         text not null check (purpose in ('turn', 'cancel_draft', 'profile_note', 'recommend')),
   conversation_id uuid references conversations (id) on delete set null,
   message_id      uuid references inbound_messages (id) on delete set null,
   order_id        uuid references orders (id) on delete set null,
@@ -495,18 +506,28 @@ create table llm_calls (
 create index llm_calls_cafe_day on llm_calls (cafe_id, created_at);
 
 create table audit_log (
-  id         uuid primary key default gen_random_uuid(),
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  actor_id   uuid,
-  actor_role text not null,
-  support    boolean not null default false,
-  cafe_id    uuid references cafes (id) on delete cascade,
-  action     text not null,
-  change     jsonb not null default '{}'::jsonb,  -- changed fields only; no secrets or full numbers
-  at         timestamptz not null default now()
+  id              uuid primary key default gen_random_uuid(),
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now(),
+  actor_id        uuid,
+  actor_role      text not null,
+  support         boolean not null default false,
+  cafe_id         uuid references cafes (id) on delete cascade,
+  action          text not null,
+  change          jsonb not null default '{}'::jsonb,  -- changed fields only; no secrets or full numbers
+  at              timestamptz not null default now(),
+  severity        text not null check (severity in ('critical', 'warning', 'info')),  -- catalog.classify at write time
+  order_id        uuid,  -- subjects copied from change for filters; no FK (append-only)
+  customer_id     uuid,
+  conversation_id uuid,
+  actor_name      text   -- display name snapshot
 );
-create index audit_log_cafe_at on audit_log (cafe_id, at desc);
+create index audit_log_cafe_at_id on audit_log (cafe_id, at desc, id desc);
+create index audit_log_cafe_order        on audit_log (cafe_id, order_id, at desc)        where order_id is not null;
+create index audit_log_cafe_customer     on audit_log (cafe_id, customer_id, at desc)     where customer_id is not null;
+create index audit_log_cafe_conversation on audit_log (cafe_id, conversation_id, at desc) where conversation_id is not null;
+create index audit_log_cafe_actor        on audit_log (cafe_id, actor_id, at desc);
+create index audit_log_cafe_flagged      on audit_log (cafe_id, severity, at desc)        where severity <> 'info';
 
 create table webhook_events (
   id              uuid primary key default gen_random_uuid(),
@@ -694,6 +715,119 @@ create view v_campaign_funnel with (security_invoker = true) as
   left join wa_messages w on w.wamid = r.wamid and w.wamid is not null
   where has_role(ca.cafe_id, 'owner')
   group by ca.id;
+
+-- v_campaign_recipients: one row per recipient with everything after the send. security_invoker; owner-only through
+-- campaign_recipients RLS (inner joins). No has_role() so the backend (server role) reuses it for the CSV, always with cafe_id.
+create view v_campaign_recipients with (security_invoker = true) as
+  select r.id as recipient_id, r.cafe_id, r.campaign_id, r.customer_id, r.code, r.status,
+         cu.name,
+         case when cu.wa_id like '000%' then null
+              when length(cu.wa_id) >= 10
+              then '+' || left(cu.wa_id, 2) || ' ' || substr(cu.wa_id, 3, 2) || '••• ••' || right(cu.wa_id, 3)
+              else '••••' end as masked_phone,
+         (cu.wa_id like '000%') as deleted,
+         r.created_at as queued_at,
+         w.sent_at, w.delivered_at, w.read_at, w.failed_at, w.error_code,
+         coalesce(w.cost, 0)::numeric(12, 6) as whatsapp_cost,
+         win.window_start, win.window_end,
+         rep.replied_at,
+         coalesce(ord.orders, 0)::int as orders,
+         coalesce(ord.spent_paise, 0)::bigint as spent_paise,
+         ord.first_order_at,
+         d.id as redemption_id, d.redeemed_at, d.channel as redemption_channel,
+         coalesce(d.bill_paise, sess.subtotal_paise)::bigint as bill_paise,
+         d.discount_paise, d.redeemed_by, m.display_name as redeemed_by_name,
+         oo.opted_out_at, oo.source as opted_out_source,
+         (coalesce(ord.orders, 0) > 0 or d.id is not null) as came_back
+  from campaign_recipients r
+  join campaigns ca on ca.id = r.campaign_id
+  join customers cu on cu.id = r.customer_id
+  left join wa_messages w on w.idempotency_key = 'campaign:' || r.id::text
+  cross join lateral (
+    select case when r.status in ('sent', 'delivered', 'read', 'held')
+                then coalesce(w.sent_at, w.attempted_at, w.created_at, r.updated_at) end as window_start) s
+  cross join lateral (
+    select s.window_start,
+           least(now(), coalesce(ca.valid_until, s.window_start + interval '30 days')) as window_end) win
+  left join lateral (
+    select min(i.received_at) as replied_at
+    from conversations cv join inbound_messages i on i.conversation_id = cv.id
+    where cv.cafe_id = r.cafe_id and cv.customer_id = r.customer_id
+      and i.received_at > win.window_start and i.received_at <= win.window_end) rep on true
+  left join lateral (
+    select count(*) as orders, sum(o.total_paise) as spent_paise, min(o.created_at) as first_order_at
+    from orders o
+    where o.cafe_id = r.cafe_id and o.customer_id = r.customer_id and o.status <> 'CANCELLED'
+      and o.created_at > win.window_start and o.created_at <= win.window_end) ord on true
+  left join redemptions d on d.campaign_recipient_id = r.id
+  left join memberships m on m.cafe_id = d.cafe_id and m.user_id = d.redeemed_by
+  left join lateral (
+    select sum(o2.total_paise) as subtotal_paise from orders o2
+    where d.bill_paise is null and d.table_session_id is not null
+      and o2.table_session_id = d.table_session_id and o2.status <> 'CANCELLED') sess on true
+  left join lateral (
+    select sc.created_at as opted_out_at, sc.source from consents sc
+    where sc.customer_id = r.customer_id and sc.status = 'opted_out'
+      and sc.created_at > win.window_start and sc.created_at <= win.window_end
+    order by sc.created_at limit 1) oo on true;
+
+-- v_campaign_insights: per-campaign funnel and money. Same visibility. queued = queued + deferred; came_back = ordered in
+-- the window or redeemed.
+create view v_campaign_insights with (security_invoker = true) as
+  select ca.id as campaign_id, ca.cafe_id, ca.name, ca.status, ca.segment, ca.template_name, ca.offer_text,
+         ca.discount_percent, ca.code_prefix, ca.valid_until, ca.scheduled_at, ca.created_at,
+         count(x.recipient_id)::int as recipients,
+         count(x.recipient_id) filter (where x.status in ('queued', 'deferred'))::int as queued,
+         count(x.recipient_id) filter (where x.status = 'deferred')::int as deferred,
+         count(x.recipient_id) filter (where x.status in ('sent', 'delivered', 'read', 'held'))::int as sent,
+         count(x.recipient_id) filter (where x.status = 'held')::int as held,
+         count(x.recipient_id) filter (where x.status in ('delivered', 'read'))::int as delivered,
+         count(x.recipient_id) filter (where x.status = 'read')::int as read,
+         count(x.recipient_id) filter (where x.status = 'failed')::int as failed,
+         count(x.replied_at)::int as replied,
+         count(x.recipient_id) filter (where x.orders > 0)::int as ordered,
+         count(x.redemption_id)::int as redeemed,
+         count(x.redemption_id) filter (where x.redemption_channel = 'counter')::int as redeemed_counter,
+         count(x.redemption_id) filter (where x.redemption_channel = 'table_bill')::int as redeemed_table_bill,
+         count(x.recipient_id) filter (where x.came_back)::int as came_back,
+         count(x.opted_out_at)::int as opted_out,
+         coalesce(sum(x.spent_paise), 0)::bigint as ordered_paise,
+         coalesce(sum(x.bill_paise) filter (where x.redemption_channel = 'counter'), 0)::bigint as counter_bill_paise,
+         (coalesce(sum(x.spent_paise), 0)
+          + coalesce(sum(x.bill_paise) filter (where x.redemption_channel = 'counter'), 0))::bigint as came_back_paise,
+         coalesce(sum(x.discount_paise), 0)::bigint as discount_paise,
+         coalesce(sum(x.whatsapp_cost), 0)::numeric(12, 4) as whatsapp_cost
+  from campaigns ca
+  left join v_campaign_recipients x on x.campaign_id = ca.id
+  group by ca.id;
+
+-- v_redemptions: every redemption with names, for "Redeemed today" (every member) and owner insights. Definer view
+-- (like v_staff_names) filtered by membership; masked number only, null when deleted.
+create view v_redemptions as
+  select d.id as redemption_id, d.cafe_id, r.campaign_id, ca.name as campaign_name, d.campaign_recipient_id,
+         d.code, d.channel, d.redeemed_at, (d.redeemed_at at time zone cf.timezone)::date as day,
+         r.customer_id, nullif(split_part(coalesce(cu.name, ''), ' ', 1), '') as first_name,
+         case when cu.wa_id like '000%' then null
+              when length(cu.wa_id) >= 10
+              then '+' || left(cu.wa_id, 2) || ' ' || substr(cu.wa_id, 3, 2) || '••• ••' || right(cu.wa_id, 3)
+              else '••••' end as masked_phone,
+         coalesce(d.bill_paise, sess.subtotal_paise)::bigint as bill_paise, d.discount_paise,
+         d.redeemed_by, m.display_name as redeemed_by_name,
+         o.number as order_number, t.label as table_label, d.table_session_id
+  from redemptions d
+  join campaign_recipients r on r.id = d.campaign_recipient_id
+  join campaigns ca on ca.id = r.campaign_id
+  join customers cu on cu.id = r.customer_id
+  join cafes cf on cf.id = d.cafe_id
+  left join memberships m on m.cafe_id = d.cafe_id and m.user_id = d.redeemed_by
+  left join orders o on o.id = d.order_id
+  left join table_sessions ts on ts.id = d.table_session_id
+  left join tables t on t.id = ts.table_id
+  left join lateral (
+    select sum(o2.total_paise) as subtotal_paise from orders o2
+    where d.bill_paise is null and d.table_session_id is not null
+      and o2.table_session_id = d.table_session_id and o2.status <> 'CANCELLED') sess on true
+  where is_member(d.cafe_id);
 
 -- ── Manager: service report ───────────────────────────────────────────────
 
