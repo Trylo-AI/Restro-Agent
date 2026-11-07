@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Route, Routes, useOutletContext } from "react-router-dom";
 
-import { lazy, type ComponentType } from "react";
+import { lazy, Suspense, type ComponentType } from "react";
 
 import { CallsScreen } from "../features/calls/CallsScreen";
 import { ChatsScreen } from "../features/chats/ChatsScreen";
@@ -47,10 +47,27 @@ const OpsEfficiency = screen(ops, "OpsEfficiency");
 const OpsInsights = screen(ops, "OpsInsights");
 const OpsLogs = screen(ops, "OpsLogs");
 
+// The public landing page is its own chunk: staff phones that are signed in never download it.
+const Landing = screen(() => import("../features/landing/Landing"), "Landing");
+
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 2 } } });
 
 export function useOffline(): boolean {
   return useOutletContext<{ offline: boolean } | undefined>()?.offline ?? false;
+}
+
+/**
+ * Signed out: "/" is the public landing page; "/login" and every other path show the login form (a deep link keeps its
+ * path, so after signing in the user lands where the link pointed). Once signed in, "/" and "/login" fall through to
+ * Home, which picks the role's start screen.
+ */
+function SignedOut() {
+  return (
+    <Routes>
+      <Route path="/" element={<Suspense fallback={null}><Landing /></Suspense>} />
+      <Route path="*" element={<Login />} />
+    </Routes>
+  );
 }
 
 /** Owners land on Today; everyone else on Live orders (docs/console.md#today). */
@@ -62,19 +79,19 @@ function Home() {
 function Gate() {
   const { ready, loadError, retry, session, cafeId } = useSession();
   if (!ready) return <div className="gate"><div className="muted">Loading…</div></div>;
-  if (!session && !loadError) return <Login />;
+  if (!session && !loadError) return <SignedOut />;
   if (!cafeId && loadError) {
     return (
       <div className="gate">
         <div className="gate-card" role="alert">
-          <h1>Can't reach Restro</h1>
+          <h1>Can't reach Mehmanawazi</h1>
           <p className="muted">Check the internet connection. Retrying every few seconds.</p>
           <button className="btn primary big" onClick={retry}>Retry now</button>
         </div>
       </div>
     );
   }
-  if (!session) return <Login />;
+  if (!session) return <SignedOut />;
   if (!cafeId) {
     return (
       <div className="gate">

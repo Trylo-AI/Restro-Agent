@@ -62,7 +62,7 @@ test("Offline banner within a few seconds of losing the api; back online toasts 
 test("phone width: tabs only, no horizontal scroll", async ({ page }) => {
   test.skip(!process.env.E2E_STAFF_PASSWORD, "needs frontend/.env.local");
   await page.setViewportSize({ width: 375, height: 812 });
-  await page.goto("/");
+  await page.goto("/login");
   await page.getByLabel("Email").fill("shift@restro.test");
   await page.getByLabel("Password").fill(process.env.E2E_STAFF_PASSWORD ?? "");
   await page.getByRole("button", { name: /^Sign in/ }).click();

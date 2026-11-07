@@ -2,7 +2,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 export async function signIn(page: Page, email: string) {
-  await page.goto("/");
+  await page.goto("/login");
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(process.env.E2E_STAFF_PASSWORD ?? "");
   await page.getByRole("button", { name: /^Sign in/ }).click();

@@ -25,9 +25,11 @@ Only `lib/` talks to Supabase or `api`. Features use `lib/` hooks; they never cr
 
 ### Login and café context
 
+- Signed out, `/` is the public landing page (`features/landing`, brand **Mehmanawazi**, its own lazy chunk so signed-in staff never download it). `/login` and every other path show the login form; a deep link keeps its path, so the user lands there after signing in. Signed in, `/` and `/login` go to the role's start screen (owner → Today, everyone else → Live orders).
+- The same landing page is also the public website on its own: `frontend/site/` → `npm run build:landing` → `dist-landing/` (landing + `public/` legal pages, relative paths, no Supabase or API), deployed to GitHub Pages by `.github/workflows/deploy-landing.yml`. "Log in" there goes to the repo variable `CONSOLE_URL` + `/login`, and is hidden while that is unset.
 - Email + password or magic link. Customers never sign in. Demo builds add a "sign in as" role picker.
 - After sign-in: `platform_admins` row → Cafés. Otherwise active memberships: none → "No access to any café"; one → that café; several → last used.
-- A memberships read that fails (network, laptop waking) is not "no access": the open café stays and the read retries every 5 s. With no café loaded yet the console shows "Can't reach Restro" + Retry now, retrying by itself.
+- A memberships read that fails (network, laptop waking) is not "no access": the open café stays and the read retries every 5 s. With no café loaded yet the console shows "Can't reach Mehmanawazi" + Retry now, retrying by itself.
 - The active café sets `X-Cafe-Id` on every call and the `cafe_id` filter on every channel. A person with several cafés gets a switcher (sidebar on desktop, More sheet on phones). Switching ends any pending undo, drops channels, refetches, re-reads the role and toasts "Switched to <café>".
 
 ### Navigation

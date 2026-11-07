@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 
 import { useSession } from "../lib/session";
 
@@ -27,7 +28,7 @@ export function Login() {
   return (
     <div className="gate">
       <form className="gate-card" onSubmit={go}>
-        <div className="brand">Restro</div>
+        <Link to="/" className="brand"><img src="/favicon.svg" alt="" width="28" height="28" />Mehmanawazi</Link>
         <h1>Sign in to the console</h1>
         <label className="field">
           Email

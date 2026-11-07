@@ -55,3 +55,10 @@ backend/logs/
 
 # Load-test reports (loadtest/run.py)
 loadtest/results/
+
+# Locally installed agent skills (not part of the product)
+.agents/
+skills-lock.json
+
+# Standalone landing page build (frontend/vite.landing.config.ts)
+frontend/dist-landing/

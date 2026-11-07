@@ -33,7 +33,7 @@ async function codeFor(page: Page, customer: Customer, prefix: string): Promise<
 /** A shift manager on a phone, on /redeem. Phones get the alerts gate first. */
 async function phoneTill(browser: Browser): Promise<Page> {
   const page = await (await browser.newContext({ viewport: { width: 375, height: 812 } })).newPage();
-  await page.goto("/");
+  await page.goto("/login");
   await page.getByLabel("Email").fill("shift@restro.test");
   await page.getByLabel("Password").fill(process.env.E2E_STAFF_PASSWORD ?? "");
   await page.getByRole("button", { name: /^Sign in/ }).click();

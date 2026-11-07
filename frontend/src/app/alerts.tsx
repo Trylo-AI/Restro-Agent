@@ -64,7 +64,7 @@ export function AlertProvider({ children }: { children: ReactNode }) {
     if (sound) {
       play(sound);
       const top = tracked.filter((t) => t.urgency.sound === sound)[0];
-      if (top) notify(top.title, "Restro Console", top.urgency.severity === "critical");
+      if (top) notify(top.title, "Mehmanawazi", top.urgency.severity === "critical");
     }
   }, [tracked, now, loaded]);
 

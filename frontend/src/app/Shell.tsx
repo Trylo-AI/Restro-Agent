@@ -81,7 +81,7 @@ export function Shell() {
     <AlertsGate>
       <div className="shell">
         <aside className="sidebar">
-          <div className="brand">Restro</div>
+          <div className="brand">Mehmanawazi</div>
           <div className="cafe-block">
             <div className="muted">Café</div>
             <div className="name">{cafeName}</div>

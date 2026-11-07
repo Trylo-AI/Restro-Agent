@@ -7,6 +7,8 @@
   border-right: 1px solid var(--color-border); padding: var(--space-4); gap: var(--space-4); }
 @media (max-width: 767px) { .sidebar { display: none; } }
 .brand { font-weight: 800; font-size: 20px; letter-spacing: -0.02em; }
+a.brand { color: inherit; text-decoration: none; display: inline-flex; align-items: center; gap: 10px; }
+a.brand img { border-radius: 7px; }
 .cafe-block { border: 1px solid var(--color-border); padding: var(--space-3); background: var(--color-card); }
 .cafe-block .name { font-weight: 800; }
 .cafe-block select { width: 100%; margin-top: var(--space-2); font: inherit; padding: 4px; }
