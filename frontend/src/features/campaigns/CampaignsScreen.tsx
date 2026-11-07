@@ -1,139 +1,102 @@
-// Campaigns (owner): list, report, templates and the five-step wizard (docs/console.md#campaigns).
-// Only opted-in customers are ever messaged; the backend re-checks consent at every send.
+// Campaigns (owner): list, detail, insights, the Redeem tab, templates and the five-step wizard
+// (docs/console.md#campaigns). Only opted-in customers are ever messaged; the backend re-checks consent at every send.
+import "../../styles/campaigns.css";
+
 import { useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Link, Navigate, NavLink, useNavigate, useParams } from "react-router-dom";
 
 import { useToasts } from "../../app/toasts";
 import { Empty } from "../../components/ui";
-import { useCafe, useCampaigns, type CampaignRow, type Funnel } from "../../lib/data";
-import { dayMonth, inr } from "../../lib/format";
+import { useCampaignInsights } from "../../lib/campaignInsights";
+import { useCafe, useCampaigns, type CampaignRow } from "../../lib/data";
+import { dayMonth } from "../../lib/format";
 import { campaigns, type CampaignInput } from "../../lib/mutations";
 import { atLeast, useSession } from "../../lib/session";
+import { RedeemPanel } from "../redeem/RedeemScreen";
+import { CampaignDetail } from "./CampaignDetail";
+import { CampaignInsights } from "./CampaignInsights";
+import { SEGMENTS, SEGMENT_LABEL, STATUS, pct } from "./labels";
 
-const SEGMENTS: [CampaignInput["segment"], string, string][] = [
-  ["all_opted_in", "Everyone opted in", "Every customer who said yes to offers"],
-  ["lapsed", "Lapsed", "No order in the last 30 days"],
-  ["regulars", "Regulars", "3 or more orders in the last 60 days"],
-];
-const SEGMENT_LABEL: Record<string, string> = Object.fromEntries(SEGMENTS.map(([k, l]) => [k, l]));
-const STATUS: Record<CampaignRow["status"], { label: string; cls: string }> = {
-  draft: { label: "Draft", cls: "calm" }, scheduled: { label: "Scheduled", cls: "info" }, sending: { label: "Sending", cls: "warning" },
-  completed: { label: "Completed", cls: "ok" }, cancelled: { label: "Cancelled", cls: "calm" },
-};
 // What the approved marketing templates say ({{1}} first name, {{2}} offer, {{3}} code, {{4}} valid until).
 const TEMPLATE_TEXT: Record<string, string> = {
   weekly_offer: "Hi {{1}}! {{2}} at {cafe} this week. Show code {{3}} at the counter. Valid till {{4}}.",
   winback: "We miss you, {{1}}! {{2}} on your next visit to {cafe}. Show code {{3}} at the counter. Valid till {{4}}.",
 };
 
-function pct(n: number, of: number): string {
-  return of ? `${Math.round((n / of) * 100)} %` : "—";
-}
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** `insights`, `redeem` and `new` are reserved values of `:campaignId`; campaign ids are UUIDs. */
 export function CampaignsScreen() {
   const { role } = useSession();
   const { campaignId } = useParams();
   if (!atLeast(role, "owner")) return <Navigate to="/orders" replace />;
   if (campaignId === "new") return <Wizard />;
-  if (campaignId) return <Report campaignId={campaignId} />;
-  return <CampaignList />;
+  if (campaignId === "insights") return <Tabbed><CampaignInsights /></Tabbed>;
+  if (campaignId === "redeem") return <Tabbed><RedeemPanel /></Tabbed>;
+  if (campaignId && UUID.test(campaignId)) return <CampaignRoute campaignId={campaignId} />;
+  if (campaignId) return <Empty>This campaign isn't available. <Link to="/campaigns">Back</Link></Empty>;
+  return <Tabbed><CampaignList /></Tabbed>;
+}
+
+function Tabbed({ children }: { children: ReactNode }) {
+  const tab = ({ isActive }: { isActive: boolean }) => `chip-btn${isActive ? " on" : ""}`;
+  return (
+    <div className="campaigns">
+      <nav className="tabs-row" aria-label="Campaigns">
+        <NavLink to="/campaigns" end className={tab}>Campaigns</NavLink>
+        <NavLink to="/campaigns/insights" className={tab}>Insights</NavLink>
+        <NavLink to="/campaigns/redeem" className={tab}>Redeem</NavLink>
+      </nav>
+      {children}
+    </div>
+  );
+}
+
+/** A draft still opens the wizard; anything else opens the detail. */
+function CampaignRoute({ campaignId }: { campaignId: string }) {
+  const q = useCampaigns();
+  const c = q.data?.list.find((x) => x.id === campaignId);
+  if (q.isPending) return <Empty>Loading…</Empty>;
+  if (q.isError) return <Empty>Couldn't load this campaign. <button className="btn small" onClick={() => void q.refetch()}>Retry</button></Empty>;
+  if (!c) return <Empty>This campaign isn't available. <Link to="/campaigns">Back</Link></Empty>;
+  if (c.status === "draft") return <Wizard draft={c} />;
+  return <CampaignDetail campaign={c} />;
 }
 
 function CampaignList() {
-  const q = useCampaigns();
+  const q = useCampaigns(); // templates (the list's numbers come from v_campaign_insights)
+  const ins = useCampaignInsights();
   const navigate = useNavigate();
   return (
-    <div className="campaigns">
+    <>
       <div className="banner dark">Only opted-in customers can be messaged. Sending is throttled and may roll over to the next day.</div>
       <div className="row toolbar"><span className="grow" /><Link className="btn primary small" to="/campaigns/new"><Plus size={15} /> New campaign</Link></div>
-      {q.isPending ? <Empty>Loading campaigns…</Empty> : !q.data?.list.length ? <Empty>No campaigns yet.</Empty> : (
-        <table className="table">
-          <thead><tr><th>Name</th><th>Audience</th><th>Status</th><th className="num">Sent</th><th className="num">Came back</th></tr></thead>
-          <tbody>{q.data.list.map((c) => {
-            const f = q.data.funnels.get(c.id);
-            return (
-              <tr key={c.id} className="clickable" onClick={() => navigate(`/campaigns/${c.id}`)}>
-                <td><button className="link">{c.name}</button><div className="muted small">{c.scheduled_at ? dayMonth(c.scheduled_at) : "not scheduled"}</div></td>
-                <td>{SEGMENT_LABEL[c.segment]}</td>
-                <td><span className={`chip ${STATUS[c.status].cls}`}>{STATUS[c.status].label}</span></td>
-                <td className="num">{f?.sent ?? 0}</td>
-                <td className="num">{f?.came_back ?? 0}{f?.sent ? <span className="muted small"> · {pct(f.came_back, f.sent)}</span> : null}</td>
-              </tr>
-            );
-          })}</tbody>
-        </table>
-      )}
+      {ins.isPending ? <Empty>Loading campaigns…</Empty>
+        : ins.isError ? <Empty>Couldn't load campaigns. <button className="btn small" onClick={() => void ins.refetch()}>Retry</button></Empty>
+          : !ins.data.length ? <Empty>No campaigns yet.</Empty> : (
+            <table className="table card-table" aria-label="Campaigns">
+              <thead><tr><th>Name</th><th>Audience</th><th>Status</th><th className="num">Sent</th><th className="num">Redeemed</th><th className="num">Came back</th></tr></thead>
+              <tbody>{ins.data.map((c) => (
+                <tr key={c.campaign_id} className="clickable" onClick={() => navigate(`/campaigns/${c.campaign_id}`)}>
+                  <td data-label="Name"><button className="link">{c.name}</button><div className="muted small">{c.scheduled_at ? dayMonth(c.scheduled_at) : "not scheduled"}</div></td>
+                  <td data-label="Audience">{SEGMENT_LABEL[c.segment]}</td>
+                  <td data-label="Status"><span className={`chip ${STATUS[c.status].cls}`}>{STATUS[c.status].label}</span></td>
+                  <td data-label="Sent" className="num">{c.sent}</td>
+                  <td data-label="Redeemed" className="num">{c.redeemed}{c.delivered ? <span className="muted small"> · {pct(c.redeemed, c.delivered)}</span> : null}</td>
+                  <td data-label="Came back" className="num">{c.came_back}{c.sent ? <span className="muted small"> · {pct(c.came_back, c.sent)}</span> : null}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          )}
       <h3>Templates</h3>
       <p className="muted small">Templates are created by the Restro team.</p>
       <ul className="plist">{(q.data?.templates ?? []).map((t) => (
         <li key={t.name} className="row"><span className="grow mono">{t.name}</span><span className="muted small">{t.category}</span>
           <span className={`chip ${t.status === "approved" ? "ok" : t.status === "rejected" ? "critical" : "warning"}`}>{t.status}</span></li>
       ))}</ul>
-    </div>
-  );
-}
-
-function FunnelBars({ f }: { f: Funnel }) {
-  const steps: [string, number, string?][] = [
-    ["Sent", f.sent], ["Held by WhatsApp", f.held, "Normal: WhatsApp limits how many marketing messages one person gets from all businesses."],
-    ["Delivered", f.delivered + f.read], ["Read", f.read], ["Came back", f.came_back],
-  ];
-  return (
-    <ul className="funnel">
-      {steps.map(([label, n, tip]) => (
-        <li key={label} title={tip}>
-          <span className="label">{label}{tip ? " ⓘ" : ""}</span>
-          <span className="track"><span className="fill" style={{ width: f.sent ? `${(n / f.sent) * 100}%` : 0 }} /></span>
-          <span className="val">{n} · {pct(n, f.sent)}</span>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function Report({ campaignId }: { campaignId: string }) {
-  const q = useCampaigns();
-  const toasts = useToasts();
-  const qc = useQueryClient();
-  const { cafeId } = useSession();
-  const navigate = useNavigate();
-  const c = q.data?.list.find((x) => x.id === campaignId);
-  const f = q.data?.funnels.get(campaignId);
-  if (q.isPending) return <Empty>Loading…</Empty>;
-  if (!c) return <Empty>This campaign isn't available. <Link to="/campaigns">Back</Link></Empty>;
-  if (c.status === "draft") return <Wizard draft={c} />;
-  async function cancel() {
-    try {
-      await campaigns.cancel(campaignId);
-      toasts.show("Campaign cancelled · messages not yet sent won't go out");
-      void qc.invalidateQueries({ queryKey: ["campaigns", cafeId] });
-    } catch (e) {
-      toasts.show(e instanceof Error ? e.message : "Couldn't cancel", true);
-    }
-  }
-  return (
-    <div className="campaigns">
-      <div className="row toolbar">
-        <button className="btn small ghost" onClick={() => navigate("/campaigns")}>← Campaigns</button>
-        <h2 className="grow">{c.name} <span className={`chip ${STATUS[c.status].cls}`}>{STATUS[c.status].label}</span></h2>
-        {(c.status === "scheduled" || c.status === "sending") && <button className="btn danger small" onClick={() => void cancel()}>{c.status === "scheduled" ? "Cancel scheduled send" : "Stop sending"}</button>}
-      </div>
-      <p className="muted">{SEGMENT_LABEL[c.segment]} · {c.template_name} · {c.offer_text ?? "no offer text"}{c.discount_percent ? ` · ${c.discount_percent} % off the bill` : ""}
-        {c.scheduled_at ? ` · ${new Date(c.scheduled_at).toLocaleString("en-IN")}` : ""}</p>
-      {f ? (
-        <>
-          <FunnelBars f={f} />
-          <div className="tiles">
-            <div className="tile"><div className="tile-label">They spent</div><div className="tile-value">{inr(f.spent_paise)}</div><div className="tile-sub">orders with a redeemed code, cancelled excluded</div></div>
-            <div className="tile"><div className="tile-label">Discount given</div><div className="tile-value">{inr(f.discount_paise)}</div></div>
-            <div className="tile"><div className="tile-label">WhatsApp cost</div><div className="tile-value">—</div><div className="tile-sub">not tracked until GCP</div></div>
-            {f.queued > 0 && <div className="tile"><div className="tile-label">Still to send</div><div className="tile-value">{f.queued}</div><div className="tile-sub">within the daily limit</div></div>}
-          </div>
-        </>
-      ) : <Empty>No messages sent yet.</Empty>}
-    </div>
+    </>
   );
 }
 

@@ -1,0 +1,66 @@
+/* Campaign detail, insights and the Redeem screen (docs/console.md#campaigns, #redeem-offer). app.css stays untouched
+   (decision D41); .campaigns, .funnel, .table, .tiles and .panel come from app.css / ops.css. */
+
+/* Redeem: one column, phone first */
+.redeem { display: flex; flex-direction: column; gap: var(--space-3); max-width: 720px; width: 100%; }
+.redeem h2 { font-size: 20px; }
+.redeem-search { display: flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-3); background: var(--color-card);
+  border: 2px solid var(--color-text); }
+.redeem-search input { flex: 1; min-width: 0; font: inherit; font-size: 18px; padding: 12px 0; border: 0; background: transparent; outline: none; }
+.offer-results { display: flex; flex-direction: column; gap: var(--space-3); }
+.offer-card { background: var(--color-card); border: 1px solid var(--color-border); padding: var(--space-3); display: flex; flex-direction: column;
+  gap: var(--space-2); min-width: 0; }
+.offer-who { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px var(--space-2); }
+.offer-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.offer-row { border-top: 1px solid var(--color-surface); padding-top: var(--space-2); display: flex; flex-direction: column; gap: 4px; }
+.offer-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.offer-code { font-size: 16px; font-weight: 700; }
+.offer-code.hit { background: var(--color-amber-soft); padding: 0 4px; }
+.offer-reason { margin: 0; }
+.offer-warning { margin: 0; color: var(--color-amber); font-weight: 600; }
+.offer-done { margin: 0; color: var(--color-green); font-weight: 700; }
+.offer-actions { gap: var(--space-2); flex-wrap: wrap; }
+.redeemed-today h3 { margin-bottom: var(--space-2); }
+.redeemed-row { display: flex; flex-wrap: wrap; gap: 4px var(--space-3); align-items: baseline; }
+.redeem-done { text-align: center; display: flex; flex-direction: column; gap: var(--space-2); }
+.redeem-done .collect { font-size: 34px; font-weight: 800; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+
+/* Campaign detail */
+.detail-head { flex-wrap: wrap; }
+.side-counts { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); font-size: 14px; }
+.side-counts li { color: var(--color-muted); }
+.side-counts strong { color: var(--color-text); margin-left: 4px; }
+.glossary summary { cursor: pointer; font-weight: 700; }
+.count-line { margin: 0; }
+.pager { gap: var(--space-2); align-items: center; justify-content: flex-end; }
+.recipients-filters input { font: inherit; padding: 8px 10px; border: 1px solid var(--color-border); min-width: 0; }
+.card-table[aria-busy="true"] { opacity: 0.6; } /* the last page, kept while the next filter or page loads */
+.sort-phone { display: none; }
+.sort-phone select { font: inherit; padding: 6px 8px; border: 1px solid var(--color-border); background: var(--color-card); margin-left: 4px; }
+.campaigns .table .num, .insights .table .num { font-variant-numeric: tabular-nums; }
+
+/* Insights */
+.insights { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
+.insights .table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.insights .table th { text-align: left; font-size: 11px; text-transform: uppercase; color: var(--color-muted); padding: 6px 8px;
+  border-bottom: 1px solid var(--color-border); white-space: nowrap; }
+.insights .table th.num, .insights .table td.num { text-align: right; }
+.insights .table td { padding: 8px; border-bottom: 1px solid var(--color-surface); }
+.insights tr.clickable { cursor: pointer; }
+.insights .link { background: none; border: 0; padding: 0; font: inherit; text-decoration: underline; cursor: pointer; }
+.insights .link.sort { text-decoration: none; text-transform: inherit; color: inherit; font-weight: 700; display: inline-flex; gap: 2px; align-items: center; }
+.best-campaign { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-3); background: var(--color-card);
+  border: 1px solid var(--color-border); }
+
+/* Phones: tables become cards, nothing scrolls sideways */
+@media (max-width: 767px) {
+  .funnel li { grid-template-columns: 96px 1fr 84px; }
+  .card-table thead { display: none; }
+  .card-table, .card-table tbody, .card-table tr, .card-table td { display: block; width: 100%; }
+  .card-table tr { border: 1px solid var(--color-border); background: var(--color-card); padding: var(--space-2) var(--space-3); margin-bottom: var(--space-2); }
+  .card-table td { border: 0 !important; padding: 2px 0 !important; text-align: left !important; overflow-wrap: anywhere; }
+  .card-table td[data-label]::before { content: attr(data-label) " · "; color: var(--color-muted); font-size: 11px; text-transform: uppercase; }
+  .sort-phone { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-bottom: var(--space-2); }
+  .redeem-search input { font-size: 16px; }
+  .offer-actions .btn { flex: 1; }
+}

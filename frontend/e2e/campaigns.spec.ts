@@ -60,8 +60,30 @@ test("opt in at the counter → campaign → code on WhatsApp → redeemed on th
   await expect(shift.getByText(/Bill delivered · T9 closed/)).toBeVisible();
   await shift.context().close();
 
+  // The detail reads v_campaign_insights: the bill redemption counts as Came back and as Redeemed.
   await page.goto(report);
   await expect(page.locator(".funnel li", { hasText: "Came back" })).toContainText(/^Came back.*1 ·/, { timeout: 30_000 });
+  await expect(page.locator(".funnel li", { hasText: "Redeemed" })).toContainText(/^Redeemed1 ·/);
+  await page.getByRole("button", { name: "Redemptions" }).click();
+  await expect(page.getByRole("row", { name: new RegExp(code) })).toContainText("T9 bill");
+
+  // Insights: the campaign's row in the comparison and the totals.
+  await page.goto("/campaigns/insights");
+  const row = page.getByRole("row", { name: new RegExp(`E2E ${prefix}`) });
+  await expect(row.getByRole("cell").nth(5)).toHaveText("1"); // Redeemed
+  await expect(row.getByRole("cell").nth(4)).not.toHaveText("0 %"); // Came back
+  await expect(page.locator(".tile", { hasText: "Came back" })).toBeVisible();
+  await expect(page.locator(".tile", { hasText: "Redeemed" })).toBeVisible();
+
+  // 375 px: the list and the comparison become cards; no table runs past the screen, the page included.
+  await page.setViewportSize({ width: 375, height: 800 });
+  for (const path of ["/campaigns", "/campaigns/insights", `${report}?tab=recipients`]) {
+    await page.goto(path);
+    await expect(page.locator("table").first()).toBeVisible();
+    const wide = await page.evaluate(() => [...document.querySelectorAll("table")].filter((t) => t.getBoundingClientRect().right > innerWidth + 1).length
+      + Math.max(0, document.documentElement.scrollWidth - document.documentElement.clientWidth));
+    expect(wide).toBe(0);
+  }
 
   await customer.say("STOP");
   await customer.expectReply(/You won't get offers/);
