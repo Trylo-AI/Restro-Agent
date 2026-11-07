@@ -24,8 +24,12 @@ function screen<M, K extends keyof M>(load: () => Promise<M>, name: K) {
 const ops = () => import("../features/ops");
 const reports = () => import("../features/reports/ReportsScreen");
 const setup = () => import("../features/setup/SetupScreen");
+const audit = () => import("../features/audit");
 const CampaignsScreen = screen(() => import("../features/campaigns/CampaignsScreen"), "CampaignsScreen");
 const CustomersScreen = screen(() => import("../features/customers/CustomersScreen"), "CustomersScreen");
+const RedeemScreen = screen(() => import("../features/redeem/RedeemScreen"), "RedeemScreen");
+const AuditScreen = screen(audit, "AuditScreen");
+const OrderHistoryScreen = screen(audit, "OrderHistoryScreen");
 const AnalyticsScreen = screen(reports, "AnalyticsScreen");
 const ServiceReportScreen = screen(reports, "ServiceReportScreen");
 const QrSheet = screen(setup, "QrSheet");
@@ -110,6 +114,9 @@ function Gate() {
             <Route path="logs" element={<OpsLogs />} />
           </Route>
           <Route path="/today" element={<TodayScreen />} />
+          <Route path="/redeem" element={<RedeemScreen />} />
+          <Route path="/audit" element={<AuditScreen />} />
+          <Route path="/audit/orders/:orderId" element={<OrderHistoryScreen />} />
           <Route path="*" element={<Home />} />
         </Route>
       </Routes>

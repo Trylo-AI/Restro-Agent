@@ -1,8 +1,9 @@
 // Customer profile: at-a-glance box, then feedback, complaints, recent orders, comments
 // (docs/console.md#customer-profile). Shared by Live orders, Calls and bills, and Chats.
 import { useQueryClient } from "@tanstack/react-query";
-import { CalendarClock, CircleAlert, Heart, Leaf, Phone, ThumbsDown, UtensilsCrossed, X } from "lucide-react";
+import { CalendarClock, CircleAlert, Heart, History, Leaf, Phone, ThumbsDown, UtensilsCrossed, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
+import { Link } from "react-router-dom";
 
 import { useNow } from "../../app/alerts";
 import { useToasts } from "../../app/toasts";
@@ -11,7 +12,7 @@ import { ApiError } from "../../lib/api/client";
 import { useCustomerProfile, type CustomerProfile } from "../../lib/data";
 import { dayMonth as day, inr, ordinal, relative } from "../../lib/format";
 import { customers } from "../../lib/mutations";
-import { useSession } from "../../lib/session";
+import { atLeast, useSession } from "../../lib/session";
 import type { CustomerNote, Preference } from "../../lib/types";
 
 const KIND_LABEL: Record<Preference["kind"], string> = {
@@ -60,6 +61,7 @@ function AtAGlance({ p, customerId }: { p: CustomerProfile; customerId: string }
   const now = useNow(60_000);
   const toasts = useToasts();
   const refresh = useRefresh();
+  const owner = atLeast(useSession().role, "owner");
   const card = p.card!;
   const of = (k: Preference["kind"]) => p.prefs.filter((x) => x.kind === k);
 
@@ -91,6 +93,10 @@ function AtAGlance({ p, customerId }: { p: CustomerProfile; customerId: string }
         {card.segment && <span className="chip flag">{SEGMENT[card.segment]}</span>}</div>
       <div className="glance-line"><CalendarClock size={16} aria-hidden />
         {card.last_visit_at ? `Last visit ${day(card.last_visit_at)} · ${relative(card.last_visit_at, now)}` : "No visit yet"}</div>
+      {owner && (
+        // Every staff action on this customer, all time (docs/console.md#audit-log). Owner only.
+        <div className="glance-line"><History size={16} aria-hidden /> <Link to={`/audit?customer=${customerId}&range=all`}>Staff activity</Link></div>
+      )}
       {card.top_items?.length ? (
         <div className="glance-line"><UtensilsCrossed size={16} aria-hidden /> <span className="grow">Usually: {card.top_items.join(", ")}</span></div>
       ) : null}

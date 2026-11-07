@@ -13,9 +13,10 @@ import { CancelDialog, DelayDialog } from "./dialogs";
 import { OrderCard, type CardActions } from "./OrderCard";
 import { canCancel, useOrderActions } from "./useOrderActions";
 
+const session = vi.hoisted(() => ({ role: "shift_manager" as string }));
 vi.mock("../../lib/session", async (orig) => ({
   ...(await orig<typeof import("../../lib/session")>()),
-  useSession: () => ({ cafeId: "cafe-1", role: "shift_manager", userId: "u-1", cafeName: "Kaapi House" }),
+  useSession: () => ({ cafeId: "cafe-1", role: session.role, userId: "u-1", cafeName: "Kaapi House" }),
 }));
 vi.mock("../../lib/mutations", async (orig) => ({
   ...(await orig<typeof import("../../lib/mutations")>()),
@@ -77,6 +78,20 @@ describe("order card", () => {
     card(liveOrder({ customer_id: null, source: "manual", customerName: null }));
     expect(screen.getByText(/Manual order/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Profile/ })).not.toBeInTheDocument();
+  });
+
+  test("History links to the order's audit history, for the owner only", () => {
+    for (const role of ["shift_manager", "manager"]) {
+      session.role = role;
+      const { unmount } = card(liveOrder());
+      expect(screen.queryByRole("link", { name: /History/ })).not.toBeInTheDocument();
+      unmount();
+    }
+    session.role = "owner";
+    render(<MemoryRouter><OrderCard o={liveOrder()} urgency={orderUrgency(liveOrder(), NOW)} now={NOW} canCancel
+      offline busy={false} act={noop} /></MemoryRouter>);
+    expect(screen.getByRole("link", { name: /History/ })).toHaveAttribute("href", "/audit/orders/o-1"); // a read: offline too
+    session.role = "shift_manager";
   });
 
   test("accepted card shows elapsed / budget including the delay", () => {

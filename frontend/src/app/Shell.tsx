@@ -1,6 +1,6 @@
 // Shell: sidebar (≥ 768 px) or tab bar, header with the active café, banners, toasts, alerts gate.
 import { useQueryClient } from "@tanstack/react-query";
-import { Activity, BarChart3, BellRing, House, Megaphone, Users, ClipboardList, Gauge, MessageCircle, PhoneCall, Settings, UtensilsCrossed } from "lucide-react";
+import { Activity, BarChart3, BellRing, House, Megaphone, Users, ClipboardList, Gauge, MessageCircle, PhoneCall, ScrollText, Settings, TicketPercent, UtensilsCrossed } from "lucide-react";
 import { Suspense, useEffect, useMemo, useRef, type ReactNode } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 
@@ -18,9 +18,10 @@ const NAV = [
   { to: "/calls", label: "Calls and bills", short: "Calls", icon: PhoneCall, area: "calls" as const },
   { to: "/chats", label: "Chats", short: "Chats", icon: MessageCircle, area: "chats" as const },
   { to: "/menu", label: "Menu", short: "Menu", icon: UtensilsCrossed, area: null },
+  { to: "/redeem", label: "Redeem offer", short: "Redeem", icon: TicketPercent, area: null },
 ];
 
-const TITLES: Record<string, string> = { "/orders": "Live orders", "/calls": "Calls and bills", "/chats": "Chats", "/menu": "Menu", "/setup": "Setup", "/service-report": "Service report", "/analytics": "Analytics", "/customers": "Customers", "/campaigns": "Campaigns", "/today": "Today", "/platform": "Performance" };
+const TITLES: Record<string, string> = { "/orders": "Live orders", "/calls": "Calls and bills", "/chats": "Chats", "/menu": "Menu", "/setup": "Setup", "/service-report": "Service report", "/analytics": "Analytics", "/customers": "Customers", "/campaigns": "Campaigns", "/today": "Today", "/platform": "Performance", "/redeem": "Redeem offer", "/audit": "Audit log" };
 
 function Banners({ offline, retry }: { offline: boolean; retry: () => void }) {
   const cafe = useCafe();
@@ -111,6 +112,7 @@ export function Shell() {
                 <NavLink to="/campaigns" className={({ isActive }) => (isActive ? "active" : "")}><Megaphone size={18} /> Campaigns</NavLink>
                 <NavLink to="/analytics" className={({ isActive }) => (isActive ? "active" : "")}><BarChart3 size={18} /> Analytics</NavLink>
                 <NavLink to="/setup/tables" className={({ isActive }) => (isActive ? "active" : "")}><Settings size={18} /> Setup</NavLink>
+                <NavLink to="/audit" className={({ isActive }) => (isActive ? "active" : "")}><ScrollText size={18} /> Audit log</NavLink>
               </>
             )}
             {atLeast(role, "owner") && (
@@ -143,7 +145,8 @@ export function Shell() {
             </ErrorBoundary>
           </div>
         </div>
-        <nav className="tabbar">
+        {/* One column per entry (app.css says 4; Redeem made it 5): ~75 px each at 375 px, no horizontal scroll. */}
+        <nav className="tabbar" style={{ gridTemplateColumns: `repeat(${NAV.length}, 1fr)` }}>
           {NAV.map((n) => (
             <NavLink key={n.to} to={n.to} className={({ isActive }) => (isActive ? "active" : "")}>
               <n.icon size={20} /> {n.short}

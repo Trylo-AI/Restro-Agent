@@ -1,9 +1,11 @@
 // One live order card (docs/console.md#live-orders).
-import { CircleAlert, MessageCircle, Printer, Timer, UserRound, X } from "lucide-react";
+import { CircleAlert, History, MessageCircle, Printer, Timer, UserRound, X } from "lucide-react";
+import { Link } from "react-router-dom";
 
 import { Flag, Progress, SeverityChip } from "../../components/ui";
 import type { LiveOrder } from "../../lib/data";
 import { clock, inr, minutesSince, ordinal, secondsSince } from "../../lib/format";
+import { atLeast, useSession } from "../../lib/session";
 import type { Urgency } from "../../lib/urgency";
 import { NEXT } from "./useOrderActions";
 
@@ -40,6 +42,7 @@ export function OrderCard({ o, urgency, now, canCancel, offline, busy, act }: {
   const showAllergy = o.status !== "READY" && (!!o.allergy_note || o.profileAllergies.length > 0);
   const flags = o.flags.filter((f) => FLAG_LABEL[f] && f !== "escalated");
   const writeOff = offline || busy;
+  const owner = atLeast(useSession().role, "owner");
 
   return (
     <article className={`order-card sev-${urgency.severity}`} aria-label={`Order ${o.number}, table ${o.table ?? "unknown"}`}>
@@ -104,6 +107,8 @@ export function OrderCard({ o, urgency, now, canCancel, offline, busy, act }: {
             <button className="btn small" onClick={act.message} disabled={writeOff}><MessageCircle size={15} /> Message</button>
           )}
           <button className="btn small" onClick={act.print}><Printer size={15} /> Print</button>
+          {/* The order's full audit history (docs/console.md#audit-log), owner only. A read: works offline too. */}
+          {owner && <Link className="btn small ghost" to={`/audit/orders/${o.id}`}><History size={15} /> History</Link>}
           {(o.status === "NEW" || o.status === "ACCEPTED") && (
             <button className="btn small" onClick={act.delay} disabled={writeOff}>Delay</button>
           )}

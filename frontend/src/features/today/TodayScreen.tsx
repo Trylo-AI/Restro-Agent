@@ -7,11 +7,13 @@ import { Link, Navigate } from "react-router-dom";
 
 import { useToasts } from "../../app/toasts";
 import { Empty } from "../../components/ui";
+import { useAuditFacets } from "../../lib/audit";
 import { useCafe, useLiveOrders } from "../../lib/data";
 import { inr } from "../../lib/format";
 import { cafes } from "../../lib/mutations";
 import { useToday } from "../../lib/reports";
 import { atLeast, useSession } from "../../lib/session";
+import { bounds, EMPTY } from "../audit/filters";
 import { Delta, Tile } from "../ops/common";
 
 interface Card { key: string; critical: boolean; body: ReactNode }
@@ -24,6 +26,9 @@ export function TodayScreen() {
   const toasts = useToasts();
   const qc = useQueryClient();
   const [busy, setBusy] = useState(false);
+  // Critical staff actions today (audit log, local day). History, not an emergency: an amber card, no sound (D26).
+  const day = bounds({ ...EMPTY, range: "today" })!;
+  const audit = useAuditFacets(day.from.toISOString(), day.to.toISOString(), atLeast(role, "owner"));
   if (!atLeast(role, "owner")) return <Navigate to="/orders" replace />;
 
   const t = today.data;
@@ -52,6 +57,11 @@ export function TodayScreen() {
           void qc.invalidateQueries({ queryKey: ["cafe", cafeId] });
         }
       }}>Resume</button></> });
+  }
+  const critical = audit.data?.by_severity.critical ?? 0;
+  if (critical > 0) {
+    cards.push({ key: "audit", critical: false, body: <>{critical} critical staff action{critical > 1 ? "s" : ""} today.{" "}
+      <Link to="/audit?severity=critical&range=today">Open audit log</Link></> });
   }
   const quality = c?.health?.quality;
   if (quality === "Medium" || quality === "Low") {

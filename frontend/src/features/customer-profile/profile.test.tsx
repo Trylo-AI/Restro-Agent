@@ -1,6 +1,7 @@
 // Customer profile panel (docs/console.md#customer-profile, "Done when").
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 
 import { ToastProvider } from "../../app/toasts";
 import { ApiError } from "../../lib/api/client";
@@ -9,9 +10,10 @@ import { customers } from "../../lib/mutations";
 import type { CustomerNote, Preference } from "../../lib/types";
 import { CustomerProfileBody } from "./CustomerProfilePanel";
 
+const session = vi.hoisted(() => ({ role: "shift_manager" as string }));
 vi.mock("../../lib/session", async (orig) => ({
   ...(await orig<typeof import("../../lib/session")>()),
-  useSession: () => ({ cafeId: "cafe-1", role: "shift_manager", userId: "u-1" }),
+  useSession: () => ({ cafeId: "cafe-1", role: session.role, userId: "u-1" }),
 }));
 vi.mock("../../lib/data", async (orig) => ({
   ...(await orig<typeof import("../../lib/data")>()),
@@ -50,9 +52,25 @@ function profile(over: Partial<CustomerProfile> = {}): CustomerProfile {
 function show(p: CustomerProfile) {
   vi.mocked(useCustomerProfile).mockReturnValue({ data: p, isPending: false, isError: false, refetch: vi.fn() } as never);
   return render(
-    <QueryClientProvider client={new QueryClient()}><ToastProvider><CustomerProfileBody customerId="cu-1" /></ToastProvider></QueryClientProvider>,
+    <QueryClientProvider client={new QueryClient()}><ToastProvider><MemoryRouter><CustomerProfileBody customerId="cu-1" /></MemoryRouter></ToastProvider></QueryClientProvider>,
   );
 }
+
+afterEach(() => {
+  session.role = "shift_manager";
+});
+
+test("Staff activity links to the customer's audit log (all time), for the owner only", () => {
+  for (const role of ["shift_manager", "manager"]) {
+    session.role = role;
+    const { unmount } = show(profile());
+    expect(screen.queryByRole("link", { name: "Staff activity" })).not.toBeInTheDocument();
+    unmount();
+  }
+  session.role = "owner";
+  show(profile());
+  expect(screen.getByRole("link", { name: "Staff activity" })).toHaveAttribute("href", "/audit?customer=cu-1&range=all");
+});
 
 test("the at-a-glance box: name, visit, masked phone, last visit, usual dishes, allergy, dislikes, diet, prefers", () => {
   show(profile());
