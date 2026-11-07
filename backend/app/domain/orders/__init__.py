@@ -67,8 +67,10 @@ async def _transition(conn: asyncpg.Connection, cafe_id: str, order_id: str, to:
     await order_writes.insert_event(conn, cafe_id, order_id, order.status, to, actor.type, actor.id, reason)
     if actor.type == "staff":
         change: dict[str, Any] = {"order_id": order_id, "number": order.number, "from": order.status, "to": to}
+        if order.customer_id:
+            change["customer_id"] = order.customer_id
         if to == "CANCELLED":
-            change["reason_code"] = (extra or {}).get("cancel_reason_code")
+            change["reason_code"] = (extra or {}).get("cancel_reason_code")  # the staff note stays on the order
         await audit.write(conn, cafe_id, actor.audit_actor, "order.cancel" if to == "CANCELLED" else "order.transition", change)
     return updated
 
@@ -90,8 +92,10 @@ async def undo(conn: asyncpg.Connection, cafe_id: str, order_id: str, actor: Ord
     if reverted is None:
         raise VersionConflict()
     await order_writes.insert_event(conn, cafe_id, order_id, order.status, back, "staff", actor.id, "undo")
-    await audit.write(conn, cafe_id, actor.audit_actor, "order.undo",
-                      {"order_id": order_id, "number": order.number, "from": order.status, "to": back})
+    change: dict[str, Any] = {"order_id": order_id, "number": order.number, "from": order.status, "to": back}
+    if order.customer_id:
+        change["customer_id"] = order.customer_id
+    await audit.write(conn, cafe_id, actor.audit_actor, "order.undo", change)
     return reverted
 
 

@@ -160,7 +160,8 @@ async def invite(p: Principal, email: str, role: str, display_name: str | None) 
             user_id, p.cafe_id, role, display_name)
         if row is None:
             raise VersionConflict("This person is already on the team.")
-        await audit.write(c, p.cafe_id, _actor(p), "team.invite", {"membership_id": row["id"], "role": role})
+        await audit.write(c, p.cafe_id, _actor(p), "team.invite",
+                          {"membership_id": row["id"], "user_id": row["user_id"], "role": role})  # never the email
     return dict(row)
 
 
@@ -185,6 +186,7 @@ async def update_member(p: Principal, membership_id: str, role: str | None, acti
         await c.execute("update memberships set role = $3, active = $4 where cafe_id = $1 and id = $2",
                         p.cafe_id, membership_id, new_role, new_active)
         await audit.write(c, p.cafe_id, _actor(p), "team.update",
-                          {"membership_id": membership_id, "role": new_role, "active": new_active})
+                          {"membership_id": membership_id, "user_id": m.user_id, "from_role": m.role, "role": new_role,
+                           "from_active": m.active, "active": new_active})
         m.role, m.active = new_role, new_active
     return asdict(m)

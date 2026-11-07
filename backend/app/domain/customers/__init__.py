@@ -114,7 +114,8 @@ async def undo_note(p: Principal, note_id: str) -> Note:
                 await prefs.insert(c, p.cafe_id, note.customer_id, kind, value, "staff_note", None)
         undone = await prefs.mark_undone(c, p.cafe_id, note_id, p.user_id)
         await audit.write(c, p.cafe_id, audit.Actor(p.user_id, p.role), "customer.profile_undo",
-                          {"customer_id": note.customer_id, "note_id": note_id})
+                          {"customer_id": note.customer_id, "note_id": note_id,
+                           "ops": [{"op": o["op"], "kind": o["kind"], "value": o["value"]} for o in note.ai_ops]})
     return undone or note
 
 

@@ -27,6 +27,9 @@ sys.path.insert(0, str(ROOT / "backend"))
 
 from app.core.config import get_settings  # noqa: E402
 
+import demo_audit  # noqa: E402  (supabase/seed/, next to this file)
+import demo_retention  # noqa: E402
+
 NOW = datetime.now(UTC)
 SIM_PHONE_NUMBER_ID = "100000000000001"
 CAFE_B_PHONE_NUMBER_ID = "100000000000002"
@@ -412,6 +415,8 @@ async def main() -> None:
                        on conflict (cafe_id, name, language) do update set status = 'approved'""", cafe_id, tname)
             await seed_customers(conn, cafe_id, tables, menu, users["shift@restro.test"])
             await seed_retention(conn, cafe_id)
+            await demo_retention.seed(conn, cafe_id, users)
+            await demo_audit.seed(conn, cafe_id, users)
             if args.live:
                 await seed_live(conn, cafe_id, tables, menu)
 

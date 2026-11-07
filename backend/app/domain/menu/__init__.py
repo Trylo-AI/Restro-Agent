@@ -55,6 +55,7 @@ async def save_item(p: Principal, item_id: str | None, fields: dict[str, object]
     try:
         async with tx() as c:
             version = await menu_repo.next_version(c, p.cafe_id)
+            before_allergens: dict[str, str] = {}
             if item_id is None:
                 item = await menu_repo.insert(c, p.cafe_id, fields, version)
                 before = None
@@ -62,6 +63,7 @@ async def save_item(p: Principal, item_id: str | None, fields: dict[str, object]
                 before = await menu_repo.get(c, p.cafe_id, item_id)
                 if before is None:
                     raise NotFound()
+                before_allergens = (await menu_repo.allergens(c, p.cafe_id, [item_id]))[item_id]  # before the replace
                 updated = await menu_repo.update(c, p.cafe_id, item_id, fields, expected_version, version)
                 if updated is None:
                     raise VersionConflict("Someone else changed this item. Reload to see their change.")
@@ -71,10 +73,17 @@ async def save_item(p: Principal, item_id: str | None, fields: dict[str, object]
             if before is not None and before.available and not item.available:
                 flagged = await order_writes.flag_open_orders_with_item(c, p.cafe_id, item.id, "item_sold_out")
             changed = sorted(k for k, v in fields.items() if before is None or getattr(before, k) != v)
-            await audit.write(c, p.cafe_id, audit.Actor(p.user_id, p.role), "menu.update",
-                              {"item_id": item.id, "name": item.name, "new": before is None, "fields": changed,
-                               "allergens": len([s for s in allergens.values() if s != "unknown"]),
-                               "orders_flagged": flagged})
+            change: dict[str, object] = {
+                "item_id": item.id, "name": item.name, "new": before is None, "fields": changed,
+                "allergens": len([s for s in allergens.values() if s != "unknown"]), "orders_flagged": flagged,
+                "price_paise_from": before.price_paise if before else None, "price_paise_to": item.price_paise,
+                "available_from": before.available if before else None, "available_to": item.available}
+            if before is not None:
+                change["allergens_changed"] = [
+                    {"allergen": a, "from": before_allergens.get(a, "unknown"), "to": allergens.get(a, "unknown")}
+                    for a in sorted(set(before_allergens) | set(allergens))
+                    if before_allergens.get(a, "unknown") != allergens.get(a, "unknown")]
+            await audit.write(c, p.cafe_id, audit.Actor(p.user_id, p.role), "menu.update", change)
     except asyncpg.UniqueViolationError as exc:
         raise _duplicate(str(fields["name"])) from exc
     return item, {a: allergens.get(a, "unknown") for a in csv_import.ALLERGENS}

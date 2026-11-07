@@ -121,8 +121,10 @@ async def staff_delay(p: Principal, order_id: str, minutes: int, note: str | Non
                 raise NotFound()
             raise InvalidTransition()
         order = delayed
-        await audit.write(c, p.cafe_id, staff(p).audit_actor, "order.delay",
-                          {"order_id": order_id, "number": order.number, "minutes": minutes})
+        change: dict[str, Any] = {"order_id": order_id, "number": order.number, "minutes": minutes, "has_note": bool(note)}
+        if order.customer_id:
+            change["customer_id"] = order.customer_id
+        await audit.write(c, p.cafe_id, staff(p).audit_actor, "order.delay", change)  # never the note itself
     if order.status == "ACCEPTED":
         await after_status_change(order, message=False)  # re-creates `overdue` at the new due time
     if order.customer_id:
@@ -157,7 +159,10 @@ async def manual_order(p: Principal, table_id: str, items: list[dict[str, Any]],
         if created:
             await order_writes.insert_event(c, p.cafe_id, order.id, None, "ACCEPTED", "staff", p.user_id, "manual")
             await audit.write(c, p.cafe_id, staff(p).audit_actor, "order.manual",
-                              {"order_id": order.id, "number": order.number, "table": table[1]})
+                              {"order_id": order.id, "number": order.number, "table": table[1],
+                               "lines": [{"item_id": ln.item_id, "name": ln.name, "qty": ln.qty, "price_paise": ln.price_paise}
+                                         for ln in lines],
+                               "total_paise": order.total_paise, "has_allergy_note": bool(order.allergy_note)})
     if created:
         await after_status_change(order, message=False)
     return order

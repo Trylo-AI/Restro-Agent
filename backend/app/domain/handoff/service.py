@@ -34,6 +34,12 @@ def _actor(p: Principal) -> audit.Actor:
     return audit.Actor(p.user_id, p.role)
 
 
+def _links(req: Request) -> dict[str, str]:
+    """A request's order, chat and table session for the audit filters (non-None only)."""
+    return {k: v for k, v in (("order_id", req.order_id), ("conversation_id", req.conversation_id),
+                              ("table_session_id", req.table_session_id)) if v}
+
+
 async def schedule_help_escalation(cafe_id: str, request_id: str) -> None:
     await timers.schedule(cafe_id, "help_escalation", request_id, HELP_ESCALATION_AFTER, dedupe=f"help_esc:{request_id}")
 
@@ -60,7 +66,8 @@ async def ack(p: Principal, request_id: str) -> Request:
         req = await _own_request(c, p, request_id)
         changed = await requests_repo.acknowledge(c, p.cafe_id, request_id, p.user_id)
         if changed:
-            await audit.write(c, p.cafe_id, _actor(p), "request.ack", {"request_id": request_id, "kind": req.kind})
+            await audit.write(c, p.cafe_id, _actor(p), "request.ack",
+                              {"request_id": request_id, "kind": req.kind, **_links(req)})
             return changed
     return req
 
@@ -71,7 +78,8 @@ async def resolve(p: Principal, request_id: str) -> Request:
         changed = await requests_repo.resolve(c, p.cafe_id, request_id)
         if not changed:
             return req
-        await audit.write(c, p.cafe_id, _actor(p), "request.resolve", {"request_id": request_id, "kind": req.kind})
+        await audit.write(c, p.cafe_id, _actor(p), "request.resolve",
+                          {"request_id": request_id, "kind": req.kind, **_links(req)})
         if req.kind in ("help", "allergy") and req.conversation_id:
             still_open = await requests_repo.open_for_conversation(c, p.cafe_id, req.conversation_id, ("help", "allergy"))
             if not still_open:  # resolving the conversation's help hands the chat back to the bot
@@ -81,18 +89,27 @@ async def resolve(p: Principal, request_id: str) -> Request:
 
 # ── chats ─────────────────────────────────────────────────────────────────
 
-async def _conversation(c: Any, p: Principal, conversation_id: str) -> conversations.Conversation:
-    convo = await conversations.get(c, p.cafe_id, conversation_id)
+async def _conversation(c: Any, p: Principal, conversation_id: str, *,
+                        for_update: bool = False) -> conversations.Conversation:
+    convo = await conversations.get(c, p.cafe_id, conversation_id, for_update=for_update)
     if convo is None:
         raise NotFound()
     return convo
 
 
-async def takeover(p: Principal, conversation_id: str) -> conversations.Conversation:
+async def takeover(p: Principal, conversation_id: str, *, via: str = "takeover",
+                   table_session_id: str | None = None) -> conversations.Conversation:
+    """`via`: takeover (the button) · reply (a staff reply from bot mode) · table (Message the table)."""
     async with tx() as c:
-        convo = await _conversation(c, p, conversation_id)
+        # Locked, so a concurrent takeover or idle handback can't change the previous assignee under us.
+        convo = await _conversation(c, p, conversation_id, for_update=True)
+        from_mode, from_assigned_to = convo.mode, convo.assigned_to  # read before set_mode
         if await conversations.set_mode(c, p.cafe_id, conversation_id, "human", p.user_id):
-            await audit.write(c, p.cafe_id, _actor(p), "chat.takeover", {"conversation_id": conversation_id})
+            change: dict[str, Any] = {"conversation_id": conversation_id, "customer_id": convo.customer_id, "via": via,
+                                      "from_mode": from_mode, "from_assigned_to": from_assigned_to}
+            if table_session_id:
+                change["table_session_id"] = table_session_id
+            await audit.write(c, p.cafe_id, _actor(p), "chat.takeover", change)
             convo.mode, convo.assigned_to = "human", p.user_id
     await arm_idle_handback(p.cafe_id, conversation_id)
     return convo
@@ -103,11 +120,12 @@ async def reply(p: Principal, conversation_id: str, text: str) -> conversations.
     async with conn() as c:
         convo = await _conversation(c, p, conversation_id)
     if convo.mode != "human" or convo.assigned_to != p.user_id:
-        convo = await takeover(p, conversation_id)
+        convo = await takeover(p, conversation_id, via="reply")
     key = f"staff:{conversation_id}:{secrets.token_hex(8)}"
     await outbound.send(p.cafe_id, Recipient(customer_id=convo.customer_id), m.Text(text), key, Purpose.STAFF_REPLY)
     async with tx() as c:  # the reply text itself is in wa_messages, never in the audit log
-        await audit.write(c, p.cafe_id, _actor(p), "chat.reply", {"conversation_id": conversation_id, "chars": len(text)})
+        await audit.write(c, p.cafe_id, _actor(p), "chat.reply",
+                          {"conversation_id": conversation_id, "customer_id": convo.customer_id, "chars": len(text)})
     await arm_idle_handback(p.cafe_id, conversation_id)
     return convo
 
@@ -116,7 +134,8 @@ async def handback(p: Principal, conversation_id: str) -> conversations.Conversa
     async with tx() as c:
         convo = await _conversation(c, p, conversation_id)
         if await conversations.set_mode(c, p.cafe_id, conversation_id, "bot", None):
-            await audit.write(c, p.cafe_id, _actor(p), "chat.handback", {"conversation_id": conversation_id})
+            await audit.write(c, p.cafe_id, _actor(p), "chat.handback",
+                              {"conversation_id": conversation_id, "customer_id": convo.customer_id})
             convo.mode, convo.assigned_to = "bot", None
     return convo
 
@@ -129,7 +148,7 @@ async def open_for_table(p: Principal, table_session_id: str) -> conversations.C
         convo = await conversations.latest_in_session(c, p.cafe_id, table_session_id)
     if convo is None:
         raise InvalidTransition("Nobody at this table has messaged us on WhatsApp yet.")
-    return await takeover(p, convo.id)
+    return await takeover(p, convo.id, via="table", table_session_id=table_session_id)
 
 
 # ── bill ──────────────────────────────────────────────────────────────────
@@ -143,7 +162,9 @@ async def deliver_bill(p: Principal, table_session_id: str) -> dict[str, Any]:
         closed = await tables_repo.close_session(c, p.cafe_id, table_session_id)
         if closed or resolved:
             await audit.write(c, p.cafe_id, _actor(p), "bill.deliver",
-                              {"table_session_id": table_session_id, "total_paise": bill["total_paise"]})
+                              {"table_session_id": table_session_id, "total_paise": bill["total_paise"],
+                               "orders": [o["number"] for o in bill["orders"]], "subtotal_paise": bill["subtotal_paise"],
+                               "discount_paise": bill["discount_paise"], "code": bill["code"]})
     return {**bill, "closed_at": bill["closed_at"] or datetime.now(UTC).isoformat()}
 
 
