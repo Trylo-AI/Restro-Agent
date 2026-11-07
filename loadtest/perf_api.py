@@ -64,6 +64,7 @@ async def main() -> int:
             return str(r.json()["access_token"])
 
         manager, owner = await token("manager@restro.test"), await token("owner@restro.test")
+        shift = await token("shift@restro.test")
         rest = {"apikey": key}
         r = await client.get(f"{sb_url}/rest/v1/cafes", params={"select": "id", "name": "eq.Kaapi House"},
                              headers={**rest, "Authorization": f"Bearer {owner}"})
@@ -103,6 +104,10 @@ async def main() -> int:
                 "select": "*", "cafe_id": f"eq.{cafe_id}", "limit": "50"})),
             ("read", "Revenue by day (Supabase view v_daily_revenue)", sb(owner, "v_daily_revenue", {
                 "select": "*", "cafe_id": f"eq.{cafe_id}"})),
+            ("read", "Offer lookup by name (FastAPI, shift manager) [offers_lookup]", fa(shift, "POST", "/offers/lookup",
+                                                                                     {"q": "Riya"})),
+            ("read", "Campaign insights (Supabase view v_campaign_insights) [campaign_insights_read]",
+             sb(owner, "v_campaign_insights", {"select": "*", "cafe_id": f"eq.{cafe_id}"})),
             ("read", "Audience preview (FastAPI, owner)", fa(owner, "POST", "/campaigns/audience-preview",
                                                             {"segment": "all_opted_in", "template_name": "weekly_offer"})),
             ("write", "Dish availability off/on (FastAPI)", availability),

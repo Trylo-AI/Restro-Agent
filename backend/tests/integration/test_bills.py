@@ -1,5 +1,6 @@
 """Bill sheet and code redemption (docs/backend.md#bill-sheet, #redemption) through the API."""
 
+import asyncio
 from collections.abc import AsyncIterator
 
 import asyncpg
@@ -116,3 +117,79 @@ async def test_used_expired_second_code_and_other_cafe(k: Kitchen, db: asyncpg.P
     finally:
         async with db.acquire() as c:
             await drop_test_cafe(c, other.cafe_id)
+
+
+async def test_table_bill_records_channel_bill_paise_and_verdict_details(k: Kitchen) -> None:
+    session = await order_at(k, "919999760004", 5, ["Cold Coffee", "Masala Chai"])
+    await a_code(k.db, k.cafe_id, "919999760093", "BACK-CHN")
+    await a_code(k.db, k.cafe_id, "919999760092", "BACK-QQQ", status="queued")
+    await a_code(k.db, k.cafe_id, "919999760091", "BACK-FLD", status="failed")
+    async with client_as(k, "shift_manager") as api:
+        subtotal = (await api.get(f"/bills/{session}")).json()["subtotal_paise"]
+        for code, verdict, message in (("BACK-QQQ", "not_sent", "Not sent yet: the customer hasn't received this code."),
+                                       ("BACK-FLD", "not_delivered", "This message failed: the customer never got the code."),
+                                       ("NOPE-999", "not_found", "This isn't a valid code, or it has expired.")):
+            r = await api.post(f"/bills/{session}/apply-code", json={"code": code})
+            assert r.status_code == 422 and r.json()["error"]["details"] == {"verdict": verdict}, code
+            assert r.json()["error"]["message"] == message
+        assert (await api.post(f"/bills/{session}/apply-code", json={"code": "BACK-CHN"})).status_code == 200
+        row = await k.db.fetchrow("select channel, bill_paise, discount_paise, idempotency_key, order_id from redemptions "
+                                  "where cafe_id = $1 and code = 'BACK-CHN'", k.cafe_id)
+        assert (row["channel"], row["bill_paise"], row["discount_paise"], row["idempotency_key"]) == \
+            ("table_bill", subtotal, subtotal * 20 // 100, None) and row["order_id"] is not None
+        number = await k.db.fetchval("select number from orders where table_session_id = $1", session)
+        other = await order_at(k, "919999760005", 2, ["Masala Chai"])
+        used = await api.post(f"/bills/{other}/apply-code", json={"code": "BACK-CHN"})
+        assert used.status_code == 409 and used.json()["error"]["message"] == f"This code was already used today on #{number}."
+        details = used.json()["error"]["details"]
+        assert (details["channel"], details["order_number"], details["table_label"], details["redeemed_by_name"]) == \
+            ("table_bill", number, "T5", "Ravi")
+
+
+async def test_offer_redeem_payload_has_d28_keys(k: Kitchen) -> None:
+    session = await order_at(k, "919999760006", 1, ["Cold Coffee"])
+    await a_code(k.db, k.cafe_id, "919999760090", "BACK-D28", percent=15)
+    async with client_as(k, "shift_manager") as api:
+        applied = (await api.post(f"/bills/{session}/apply-code", json={"code": "BACK-D28"})).json()
+    order = await k.db.fetchrow("select id::text, number from orders where table_session_id = $1", session)
+    recipient = await k.db.fetchrow("select id::text, campaign_id::text, customer_id::text from campaign_recipients "
+                                    "where code = 'BACK-D28'")
+    change = await k.db.fetchval("select change from audit_log where cafe_id = $1 and action = 'offer.redeem'", k.cafe_id)
+    assert change == {
+        "table_session_id": session, "order_id": order["id"], "order_number": order["number"],
+        "campaign_id": recipient["campaign_id"], "recipient_id": recipient["id"], "customer_id": recipient["customer_id"],
+        "code": "BACK-D28", "channel": "table_bill", "discount_percent": 15, "bill_paise": applied["subtotal_paise"],
+        "discount_paise": applied["discount_paise"],
+    }
+
+
+async def test_double_tap_same_code_every_response_carries_the_discount(k: Kitchen) -> None:
+    """The bill is read after the locks: a tap that waited on the first sees the committed code, not a stale bill."""
+    for n, table in enumerate((1, 2, 5)):
+        session = await order_at(k, f"91999976002{n}", table, ["Cold Coffee", "Masala Chai"])
+        await a_code(k.db, k.cafe_id, f"91999976008{n}", f"BACK-DT{n}")
+        async with client_as(k, "shift_manager") as api:
+            taps = await asyncio.gather(*(api.post(f"/bills/{session}/apply-code", json={"code": f"BACK-DT{n}"})
+                                          for _ in range(3)))
+        assert [r.status_code for r in taps] == [200, 200, 200], [r.text for r in taps]
+        bills = [r.json() for r in taps]
+        assert all(b["code"] == f"BACK-DT{n}" and b["discount_paise"] == b["subtotal_paise"] * 20 // 100 > 0
+                   for b in bills), bills
+        assert await k.db.fetchval("select count(*) from redemptions where cafe_id = $1 and table_session_id = $2",
+                                   k.cafe_id, session) == 1
+
+
+async def test_two_codes_at_once_on_one_bill_one_wins(k: Kitchen) -> None:
+    """The bill's session row serialises codes from two customers at one table: one code per bill holds."""
+    for n, table in enumerate((1, 2, 5)):
+        session = await order_at(k, f"91999976003{n}", table, ["Cold Coffee"])
+        await a_code(k.db, k.cafe_id, f"91999976007{n}", f"BACK-TA{n}")
+        await a_code(k.db, k.cafe_id, f"91999976006{n}", f"BACK-TB{n}")
+        async with client_as(k, "shift_manager") as api:
+            a, b = await asyncio.gather(api.post(f"/bills/{session}/apply-code", json={"code": f"BACK-TA{n}"}),
+                                        api.post(f"/bills/{session}/apply-code", json={"code": f"BACK-TB{n}"}))
+        assert sorted((a.status_code, b.status_code)) == [200, 400], (a.text, b.text)
+        loser = a if a.status_code == 400 else b
+        assert "One code per bill" in loser.json()["error"]["message"]
+        assert await k.db.fetchval("select count(*) from redemptions where cafe_id = $1 and table_session_id = $2",
+                                   k.cafe_id, session) == 1

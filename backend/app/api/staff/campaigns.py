@@ -1,12 +1,13 @@
 from datetime import datetime
 from typing import Any, Literal
 
-from fastapi import Depends
+from fastapi import Depends, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.api.staff import router
 from app.core.auth import Principal, owner
 from app.domain import campaigns
+from app.domain.campaigns import export
 
 Segment = Literal["all_opted_in", "lapsed", "regulars"]
 
@@ -56,3 +57,9 @@ async def schedule(campaign_id: str, body: ScheduleBody, p: Principal = Depends(
 @router.post("/campaigns/{campaign_id}/cancel")
 async def cancel(campaign_id: str, p: Principal = Depends(owner)) -> dict[str, Any]:
     return await campaigns.cancel(p, campaign_id)
+
+
+@router.get("/campaigns/{campaign_id}/recipients/export")
+async def recipients_export(campaign_id: str, p: Principal = Depends(owner)) -> Response:
+    return Response(await export.recipients_csv(p, campaign_id), media_type="text/csv",
+                    headers={"Content-Disposition": 'attachment; filename="campaign-recipients.csv"'})

@@ -145,3 +145,34 @@ async def test_opt_out_between_snapshot_and_send_and_cancel(k: Kitchen) -> None:
     from app.integrations.whatsapp import messages as m
     assert await outbound.send(k.cafe_id, outbound.Recipient(customer_id=str(first)), m.Template("weekly_offer", ["a", "b", "c", "d"]),
                                "campaign:direct-test", outbound.Purpose.MARKETING) is None
+
+
+async def test_campaign_draft_audited_on_create_and_edit(k: Kitchen) -> None:
+    async with client_as(k, "owner") as api:
+        cid = (await api.post("/campaigns", json=DRAFT)).json()["id"]
+        r = await api.put(f"/campaigns/{cid}", json={**DRAFT, "name": "Back sooner", "discount_percent": 25})
+        assert r.status_code == 200
+        assert (await api.put(f"/campaigns/{cid}", json={**DRAFT, "name": "Back sooner", "discount_percent": 25})).status_code == 200
+    rows = await k.db.fetch("select actor_role, change from audit_log where cafe_id = $1 and action = 'campaign.draft' order by at, id",
+                            k.cafe_id)
+    assert [r["actor_role"] for r in rows] == ["owner"] * 3
+    assert [r["change"] for r in rows] == [
+        {"campaign_id": cid, "new": True, "discount_percent": 20,
+         "fields": ["code_prefix", "discount_percent", "name", "offer_text", "segment", "template_name"]},
+        {"campaign_id": cid, "new": False, "discount_percent": 25, "fields": ["discount_percent", "name"]},
+        {"campaign_id": cid, "new": False, "discount_percent": 25, "fields": []},
+    ]  # field names only: never the offer text
+
+
+async def test_offer_message_valid_till_in_cafe_timezone(k: Kitchen) -> None:
+    # 20:00 UTC is 01:30 the next day in the café (Asia/Kolkata): the customer is told the café-local date.
+    day = (datetime.now(UTC) + timedelta(days=3)).date()
+    until = datetime(day.year, day.month, day.day, 20, 0, tzinfo=UTC)
+    async with client_as(k, "owner") as api:
+        cid = (await api.post("/campaigns", json={**DRAFT, "valid_until": until.isoformat()})).json()["id"]
+        await api.post(f"/campaigns/{cid}/schedule", json={"scheduled_at": (datetime.now(UTC) + timedelta(minutes=5)).isoformat()})
+    await make_due(k, cid)
+    await campaigns.start_due()
+    assert "sent" in await send_queued(k)
+    params = [p["text"] for p in k.transport.sent[0].body["template"]["components"][0]["parameters"]]
+    assert params[3] == (day + timedelta(days=1)).strftime("%d %b")

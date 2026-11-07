@@ -8,12 +8,16 @@ queued recipients are not sent).
 Sender: one `campaign-send` task per recipient, spaced below the number's throughput, within the day's limit from
 the messaging tier (over it → `deferred`, never dropped; `campaign_resume` re-queues them when the day has room).
 Each send re-checks the campaign, the recipient, consent and the template; the send layer checks consent again.
+
+Codes are valid through the café-local day of `valid_until`: the message tells that date and the verdict uses it
+(`campaigns.redemption`). Every draft save writes `campaign.draft` (ids, field names, the percentage; no offer text).
 """
 
 import math
 import secrets
 from datetime import UTC, datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from app.core.auth import Principal
 from app.core.errors import AppError, BadRequest, NotFound
@@ -28,6 +32,7 @@ from app.ops import tracing
 
 log = get_logger(__name__)
 
+DRAFT_FIELDS = ("name", "segment", "template_name", "offer_text", "discount_percent", "code_prefix", "valid_until")
 DEFAULT_DAILY_LIMIT = 250  # Meta's limit before the business is verified; the number's tier raises it
 TIERS = {"TIER_250": 250, "TIER_1K": 1000, "TIER_10K": 10_000, "TIER_100K": 100_000, "TIER_UNLIMITED": 1_000_000}
 CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # no 0/O or 1/I
@@ -56,6 +61,7 @@ async def save_draft(p: Principal, campaign_id: str | None, f: dict[str, Any]) -
     async with tx() as c:
         if campaign_id is None:
             camp = await repo.insert(c, p.cafe_id, f)
+            changed = [k for k in DRAFT_FIELDS if f.get(k) is not None]
         else:
             existing = await repo.get(c, p.cafe_id, campaign_id)
             if existing is None:
@@ -64,6 +70,10 @@ async def save_draft(p: Principal, campaign_id: str | None, f: dict[str, Any]) -
             if updated is None:
                 raise CampaignStateError("Only a draft can be edited.")
             camp = updated
+            changed = [k for k in DRAFT_FIELDS if getattr(existing, k) != getattr(camp, k)]
+        await audit.write(c, p.cafe_id, _actor(p), "campaign.draft",
+                          {"campaign_id": camp.id, "new": campaign_id is None, "fields": sorted(changed),
+                           "discount_percent": camp.discount_percent})
     return camp.as_dict()
 
 
@@ -172,8 +182,9 @@ async def _complete_if_done(cafe_id: str, campaign_id: str) -> int:
 
 # ── the send task ─────────────────────────────────────────────────────────
 
-def offer_message(camp: repo.Campaign, first_name: str | None, code: str) -> m.Template:
-    until = camp.valid_until.strftime("%d %b") if camp.valid_until else "soon"
+def offer_message(camp: repo.Campaign, first_name: str | None, code: str, tz: str = "Asia/Kolkata") -> m.Template:
+    """"valid till" is the café-local date of `valid_until`: the last day the code works (decision D14a)."""
+    until = camp.valid_until.astimezone(ZoneInfo(tz)).strftime("%d %b") if camp.valid_until else "soon"
     return m.Template(camp.template_name, [first_name or "there", camp.offer_text or "a little something on us", code, until])
 
 
@@ -184,6 +195,7 @@ async def send_one(cafe_id: str, recipient_id: str) -> str:
             return "missing"
         camp = await repo.get(c, cafe_id, r["campaign_id"])
         template = await repo.template_status(c, cafe_id, camp.template_name) if camp else None
+        tz = await c.fetchval("select timezone from cafes where id = $1", cafe_id)
     if camp is None or camp.status != "sending" or r["status"] != "queued":
         return "skipped"  # cancelled, already sent, or deferred since
     if r["consent"] != "opted_in" or template != "approved":
@@ -193,7 +205,7 @@ async def send_one(cafe_id: str, recipient_id: str) -> str:
         await _complete_if_done(cafe_id, camp.id)
         return "blocked"
     first = (r["name"] or "").split(" ")[0] or None
-    status = await outbound.send(cafe_id, outbound.Recipient(customer_id=r["customer_id"]), offer_message(camp, first, r["code"]),
+    status = await outbound.send(cafe_id, outbound.Recipient(customer_id=r["customer_id"]), offer_message(camp, first, r["code"], tz),
                                  f"campaign:{recipient_id}", outbound.Purpose.MARKETING)
     async with conn() as c:
         wamid = await c.fetchval("select wamid from wa_messages where cafe_id = $1 and idempotency_key = $2",
