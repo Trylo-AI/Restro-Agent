@@ -13,7 +13,9 @@ describe("public pages", () => {
     expect(html).not.toMatch(/<script/i);
     expect(html).toMatch(/<title>Restro · [^<]+<\/title>/);
     expect(html).toContain('name="viewport"');
-    for (const other of PAGES) expect(html).toContain(`href="/${other}.html"`);
+    // Relative links: the same files are served at "/" (console) and under a sub-path (GitHub Pages site).
+    for (const other of PAGES) expect(html).toContain(`href="${other}.html"`);
+    expect(html).not.toMatch(/href="\//);
   });
 
   it("the privacy policy states the processor role, the AI, processing outside India and STOP", () => {
